@@ -89,6 +89,8 @@ class GraphTolerances:
     max_gap: float = 12.0       # pt, search window for a continuation
     gap_window: float = 0.0     # pt either side of a gap size that still counts as that size when the family's
                                 # dash pattern is found; 0 = the gaps are exact and only the same size counts
+    end_hook: float = 0.0       # pt: a line's last stroke this short is a tracer's hook, and the line's direction is
+                                # the stroke before it; 0 = the source's strokes are what was drawn
 
 
 VECTOR_TOL = GraphTolerances()
@@ -98,7 +100,10 @@ VECTOR_TOL = GraphTolerances()
 # lines the commonest gap of 9 pt was read as 8.75, 9.0 and 9.25 in near equal parts, no single size reached the
 # share a pattern needs, no dash was joined to the next, and the sheet measured 24 m of 2,300. Counted within
 # a point and a half of pixels either way, the pattern is the third of all gaps it is.
-RASTER_TOL = GraphTolerances(ang_tol=4.0, off_tol=1.0, gap_window=0.5)
+# And a traced line ends in a hook: the last pixel or two of the skeleton bend towards a corner of the ink, a
+# stroke of half a point at forty degrees from the line. Looked at from its end, every scanned line then pointed
+# somewhere else, no gap in it was bridged, and the runs of a scanned plan were a third of a metre long.
+RASTER_TOL = GraphTolerances(ang_tol=4.0, off_tol=1.0, gap_window=0.5, end_hook=1.0)
 
 
 def graph_tolerances(page) -> GraphTolerances:
@@ -736,7 +741,26 @@ def _crossing_in_gap(n, along: float, ux: float, uy: float, pmap, prim_nodes, id
     return None
 
 
-def _symbol_bridges(nodes, pmap, prim_nodes, idx, symbols: SymbolIndex, family: str):
+def _end_strokes(prims, hook: float):
+    """For a free end, the stroke whose direction is the line's: the end's own, or - where the end is a hook no
+    longer than `hook` - the stroke of the same path it hangs from."""
+    by_seg: dict[tuple[str, int], list[Prim]] = defaultdict(list)
+    for q in prims:
+        by_seg[(q.pid, q.seg_index)].append(q)
+
+    def stroke(n, q):
+        if hook <= 0 or q.seg.length > hook:
+            return q
+        joint = q.b if dist(q.a, (n.x, n.y)) < dist(q.b, (n.x, n.y)) else q.a
+        for k in (q.seg_index - 1, q.seg_index + 1):
+            for r in by_seg.get((q.pid, k), ()):
+                if r.seg.length > DOT_MAX and min(dist(r.a, joint), dist(r.b, joint)) <= TOUCH_TOL + 0.05:
+                    return r
+        return q
+    return stroke
+
+
+def _symbol_bridges(nodes, pmap, prim_nodes, idx, symbols: SymbolIndex, family: str, end_stroke=None):
     """Two free ends of one run facing each other across a symbol of another pen: (node, node, gap, symbol).
 
     Each free end of a real stroke (not a dot) looks ahead along its own ray for the nearest free end of a
@@ -747,7 +771,8 @@ def _symbol_bridges(nodes, pmap, prim_nodes, idx, symbols: SymbolIndex, family: 
     for n in sorted(nodes.values(), key=lambda m: m.nid):
         if n.degree != 1:
             continue
-        q = pmap[n.prims[0]]
+        q0 = pmap[n.prims[0]]
+        q = end_stroke(n, q0) if end_stroke else q0
         if q.seg.length <= DOT_MAX:
             continue
         far = q.b if dist(q.a, (n.x, n.y)) < dist(q.b, (n.x, n.y)) else q.a
@@ -760,16 +785,20 @@ def _symbol_bridges(nodes, pmap, prim_nodes, idx, symbols: SymbolIndex, family: 
         box = (min(n.x, n.x + ux * R) - 1, min(n.y, n.y + uy * R) - 1, max(n.x, n.x + ux * R) + 1, max(n.y, n.y + uy * R) + 1)
         best = None
         for pid2 in idx.query(box):
-            if pid2 == q.prim_id:
+            if pid2 in (q.prim_id, q0.prim_id):
                 continue
             r = pmap[pid2]
+            if end_stroke and r.seg.length <= DOT_MAX:
+                # the far end's own hook: the line it hangs from is the one to compare with
+                r = next((end_stroke(nodes[k], r) for k in prim_nodes[pid2] if nodes[k].degree == 1), r)
             if r.seg.length <= DOT_MAX or angle_diff(q.seg.angle, r.seg.angle) > 3.0:
                 continue
-            for ep in (r.a, r.b):
+            hooked = pmap[pid2]
+            for ep in (hooked.a, hooked.b):
                 vx, vy = ep[0] - n.x, ep[1] - n.y
                 along = vx * ux + vy * uy
                 perp = abs(-vx * uy + vy * ux)
-                if 0.5 < along <= R and perp <= SYMBOL_OFF:
+                if 0.5 < along <= R and perp <= SYMBOL_OFF + (0.4 if end_stroke else 0.0):
                     tn = next((nn for nn in prim_nodes[pid2] if dist((nodes[nn].x, nodes[nn].y), ep) <= TOUCH_TOL + 0.05), None)
                     if tn is None or tn == n.nid or nodes[tn].degree != 1:
                         continue
@@ -894,9 +923,11 @@ def build_graph(prims: list[Prim], family: str, tol: GraphTolerances | None = No
                         best = (along, pid2, ep)
         return best
 
+    end_stroke = _end_strokes(prims, tol.end_hook) if tol.end_hook > 0 else None
     claimants: set[int] = set()
     for n in deg1:
-        q = pmap[n.prims[0]]
+        q0 = pmap[n.prims[0]]
+        q = end_stroke(n, q0) if end_stroke else q0
         if q.seg.length <= DOT_MAX:
             continue                      # a dot's direction is noise: it never claims, it gets claimed
         # direction pointing outward from the node
@@ -906,7 +937,7 @@ def build_graph(prims: list[Prim], family: str, tol: GraphTolerances | None = No
         if L < 1e-9:
             continue
         ux, uy = dx / L, dy / L
-        best = look_ahead(n, ux, uy, q, {q.prim_id})
+        best = look_ahead(n, ux, uy, q, {q.prim_id, q0.prim_id})
         if best is None:
             continue
         gaps.append(best[0])
@@ -1003,7 +1034,8 @@ def build_graph(prims: list[Prim], family: str, tol: GraphTolerances | None = No
     if symbols is not None:
         # a valve in the line, or another line of the same pen crossing it: the run goes on beyond it,
         # whatever gap style the pen has
-        for nid, tn, g, sym in _symbol_bridges(nodes, pmap, prim_nodes, idx, symbols, family):
+        for nid, tn, g, sym in _symbol_bridges(nodes, pmap, prim_nodes, idx, symbols, family,
+                                               _end_strokes(prims, tol.end_hook) if tol.end_hook > 0 else None):
             _merge_nodes(nodes, prim_nodes, nid, tn, merged_into)
             crossing = sym.startswith("crossing:")
             bridges.append({"from_node": nid, "to_node": tn, "gap_pt": round(g, 2),

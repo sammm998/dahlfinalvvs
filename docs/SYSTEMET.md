@@ -284,6 +284,13 @@ ur bild flyttar pixlarna glappen: samma glapp om 9 pt lästes som 8,75, 9,0 och 
 enskild storlek nådde andelen ett mönster kräver, och en plan vars rör alla är streck-prick mätte 24 m. På en sida
 läst ur bild räknas glapp inom en halv punkt som samma glapp; samma plan mäter nu 73 m. Vektorsidor räknas som förut.
 
+**Spårarens krokar** (`pipes/representation.py`, `RASTER_TOL.end_hook`, `_end_strokes`). En spårad linje slutar i
+en krok: den sista pixeln eller två böjer av mot ett hörn av bläcket, ett streck på en halv punkt snett mot
+linjen. Sedd från änden pekade varje linje då åt fel håll, och inget glapp i den fogades ihop - inte där en
+hänvisningslinje korsade röret och spåraren bröt det, inte mellan streck och prick. På en sida läst ur bild har
+en fri ände nu riktningen från strecket kroken hänger i; samma plan går från 73 till 222 m. Exporterade vektorer
+har inga krokar och läses som förut.
+
 ### 2e. Det som ska granskas mäts och markeras ändå
 
 Det läsningen inte kan avgöra lämnades tidigare utanför: ett rör två etiketter namnger olika stod "påpekat men
