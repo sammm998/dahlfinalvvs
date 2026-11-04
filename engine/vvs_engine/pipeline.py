@@ -41,6 +41,7 @@ from .text.searchable import searchable_rows
 from .text.vector_text import VectorTextResult, vector_text_rows
 from .measure.scale import ScaleResult, discover_scale, scale_from_the_set, scale_given_by_hand
 from .measure.measure import SETTLED_SCALE, PipeMeasure, aggregate, measure_pipes
+from .measure.scale import NOT_MEASURED_HERE, SECTION_NOT_MEASURED
 from .pipes.ownership import (Identity, OwnershipResult, complete_identities, identity_of, identity_from_text,
                               propagate, DECLARED_RUN_MAX_M)
 from .pipes.frontier import end_evidence, frontiers_of, summary as frontier_summary
@@ -1859,6 +1860,12 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
         # men den ersätter den inte tyst: bladets eget utfall står kvar i skälet, och ingen rad som vilar på en
         # handskriven skala får heta bekräftad.
         scale = scale_given_by_hand(given_scale, scale.reason)
+    from .measure.scale import ScaleResult, is_section
+    if is_section(lines, page.info.width, page.info.height):
+        # A section shows the plans' pipes from the side: its lengths are the plans' lengths again, and its
+        # vertical lines are as often ladders and walls as pipes. It is read as a schema is - its designations
+        # and components counted, no metres taken - whatever scale it is drawn in.
+        scale = ScaleResult(None, "none", "NONE", scale.evidence, SECTION_NOT_MEASURED)
     # the rule for connection pipes names short runs; how short is a length in metres, so the scale comes first
     _mpp = scale.meters_per_pt if scale.meters_per_pt else None
     declared_max_pt = (_R("pipes.ownership.DECLARED_RUN_MAX_M", DECLARED_RUN_MAX_M) / _mpp) if _mpp else None
@@ -2804,7 +2811,8 @@ def reading_coverage(pa: PageAnalysis) -> dict[str, Any]:
     # A flow or principle diagram names its pipes and draws them without a scale: none of its names is a pipe the
     # reading missed - they are measured on the plans - and listing them as missed sent the reader looking for
     # metres the sheet never had. They are said as what they are: the pipes the schema shows.
-    schematic = bool(pa.scale and pa.scale.reason == "schematic_not_to_scale")
+    schematic = bool(pa.scale and pa.scale.reason in NOT_MEASURED_HERE)
+    section = bool(pa.scale and pa.scale.reason == SECTION_NOT_MEASURED)
     missing = set() if schematic else named - got
     out = {
         "pipe_names": len(named), "pipe_names_with_metres": len(got),
@@ -2825,6 +2833,8 @@ def reading_coverage(pa: PageAnalysis) -> dict[str, Any]:
         out["components"] = [{"name": n, "count": len(r), "rects": r[:6]} for n, r in sorted(fittings.items())][:60]
     if schematic:
         out["schematic"] = True
+        if section:
+            out["section"] = True
         out["names_on_schematic"] = [{"name": n, "rects": (places.get(n) or [])[:6]} for n in sorted(named)][:60]
     # Someone else's marks on the sheet, and how far they ran. A page that arrives already measured by hand
     # carries the answer drawn on top of the drawing; the reading takes that ink off before it reads, and says

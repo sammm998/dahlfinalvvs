@@ -251,7 +251,8 @@ def settle_after_reading(db: Session, job: AnalysisJob) -> None:
     scale_state = s.get("scale") if isinstance(s.get("scale"), str) else cov.get("scale_state")
     unsettled = cov.get("scale_settled") is False or scale_state in (None, "NONE", "CONFLICT")
     if with_m == 0:
-        why = ("Bladet är ett schema, som inte ritas i skala: rören mängdas på planritningarna" if cov.get("schematic")
+        why = ("Bladet är en sektion: rören mängdas på planritningarna" if cov.get("section")
+               else "Bladet är ett schema, som inte ritas i skala: rören mängdas på planritningarna" if cov.get("schematic")
                else "Bladets skala är inte fastställd, så inga meter kunde ges" if unsettled
                else "Läsningen kunde inte ge någon beteckning en meter")
         refund_reading(db, job, why)

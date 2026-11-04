@@ -70,7 +70,14 @@ def coverage_validity(cov: dict[str, Any], anchors: list, reconciliation: dict |
         verdict = "INVALID"; reasons.append("GEOMETRY_CONSERVATION_BROKEN")
     if fr and fr.get("silent_pipes"):
         verdict = "INVALID"; reasons.append(f"SILENT_PIPES:{len(fr['silent_pipes'])}")
-    if cov.get("scale_reason") == "schematic_not_to_scale":
+    if cov.get("scale_reason") == "section_not_measured":
+        # A section shows the plans' pipes from the side. It is read as a schema is: its designations and
+        # components counted, its pipes measured on the plans, so nothing is missing from it.
+        measures["NAMES_WITH_METRES_SHARE"] = None
+        reasons.append("SECTION_NOT_MEASURED")
+        if verdict == "VALID":
+            verdict = "SECTION"
+    elif cov.get("scale_reason") == "schematic_not_to_scale":
         # A flow or principle diagram is drawn without a scale on purpose: its lines say what connects to what,
         # not how long anything is. Nothing is missing from it - its pipes are measured on the plans - so it is
         # neither a sheet without a scale nor one where nothing was measured, and how many of its pipe names got
@@ -127,6 +134,6 @@ def completion_checks(quality, quantities=(), source_assignment=None, review=Non
         if reason not in reasons:
             reasons.append(reason)
     # a schema stays a schema: what the checks say is listed, but no metres hang on it
-    if checks and result.get('verdict') not in ('INVALID', 'SCHEMATIC'):
+    if checks and result.get('verdict') not in ('INVALID', 'SCHEMATIC', 'SECTION'):
         result['verdict'] = 'DEGRADED'
     return result
