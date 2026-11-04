@@ -411,7 +411,9 @@ export default function AnalysisPage() {
   const noScale = nm.scale_settled === false || nm.drawn_m == null;
   // A flow or principle diagram is drawn without a scale on purpose. It is no sheet that failed: its pipes are
   // measured on the plans, so it asks for no scale and has no pipe names "without metres".
-  const schematic = Boolean(nm.schematic) || nm.scale_reason === "schematic_not_to_scale";
+  const schematic = Boolean(nm.schematic) || nm.scale_reason === "schematic_not_to_scale" || nm.scale_reason === "section_not_measured";
+  // a section shows the plans' pipes from the side: read like a schema, its pipes measured on the plans
+  const section = Boolean(nm.section) || nm.scale_reason === "section_not_measured";
   /* Someone else's marks on the sheet. A drawing that arrives with a takeoff already drawn on it in coloured
    * polylines carries somebody's answer on top of the drawing, and the reading takes that ink off before it
    * reads - otherwise it would measure an opinion of the drawing and hand it back as the drawing. That is worth
@@ -758,11 +760,13 @@ export default function AnalysisPage() {
             {schematic ? (
               <>
                 <p className="badge">
-                  {tr("Det här bladet är ett schema (flödes- eller principschema). Ett schema ritas inte i skala: linjerna visar vad som hänger ihop, inte hur långt något är, så rörlängder mäts inte här. Rören mängdas på planritningarna. Beteckningarna och komponenterna på schemat är lästa och räknade.")}
+                  {section
+                    ? tr("Det här bladet är en sektion. En sektion visar planernas rör från sidan, så rörlängder mäts inte här - de skulle räknas två gånger. Rören mängdas på planritningarna. Beteckningarna och komponenterna på sektionen är lästa och räknade.")
+                    : tr("Det här bladet är ett schema (flödes- eller principschema). Ett schema ritas inte i skala: linjerna visar vad som hänger ihop, inte hur långt något är, så rörlängder mäts inte här. Rören mängdas på planritningarna. Beteckningarna och komponenterna på schemat är lästa och räknade.")}
                 </p>
                 {(nm.names_on_schematic?.length ?? 0) > 0 && (
                   <details className="settings">
-                    <summary>{tr("Rör som schemat visar")} · {nm.names_on_schematic.length}</summary>
+                    <summary>{tr(section ? "Rör som sektionen visar" : "Rör som schemat visar")} · {nm.names_on_schematic.length}</summary>
                     <div className="body row" style={{ flexWrap: "wrap", gap: 8 }}>
                       {nm.names_on_schematic.map((m: any) => (
                         <button key={m.name} className="link small" onClick={() => {
@@ -933,7 +937,7 @@ export default function AnalysisPage() {
                   skrafferade ytor mäts alltid men räknas in bara om du kryssar i rutan nedan.</p>
               </div>
             </details>
-            <QuantityTable rows={result.quantities} selected={selIdent} onSelect={onIdentityPick} floorHeight={floorH} schematic={schematic}
+            <QuantityTable rows={result.quantities} selected={selIdent} onSelect={onIdentityPick} floorHeight={floorH} schematic={schematic} section={section}
               pipes={result.pipes} meterPerPt={result.scale?.meters_per_pdf_point ?? null} onPipeClick={onPipeClick}
               selectedPipe={selPipe?.physical_pipe_id ?? null}
               onRiserSplit={job?.drawing_id ? async (r: any, slab: number) => {

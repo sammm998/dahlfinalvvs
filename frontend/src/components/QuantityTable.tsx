@@ -60,7 +60,7 @@ export function withFloorHeight(rows: any[], floorHeight: number | null, include
 
 export default function QuantityTable({ rows, selected, onSelect, floorHeight, includeHatched, onIncludeHatched, riserSource,
   includeDeclared = true, onIncludeDeclared, pipes = [], onPipeClick, meterPerPt, selectedPipe = null, onRiserSplit,
-  schematic = false }: {
+  schematic = false, section = false }: {
     rows: any[]; selected: string | null; onSelect: (key: string | null) => void; floorHeight: number | null;
     includeHatched: boolean; onIncludeHatched: (v: boolean) => void; riserSource: string;
     includeDeclared?: boolean; onIncludeDeclared?: (v: boolean) => void;
@@ -70,7 +70,7 @@ export default function QuantityTable({ rows, selected, onSelect, floorHeight, i
     /** The reader says how many of a row's risers go through the slab (a metre) rather than a storey. */
     onRiserSplit?: (row: any, slab: number) => void;
     /** The sheet is a flow or principle diagram: its rows have no metres because it is drawn without a scale. */
-    schematic?: boolean }) {
+    schematic?: boolean; section?: boolean }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const runs = useMemo(() => pipeRuns(pipes), [pipes]);
@@ -203,7 +203,7 @@ export default function QuantityTable({ rows, selected, onSelect, floorHeight, i
                   </span>
                 )}
               </td>
-              <td><span className={`badge ${r.state === "CONFIRMED" ? "ok" : r.state === "AMBIGUOUS" || r.state === "RISER_LABELS_ONLY" || r.state === "IN_HATCHED_AREA" || r.state === "UNNAMED" ? "warn" : "bad"}`}>{r.state === "NO_SCALE" && schematic ? tr("SCHEMA") : STATE_LABELS[r.state] ?? r.state}</span></td>
+              <td><span className={`badge ${r.state === "CONFIRMED" ? "ok" : r.state === "AMBIGUOUS" || r.state === "RISER_LABELS_ONLY" || r.state === "IN_HATCHED_AREA" || r.state === "UNNAMED" ? "warn" : "bad"}`}>{r.state === "NO_SCALE" && schematic ? tr(section ? "SEKTION" : "SCHEMA") : STATE_LABELS[r.state] ?? r.state}</span></td>
             </tr>,
             ...(open === identityKey(r)
               ? runRows(pipes.filter((p: any) => p.identity === identityKey(r)), runs)

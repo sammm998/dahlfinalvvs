@@ -388,7 +388,7 @@ def _first_sheet_coverage(out_dir: str) -> dict:
         return {}
     s = sheets[0]
     keep = ("pipe_names", "pipe_names_with_metres", "share", "drawn_m", "confirmed_m", "ambiguous_m", "unowned_m",
-            "scale_state", "scale_settled", "markup_set_aside", "names_from", "missed", "schematic")
+            "scale_state", "scale_settled", "markup_set_aside", "names_from", "missed", "schematic", "section")
     return {k: s[k] for k in keep if k in s}
 
 

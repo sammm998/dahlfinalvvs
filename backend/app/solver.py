@@ -99,8 +99,8 @@ def problems(m) -> list[dict]:
         out.append({"typ": f.get("flag"), "plats": f.get("at"), "beteckningar": f.get("designations"),
                     "text": f"Flagga {f.get('flag')} vid {f.get('at')}: {', '.join(f.get('designations') or [])}."})
     scale = m.scale or {}
-    if scale.get("reason") == "schematic_not_to_scale":
-        pass          # a flow diagram has no scale to find: its pipes have no length, only connections
+    if scale.get("reason") in ("schematic_not_to_scale", "section_not_measured"):
+        pass          # a flow diagram or a section takes no metres: its pipes are measured on the plans
     elif scale.get("state") not in ("VERIFIED", "TEXT_ONLY", "BAR_ONLY", "DIMENSIONS_ONLY", "GIVEN_BY_HAND"):
         out.append({"typ": "skala", "text": f"Skalan är {scale.get('state')} ({scale.get('reason')}). "
                     "Mät fram den på bladet (foresla_skala) från något vars storlek ritningen anger."})

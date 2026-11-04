@@ -6,6 +6,7 @@ reference quantities are inputs. The caller owns assignment and measurement.
 from dataclasses import asdict
 import hashlib
 import json
+import re
 import os
 from pathlib import Path
 import sys
@@ -169,6 +170,7 @@ def kept_policy(ex, B, extra_pipe_width, leader_width):
                        'leader_pen': leader_width, 'method': C.get('family_method')}}
 
 
+LOOKS_LIKE_ZERO = re.compile(r"[Oo](?=\d)|(?<=\d)[Oo]")
 KNOWN_COVER = 0.6        # the rows read from the vector glyphs must span this share of a label box's height and width
 
 
@@ -200,10 +202,19 @@ def read_labels_known(labels, clean, det, page_number, known_text):
         rows.sort(key=lambda r: r['bbox'][1])
         ux0, uy0 = min(r['bbox'][0] for r in rows), min(r['bbox'][1] for r in rows)
         ux1, uy1 = max(r['bbox'][2] for r in rows), max(r['bbox'][3] for r in rows)
-        if (ux1 - ux0) < KNOWN_COVER * (x1 - x0) or (uy1 - uy0) < KNOWN_COVER * (y1 - y0):
+        # The box is a little taller than its lettering: the detector frames a label with a margin. What matters
+        # is that no row of it can be left unread - that the height the rows leave over could not hold another.
+        row_h = min(r['bbox'][3] - r['bbox'][1] for r in rows)
+        room = (y1 - y0) - (uy1 - uy0)
+        if (ux1 - ux0) < KNOWN_COVER * (x1 - x0) or ((uy1 - uy0) < KNOWN_COVER * (y1 - y0) and room >= row_h):
             rest.append(b)
             continue
         texts = [r['text'].strip() for r in rows]
+        # drawn lettering makes O and 0 the same ring: VVCO1 is VVC01 to the eye and another system to the parser.
+        # Which one it is, is the OCR's to say.
+        if any(LOOKS_LIKE_ZERO.search(t) for t in texts):
+            rest.append(b)
+            continue
         des, level, unknown = vvs.parse_block(texts)
         des = [vvs.sanitize_dimension(d) for d in des]
         if not des or not all(d.get('dimension') and d.get('system') for d in des) or unknown:

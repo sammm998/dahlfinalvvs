@@ -13,6 +13,9 @@ from ..text.model import TextRow, project, row_axes
 from .. import rules as _rules
 
 MM_PER_PT = 25.4 / 72.0
+SECTION_NOT_MEASURED = "section_not_measured"
+# the reasons a sheet takes no metres on purpose: its pipes are measured on the plans
+NOT_MEASURED_HERE = ("schematic_not_to_scale", SECTION_NOT_MEASURED)
 SCHEMATIC_RE = re.compile(r"(?i)^\s*(FLÖDES|FLODES|PRINCIP|SYSTEM|FUNKTIONS)\s*-?\s*SCHEMA\b")
 
 
@@ -20,6 +23,22 @@ def is_schematic(lines) -> bool:
     """The sheet names itself a flow or principle diagram: a row that begins with it, as a stamp's title does - not
     a note on a plan that refers to one ("SE FLÖDESSCHEMA V-50-...")."""
     return any(SCHEMATIC_RE.search(ln.text) for ln in lines)
+
+
+# A section's title block names it so: SEKTION A-A, SEKTIONER. A view cut out on a plan carries the same word
+# in its own caption, out on the drawing; the title block is what says what the sheet is. The title block sits
+# in the lower right, as the reading of the sheet's handling (handling._title_block) has it.
+SECTION_RE = re.compile(r"(?i)^\s*SEKTION(ER)?\b")
+TITLE_BLOCK_FROM = 0.55
+
+
+def is_section(lines, width: float, height: float) -> bool:
+    """The sheet's title block says it is a section: a row there that begins with the word. A section shows the
+    pipes of the plans from the side, so measuring it counts them twice."""
+    if not width or not height:
+        return False
+    return any(SECTION_RE.search(ln.text) and ln.bbox[0] > TITLE_BLOCK_FROM * width
+               and ln.bbox[1] > TITLE_BLOCK_FROM * height for ln in lines)
 # The denominator has to end where the number ends. Without the boundary "1:10000" matches its first four
 # digits and reads as 1:1000, which is not a refusal to understand an unsupported scale - it is a tenfold
 # error stated as confidently as a correct reading.
