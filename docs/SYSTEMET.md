@@ -68,6 +68,13 @@ hänger ihop, inte hur långt något är. Ett schema är därför inget misslyck
 - komponenterna räknas, och i "Alla" ramas varje beteckning in
 - läsningen betalas tillbaka som förut, med skälet att bladet är ett schema
 
+**Sektionsblad.** En sektion visar planernas rör från sidan. Mätt som en plan räknas samma rör två gånger, och
+sektionens lodräta linjer - stegar, väggar, schakt - tas för rör. Står `SEKTION` eller `SEKTIONER` först i en rad i
+bladets namnruta (den nedre högra delen av bladet) läses bladet som ett schema, vilken skala det än är ritat i:
+omdömet är SECTION, beteckningar och komponenter räknas, inga meter tas, och mängdtabellens rader står som SEKTION.
+En plan med ett sektionsutsnitt på ritytan bär ordet i utsnittets rubrik, inte i namnrutan, och mäts som förut;
+så gör också ett blad vars namn börjar med något annat, som `PLANRITNING, SEKTION, ...`.
+
 **Ett antal skrivet isär är kodens antal.** Ett blad skriver buntarna vid en fördelare på två sätt: `4xKV1-X32-16`
 och `6x VV1-X32-16`. Lästa som två ord var "6x" ingen kod, så raden togs för en anteckning och bunten den namnger
 blev onämnd. En rad som skrev ännu en etikett bredvid, `8x KV1-X32-16 2xVV1-X32-16`, försvann hel. Mellanslaget är
