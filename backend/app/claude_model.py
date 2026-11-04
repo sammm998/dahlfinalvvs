@@ -65,6 +65,8 @@ def usd(model, tokens_in, tokens_out, cache_read, cache_write):
 class ClaudeTransport(AssignmentTransport):
     def _send(self, system, overview, content, schema=None, key='decisions'):
         from vvs_engine.source_rules.pipestudio.final_bind import SCHEMA
+        from . import api_budget
+        api_budget.check(self.model)
         schema = schema or SCHEMA
         import anthropic
         opening = _blocks(overview)
@@ -100,6 +102,8 @@ class ClaudeTransport(AssignmentTransport):
         record = {'model': response.model, 'response_id': response.id, 'tokens_in': tokens_in,
                   'tokens_out': tokens_out, 'cached_tokens': read, 'cache_write_tokens': written,
                   'usd': usd(self.model, tokens_in, tokens_out, read, written), 'request_reused': reused}
+        if not reused:
+            record['kr'] = api_budget.charge(self.model, tokens_in, tokens_out, read, written, 'tilldelning')
         text = next(b.text for b in response.content if b.type == 'text')
         return json.loads(text)[key], record
 

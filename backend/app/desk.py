@@ -371,6 +371,8 @@ def ask(body: Ask, user: User = Depends(current_user), db: Session = Depends(get
     q = (body.fraga or "").strip()
     if not q:
         raise HTTPException(422, "Skriv en fråga.")
+    from . import api_budget
+    api_budget.require()
     desk = Desk(db, user, body.filer)
     try:
         from tools.astra_transport import agent_transport

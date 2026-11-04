@@ -30,7 +30,10 @@ def default():
     if os.environ.get('VVS_ASSIGNMENT_MODEL') == '0':
         return NONE
     from .source_model import configured as openai_ready
-    return ASTRA if openai_ready() else NONE
+    if not openai_ready():
+        return NONE
+    from . import api_budget
+    return NONE if api_budget.blocked(model_id(ASTRA)) else ASTRA
 
 
 def available():

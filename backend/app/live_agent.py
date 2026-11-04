@@ -44,6 +44,10 @@ def create_session(language="sv"):
     if not key:
         raise ValueError("OpenAI-anslutning saknas")
     model = os.environ.get("VVS_REALTIME_MODEL", "gpt-realtime-2.1")
+    # The voice session runs between the browser and OpenAI: what it costs is not seen here, only whether the
+    # service's ceiling still allows one to start.
+    from . import api_budget
+    api_budget.check(None)
     secret = OpenAI(api_key=key, timeout=25, max_retries=0).realtime.client_secrets.create(
         expires_after={"anchor": "created_at", "seconds": 60},
         session={"type": "realtime", "model": model, "instructions": INSTRUCTIONS.replace("Tala naturlig, kort svenska", "Speak natural, concise English" if language == "en" else "Tala naturlig, kort svenska"),
@@ -96,7 +100,13 @@ def text_turn(items, previous_response_id=None, language="sv"):
               "tool_choice": "auto", "max_output_tokens": 2048}
     if previous_response_id:
         kwargs["previous_response_id"] = previous_response_id
+    from . import api_budget
+    api_budget.check(model)
     r = OpenAI(api_key=key, timeout=60, max_retries=1).responses.create(**kwargs)
+    u = getattr(r, "usage", None)
+    if u is not None:
+        api_budget.charge(model, getattr(u, "input_tokens", 0) or 0, getattr(u, "output_tokens", 0) or 0,
+                          getattr(getattr(u, "input_tokens_details", None), "cached_tokens", 0) or 0, 0, "röst_text")
     out = []
     for item in r.output or []:
         if item.type == "function_call":

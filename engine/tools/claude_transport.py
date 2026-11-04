@@ -68,6 +68,18 @@ def _post(body: dict, timeout: int = 180) -> dict:
     return d
 
 
+def _call(body: dict, source: str) -> dict:
+    """En fråga, prövad mot tjänstens mätare först och betald efteråt."""
+    try:
+        from . import meter                                  # noqa: PLC0415
+    except ImportError:
+        import meter                                         # noqa: PLC0415
+    meter.before(body["model"])
+    d = _post(body)
+    meter.after(body["model"], d.get("usage") if isinstance(d, dict) else None, source)
+    return d
+
+
 def _text_of(d: dict) -> str:
     return "".join(b.get("text", "") for b in (d.get("content") or []) if b.get("type") == "text")
 
@@ -77,7 +89,7 @@ def transport(effort: str = "low") -> Callable:
     def ask(q) -> str:
         body = {"model": MODEL, "system": SYSTEM, "max_tokens": MAX_OUTPUT_TOKENS,
                 "messages": [{"role": "user", "content": q.as_prompt()}]}
-        return _text_of(_post(body))
+        return _text_of(_call(body, "andra_läsaren"))
     return ask
 
 
@@ -96,7 +108,7 @@ def vision_transport(effort: str = "low") -> Callable:
                                                         "data": base64.b64encode(png).decode()}})
         body = {"model": MODEL, "max_tokens": VISION_MAX_TOKENS,
                 "messages": [{"role": "user", "content": content}]}
-        return _text_of(_post(body))
+        return _text_of(_call(body, "granskning"))
     return ask
 
 
@@ -112,7 +124,7 @@ def agent_transport(effort: str = "low") -> Callable:
         msgs = _to_messages(items)
         body = {"model": MODEL, "system": AGENT_SYSTEM, "max_tokens": 6000, "messages": msgs,
                 "tools": [_to_tool(t) for t in tools]}
-        d = _post(body)
+        d = _call(body, "agent")
         calls = [{"call_id": b.get("id"), "name": b.get("name"), "arguments": json.dumps(b.get("input") or {})}
                  for b in (d.get("content") or []) if b.get("type") == "tool_use"]
         return {"calls": calls, "text": _text_of(d), "status": d.get("stop_reason"), "id": d.get("id")}

@@ -47,6 +47,9 @@ def _cached_detector(output_dir, detect_page, persistent_dir=None, revision=None
 
 def _child(connection, args, kwargs, rule_values):
     try:
+        # this process asks language models too: through the service's ledger and under its ceiling
+        from .api_budget import install_meter
+        install_meter()
         label_audit = kwargs.pop('label_audit', False)
         from vvs_engine.cli import analyze_pdf
         from vvs_engine import rules, disciplines

@@ -41,6 +41,8 @@ def _parts(items):
 class GeminiTransport(AssignmentTransport):
     def _send(self, system, overview, content, schema=None, key='decisions'):
         from vvs_engine.source_rules.pipestudio.final_bind import SCHEMA
+        from . import api_budget
+        api_budget.check(self.model)
         schema = schema or SCHEMA
         from google.genai import types
         parts = _parts(overview) + _parts(content)
@@ -69,6 +71,9 @@ class GeminiTransport(AssignmentTransport):
                   'tokens_out': 0 if reused else ((getattr(u, 'candidates_token_count', 0) or 0)
                                                   + (getattr(u, 'thoughts_token_count', 0) or 0)),
                   'cached_tokens': cached, 'request_reused': reused}
+        if not reused:
+            record['kr'] = api_budget.charge(self.model, record['tokens_in'], record['tokens_out'], cached, 0,
+                                             'tilldelning')
         return json.loads(response.text)[key], record
 
 

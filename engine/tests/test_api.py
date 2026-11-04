@@ -1994,3 +1994,107 @@ def test_a_drawn_correction_is_bent_and_the_row_follows(client, synthetic_pdf):
     client.delete(f"/api/drawings/{d['id']}/corrections/{c['id']}", headers=H)
     assert client.put(f"/api/drawings/{d['id']}/corrections/{c['id']}/shape", headers=H,
                       json={"points": [[1, 1], [2, 2]]}).status_code == 409
+
+
+def _budget_admin(client, email):
+    tok = client.post("/api/auth/register", json={"email": email, "password": "hemligt1"}).json()["access_token"]
+    from app.db import SessionLocal, User
+    db = SessionLocal()
+    db.query(User).filter(User.email == email).first().role = "admin"
+    db.commit(); db.close()
+    return {"Authorization": f"Bearer {tok}"}
+
+
+def test_a_request_is_priced_from_its_own_tokens(client):
+    from app import api_budget
+    cfg = {"prices": api_budget.PRICE_DEFAULTS, "usd_sek": 10.0}
+    # a million input tokens of which 200 000 from the cache, and 100 000 out: 8 + 0.2 + 5 USD
+    assert api_budget.cost_kr("gpt-6-astra", 1_000_000, 100_000, 200_000, 0, cfg) == 132.0
+    # a dated model id takes the price of the name it begins with
+    assert api_budget.cost_kr("gpt-6-astra-2026-09-01", 1_000_000, 0, 0, 0, cfg) == 100.0
+    assert api_budget.cost_kr("a-model-with-no-price", 1000, 1000, 0, 0, cfg) is None
+
+
+def test_the_service_locks_ai_at_its_cost_ceiling_and_reads_without_it(client, synthetic_pdf, monkeypatch):
+    from app import api_budget, jobs, source_model
+    monkeypatch.setattr(jobs, "submit", lambda *_: None)
+    monkeypatch.setattr(source_model, "configured", lambda: True)
+    A = _budget_admin(client, "taket@example.com")
+    r = client.post("/api/auth/register", json={"email": "kund-taket@example.com", "password": "hemligt1"}).json()
+    H = {"Authorization": f"Bearer {r['access_token']}"}
+    try:
+        st = client.get("/api/admin/api-budget", headers=A).json()
+        assert st["limit_kr"] == 10000.0 and st["exhausted"] is False
+        assert client.get("/api/admin/api-budget", headers=H).status_code == 403
+        client.post("/api/admin/api-budget/reset", json={}, headers=A)
+        assert client.put("/api/admin/api-budget", json={"limit_kr": 1.0}, headers=A).json()["limit_kr"] == 1.0
+        assert client.get("/api/analysis-options", headers=H).json()["ai_default"] == "gpt-6-astra"
+        # one request worth more than the ceiling
+        api_budget.charge("gpt-6-astra", 200_000, 20_000, 0, 0, "tilldelning")
+        st = client.get("/api/admin/api-budget", headers=A).json()
+        assert st["exhausted"] is True and st["remaining_kr"] == 0 and st["by_source"][0]["source"] == "tilldelning"
+        opts = client.get("/api/analysis-options", headers=H).json()
+        assert opts["ai_budget_exhausted"] is True and opts["ai_default"] == "none"
+        astra = next(m for m in opts["ai_models"] if m["id"] == "gpt-6-astra")
+        assert astra["available"] is False and astra["blocked"] == api_budget.EXHAUSTED
+        p = client.post("/api/projects", json={"name": "Taket"}, headers=H).json()
+        with open(synthetic_pdf, "rb") as f:
+            d = client.post(f"/api/projects/{p['id']}/drawings", files={"file": ("taket.pdf", f, "application/pdf")},
+                            headers=H).json()
+        locked = client.post(f"/api/drawings/{d['id']}/analyze", json={"ai_model": "gpt-6-astra"}, headers=H)
+        assert locked.status_code == 402 and "Alla krediter för AI är förbrukade" in locked.text
+        # reading without AI goes on as before
+        free = client.post(f"/api/drawings/{d['id']}/analyze", json={"ai_model": "none"}, headers=H)
+        assert free.status_code == 200 and free.json()["summary"]["ai_model"] == "none"
+        # a raised ceiling opens it again; a reset starts the count from nothing
+        assert client.put("/api/admin/api-budget", json={"limit_kr": 10000.0}, headers=A).json()["exhausted"] is False
+        assert client.post("/api/admin/api-budget/reset", json={}, headers=A).json()["spent_kr"] == 0
+    finally:
+        client.put("/api/admin/api-budget", json={"limit_kr": 10000.0}, headers=A)
+        client.post("/api/admin/api-budget/reset", json={}, headers=A)
+
+
+def test_a_model_without_a_price_may_not_be_asked(client):
+    from app import api_budget
+    A = _budget_admin(client, "prislista@example.com")
+    try:
+        st = client.put("/api/admin/api-budget", json={"prices": {"gpt-6.1-sol": None}}, headers=A).json()
+        assert "gpt-6.1-sol" not in st["prices"]
+        assert "saknas" in (api_budget.blocked("gpt-6.1-sol") or "")
+        assert api_budget.blocked("gpt-6-astra") is None
+    finally:
+        client.put("/api/admin/api-budget", json={"prices": {"gpt-6.1-sol": api_budget.PRICE_DEFAULTS["gpt-6.1-sol"]}},
+                   headers=A)
+
+
+def test_a_running_reading_stops_asking_when_the_ceiling_is_reached(client):
+    from types import SimpleNamespace as NS
+    from app import api_budget
+    from app.source_model import AssignmentTransport
+    A = _budget_admin(client, "pagaende@example.com")
+    sent = []
+
+    def create(**kw):
+        sent.append(kw)
+        u = NS(input_tokens=400_000, output_tokens=40_000, input_tokens_details=NS(cached_tokens=0))
+        return NS(status="completed", output_text='{"decisions":[]}', usage=u, model=kw["model"], id=f"r{len(sent)}")
+    try:
+        client.post("/api/admin/api-budget/reset", json={}, headers=A)
+        client.put("/api/admin/api-budget", json={"limit_kr": 50.0}, headers=A)
+        t = AssignmentTransport(NS(responses=NS(create=create)), "gpt-6-astra")
+        t([{"stretch": 1, "points": [[0, 0], [10, 0]], "candidates": []}])        # 4 + 2 USD: about 58 kr
+        assert len(sent) == 1 and t.usage[0]["kr"] > 50
+        import pytest as _pytest
+        with _pytest.raises(api_budget.BudgetExhausted):
+            t([{"stretch": 2, "points": [[0, 5], [10, 5]], "candidates": []}])
+        assert len(sent) == 1, "nothing more is sent once the ceiling is reached"
+        # the engine's own transports pay through the same ledger
+        from tools import meter
+        api_budget.install_meter()
+        client.post("/api/admin/api-budget/reset", json={}, headers=A)
+        meter.after("gpt-6-astra", {"input_tokens": 1000, "output_tokens": 100,
+                                    "input_tokens_details": {"cached_tokens": 0}}, "andra_läsaren")
+        assert client.get("/api/admin/api-budget", headers=A).json()["by_source"][0]["source"] == "andra_läsaren"
+    finally:
+        client.put("/api/admin/api-budget", json={"limit_kr": 10000.0}, headers=A)
+        client.post("/api/admin/api-budget/reset", json={}, headers=A)

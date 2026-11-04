@@ -8,7 +8,7 @@ import { t as tr, trf } from "../i18n";
  * Samma ritning kan läsas en gång med varje, och raden "Läst med …" på analysen visar tokens och pris. En modell
  * servern saknar nyckel till går inte att välja, och det står varför. */
 
-type Choice = { id: string; label: string; available: boolean };
+type Choice = { id: string; label: string; available: boolean; blocked?: string | null };
 
 const NOTES: Record<string, string> = {
   "none": "Ritningens egna belägg avgör. Ingen AI-kostnad.",
@@ -22,6 +22,7 @@ export default function AiModelDialog() {
   const [open, setOpen] = useState<{ count: number } | null>(null);
   const [choices, setChoices] = useState<Choice[]>([]);
   const [value, setValue] = useState<string>("gpt-6-astra");
+  const [exhausted, setExhausted] = useState(false);
   const answer = useRef<((v: string | null) => void) | null>(null);
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export default function AiModelDialog() {
       api.analysisOptions().then((o: any) => {
         const list: Choice[] = o.ai_models ?? [];
         setChoices(list);
+        setExhausted(!!o.ai_budget_exhausted);
         // Förvalt: det man själv valde senast, annars serverns standard (GPT-6 Astra när nyckeln finns).
         const last = lastAiModel();
         const usable = (id: string | null | undefined) => !!id && list.some(c => c.id === id && c.available);
@@ -54,6 +56,8 @@ export default function AiModelDialog() {
         <h3 style={{ marginTop: 0 }}>{tr("Välj AI-modell för analysen")}</h3>
         <p className="muted small">{open.count > 1 ? trf("Gäller alla {0} ritningar som startas nu.", open.count)
           : tr("Läs samma ritning med flera modeller för att jämföra mängder, tokens och pris.")}</p>
+        {exhausted && <p className="aidlg-off" role="status"><b>{tr("Alla krediter för AI är förbrukade.")}</b>{" "}
+          {tr("Analysen går lika bra utan AI - ritningens egna belägg avgör.")}</p>}
         <div className="aidlg-list" role="radiogroup">
           {(choices.length ? choices : [{ id: "none", label: "Utan AI", available: true }]).map(c => (
             <label key={c.id} className={`aidlg-opt${value === c.id ? " on" : ""}${c.available ? "" : " off"}`}>
@@ -61,6 +65,7 @@ export default function AiModelDialog() {
                 onChange={() => setValue(c.id)} />
               <span><b>{tr(c.label)}</b>{c.id === "gpt-6-astra" ? <span className="muted small"> · {tr("förvald")}</span> : null}<br />
                 <span className="muted small">{c.available ? tr(NOTES[c.id] ?? "")
+                  : c.blocked ? tr(c.blocked)
                   : tr("Inte ansluten på servern - nyckeln saknas i Railway.")}</span></span>
             </label>
           ))}

@@ -198,6 +198,14 @@ def solve(result_dir: str, page: int, pdf_path: str, choice: str, turns=None, cl
         if clock() - start > MAX_SECONDS:
             report["status"] = "TIME_LIMIT"
             break
+        from . import api_budget
+        model_id = getattr(turns, "model", None)
+        why = api_budget.blocked(model_id)
+        if why:
+            # the service's ceiling on language models: the agent stops, and what the rules read stands
+            report["status"] = "BUDGET_EXHAUSTED"
+            report["report"] = why
+            break
         try:
             out = turns.turn(new)
         except Exception as exc:                          # noqa: BLE001
@@ -205,7 +213,10 @@ def solve(result_dir: str, page: int, pdf_path: str, choice: str, turns=None, cl
             report["status"] = "MODEL_FAILED"
             report["report"] = f"Modellen kunde inte nås: {type(exc).__name__}"
             break
-        report["usage"].append(out.get("usage") or {})
+        used = out.get("usage") or {}
+        api_budget.charge(used.get("model") or model_id, used.get("tokens_in") or 0, used.get("tokens_out") or 0,
+                          used.get("cached_tokens") or 0, 0, "agent")
+        report["usage"].append(used)
         if not out.get("calls"):
             report["report"] = out.get("text") or ""
             report["status"] = "DONE"

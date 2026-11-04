@@ -343,6 +343,23 @@ läste; en sådan erbjuds de onämnda rören vid den, bara om bladet självt skr
 någon annanstans, och det modellen namnger så står som att granska. Annat redovisas som "sett, inte läst".
 Rutor, anrop och frågor taket lämnade står på raden "Läst med …". `VVS_SHEET_SWEEP=0` stänger av svepet.
 
+**Taket på AI-kostnaden** (`backend/app/api_budget.py`, tabellen `api_spend`). Allt tjänsten lägger på
+språkmodeller går mot ett tak, 10 000 kr från början:
+- tilldelningen under en analys, kompletteringsfrågorna och svepet
+- agenten och samtalsagentens textsvar
+- andra läsaren och synkontrollen
+
+Varje anrop frågar först om det får göras. Efteråt bokförs vad det kostade: anropets egna tokens gånger
+modellens listpris och växelkursen. Raden bär priset den räknades med.
+
+När summan sedan den senaste nollställningen når taket låses AI för hela tjänsten. Valrutan och varje
+AI-funktion säger då att alla krediter för AI är förbrukade, och analyser kan fortfarande köras "Utan AI". En
+pågående analys slutar fråga när taket nås och läser resten med reglerna.
+
+En modell utan pris i prislistan får inte anropas. Prislistan, växelkursen, taket och nollställningen finns
+under Administration → AI-kostnad, och utgångspriserna står med källa och datum. Röstassistentens samtal går
+direkt mellan webbläsaren och OpenAI och syns inte i reskontran; taket avgör bara om ett samtal får starta.
+
 ### 3.1 Andra läsaren (`semantics/astra.py`, transport i `engine/tools/astra_transport.py`)
 
 *Modell:* OpenAI, standard `gpt-6-astra` (miljövariabeln `VVS_SECOND_READER_MODEL`), via Responses-API:et.
