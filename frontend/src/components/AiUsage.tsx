@@ -12,7 +12,7 @@ export function AiUsage({ usage }: { usage?: any }) {
       {!none && <> · {NUM.format(usage.requests)} {tr("anrop")} · {NUM.format(usage.tokens_in)} {tr("tokens in")}
         {usage.cached_tokens ? <> ({NUM.format(usage.cached_tokens)} {tr("från cache")})</> : null}
         {" · "}{NUM.format(usage.tokens_out)} {tr("tokens ut")}
-        {" · "}{usage.usd == null ? tr("pris okänt") : `$${usage.usd.toFixed(2)}`}</>}
+        {" · "}{usage.kr ? `${NUM.format(usage.kr)} kr` : usage.usd == null ? tr("pris okänt") : `$${usage.usd.toFixed(2)}`}</>}
       {none && <> · {tr("ingen AI-kostnad")}</>}
       {!none && usage.missed_checked > 0 && <> · {tr("kontroll av missade")}: {NUM.format(usage.missed_named)} {tr("rör namngivna, att granska")}</>}
       {!none && usage.swept_tiles > 0 && <> · {tr("svep")}: {NUM.format(usage.swept_tiles)} {tr("rutor")}, {NUM.format(usage.sweep_requests ?? 0)} {tr("anrop")}</>}

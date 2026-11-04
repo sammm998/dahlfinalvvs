@@ -733,6 +733,8 @@ def sheet_agent(sheet_id: str, body: CadAsk, user: User = Depends(current_user),
     s = _sheet(db, user, sheet_id)
     model = cad_agent.CadAgentModel(_v2(s))
     from .agent import run_turn
+    from . import api_budget
+    api_budget.require()
     try:
         from tools.astra_transport import agent_transport
     except Exception as e:                                      # noqa: BLE001

@@ -176,6 +176,8 @@ class AssignmentTransport:
     def _send(self, system, overview, content, schema=None, key='decisions'):
         """One request to OpenAI; returns (the answer's `key` list, usage record)."""
         from vvs_engine.source_rules.pipestudio.final_bind import SCHEMA
+        from . import api_budget
+        api_budget.check(self.model)          # the service's ceiling on what language models may cost
         schema = schema or SCHEMA
         cache_key = self._cache_key()
         request = dict(
@@ -201,6 +203,9 @@ class AssignmentTransport:
                   'tokens_out': 0 if reused else u.output_tokens if u else None,
                   'cached_tokens': 0 if reused else getattr(getattr(u, 'input_tokens_details', None), 'cached_tokens', 0),
                   'request_reused': reused}
+        if not reused:
+            record['kr'] = api_budget.charge(self.model, record['tokens_in'] or 0, record['tokens_out'] or 0,
+                                             record['cached_tokens'] or 0, 0, 'tilldelning')
         if response.status != 'completed':
             raise RuntimeError('Model assignment did not complete')
         return json.loads(response.output_text)[key], record

@@ -953,3 +953,56 @@ def learned_rule_deactivate(rule_id: str, admin: User = Depends(current_admin), 
     rule.state, rule.off_reason = AVSTANGD, "avstängd av admin"
     db.commit()
     return rule_out(db, rule)
+
+
+# ------------------------------------------------------------------------------------------------------------
+# Taket på API-kostnaden (api_budget.py)
+# ------------------------------------------------------------------------------------------------------------
+
+class ApiBudgetIn(BaseModel):
+    limit_kr: float | None = None
+    usd_sek: float | None = None
+    prices: dict[str, dict | None] | None = None
+
+
+@router.get("/api-budget")
+def api_budget_status(admin: User = Depends(current_admin), db: Session = Depends(get_db)):
+    """Vad tjänsten lagt på språkmodeller sedan den senaste nollställningen, taket, och prislistan."""
+    from . import api_budget
+    return api_budget.status(db)
+
+
+@router.put("/api-budget")
+def api_budget_set(body: ApiBudgetIn, admin: User = Depends(current_admin), db: Session = Depends(get_db)):
+    from . import api_budget
+    change: dict[str, Any] = {}
+    if body.limit_kr is not None:
+        if body.limit_kr < 0:
+            raise HTTPException(422, "Taket kan inte vara negativt.")
+        change["limit_kr"] = float(body.limit_kr)
+    if body.usd_sek is not None:
+        if body.usd_sek <= 0:
+            raise HTTPException(422, "Växelkursen måste vara större än noll.")
+        change["usd_sek"] = float(body.usd_sek)
+    if body.prices is not None:
+        clean: dict[str, dict | None] = {}
+        for name, p in body.prices.items():
+            if p is None:
+                clean[name] = None
+                continue
+            for k in ("in", "out", "cached", "cache_write"):
+                if k in p and p[k] is not None and float(p[k]) < 0:
+                    raise HTTPException(422, f"Priset för {name} kan inte vara negativt.")
+            clean[name] = {k: (float(v) if k in ("in", "out", "cached", "cache_write") and v is not None else v)
+                           for k, v in p.items() if k in ("in", "out", "cached", "cache_write", "source", "date")}
+        change["prices"] = clean
+    api_budget.save(db, change, admin.id)
+    return api_budget.status(db)
+
+
+@router.post("/api-budget/reset")
+def api_budget_reset(admin: User = Depends(current_admin), db: Session = Depends(get_db)):
+    """Räkningen börjar om på noll från nu; reskontran står kvar som den var."""
+    from . import api_budget
+    api_budget.save(db, {"reset_at": dt.datetime.now(dt.timezone.utc).isoformat()}, admin.id)
+    return api_budget.status(db)

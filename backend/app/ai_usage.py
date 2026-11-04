@@ -63,6 +63,8 @@ def read_usage(out_dir, choice):
         'tokens_out': sum(r.get('tokens_out') or 0 for r in used),
         'cached_tokens': sum(r.get('cached_tokens') or 0 for r in used),
         'usd': round(sum(priced), 4) if used and all(p is not None for p in priced) else (0.0 if not used else None),
+        # what the requests cost the service in kronor, as its ledger booked them (api_budget.py)
+        'kr': round(sum(float(r.get('kr') or 0) for r in used), 2),
         # a model that was chosen but did not answer: the rules read the sheet instead, and that is said
         'fell_back_to_rules': bool(fallbacks),
         'fallback_reason': (fallbacks[0] or {}).get('reason') if fallbacks else None,

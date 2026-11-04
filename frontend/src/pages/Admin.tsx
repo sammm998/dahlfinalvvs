@@ -7,6 +7,7 @@ import { AgentRecipes, Corrections, Learning, LearnedRules, Readings, RulesMoved
 import { RulesCatalogue } from "../components/AdminRules";
 import { Assumptions } from "../components/AdminSettings";
 import { SystemHealth } from "../components/AdminSystem";
+import { ApiBudget } from "../components/AdminApiBudget";
 
 /* Att driva tjänsten.
  *
@@ -21,7 +22,7 @@ import { SystemHealth } from "../components/AdminSystem";
  */
 
 type Section = "overblick" | "lasningar" | "rattelser" | "inlarning" | "recept" | "regler_larda" | "regler" | "antaganden"
-  | "konton" | "priser" | "partners" | "crm" | "meddelanden" | "innehall" | "prov" | "heatmap" | "system";
+  | "konton" | "priser" | "partners" | "crm" | "meddelanden" | "innehall" | "prov" | "heatmap" | "system" | "ai_kostnad";
 
 const SECTIONS: { id: Section; label: string; group: string; lead: string }[] = [
   { id: "overblick", label: "Överblick", group: "Läsningen", lead: "Hur läsningen mår, och vad som väntar på någon." },
@@ -41,6 +42,7 @@ const SECTIONS: { id: Section; label: string; group: string; lead: string }[] = 
   { id: "prov", label: "A/B-prov", group: "Företaget", lead: "Två varianter av samma sak, och vilken som gick bäst." },
   { id: "heatmap", label: "Heatmap", group: "Företaget", lead: "Var i gränssnittet folk klickar, och var de ger upp." },
   { id: "system", label: "Systemet", group: "Systemet", lead: "Vad som kör och hur det mår: byggning, andra läsaren, kö, lager, databas." },
+  { id: "ai_kostnad", label: "AI-kostnad", group: "Systemet", lead: "Vad tjänsten lagt på språkmodeller, taket och prislistan. När taket är nått låses AI och det står att alla krediter för AI är förbrukade; läsning utan AI går som vanligt." },
 ];
 
 const pct = (v: number | null | undefined) =>
@@ -291,6 +293,7 @@ export default function AdminPage() {
           {sec === "prov" && <Experiments />}
           {sec === "heatmap" && <Heatmap />}
           {sec === "system" && <SystemHealth />}
+          {sec === "ai_kostnad" && <ApiBudget />}
         </div>
       </div>
     </div>

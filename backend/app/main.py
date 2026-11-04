@@ -36,6 +36,8 @@ async def _lifespan(_app: FastAPI):
     # gå upp alls. Ett varningsmeddelande i en logg ingen läser är samma sak som ingenting.
     demand_a_real_secret()
     init_db()
+    from . import api_budget
+    api_budget.install_meter()      # the engine's own transports ask and pay through the service's ledger
     if os.environ.get("PYTEST_CURRENT_TEST") is None:
         from .reset_once import run as _reset_once
         _reset_once(storage.path(""))
@@ -76,6 +78,7 @@ async def _lifespan(_app: FastAPI):
         from . import jobs as _jobs
         _jobs.resubmit_unfinished()
     yield
+    api_budget.uninstall_meter()
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=_lifespan)
@@ -511,6 +514,8 @@ def live_session(job_id: str, language: Literal["sv", "en"] = "sv", user: User =
     if j.status != "COMPLETED":
         raise HTTPException(409, "Analysen är inte klar")
     from .live_agent import create_session
+    from . import api_budget
+    api_budget.require()
     try:
         result = create_session(language=language)
     except ValueError:
@@ -529,6 +534,8 @@ def live_text(job_id: str, body: dict, language: Literal["sv", "en"] = "sv", use
     if j.status != "COMPLETED":
         raise HTTPException(409, "Analysen är inte klar")
     from .live_agent import text_turn
+    from . import api_budget
+    api_budget.require()
     prev = body.get("previous_response_id")
     try:
         result = text_turn(body.get("input") or [], prev if isinstance(prev, str) else None, language=language)
@@ -545,12 +552,20 @@ def analysis_options(user: User = Depends(current_user)):
     from vvs_engine.source_rules.styles import profiles
     from .source_model import connection_settings
     key, model = connection_settings()
-    from . import ai_models
+    from . import ai_models, api_budget
     ready = ai_models.available()
+    # the service's ceiling on what language models may cost: past it, every model but "none" is closed
+    blocked = {c: api_budget.blocked(ai_models.model_id(c)) for c in ai_models.CHOICES if c != ai_models.NONE}
+    exhausted = api_budget.blocked(None) is not None
+    for c, why in blocked.items():
+        if why:
+            ready[c] = False
     return {"styles": [{"id": k, "name": p.get("name", k)} for k,p in profiles().items()],
             "model": {"configured": bool(key), "name": model},
-            "ai_models": [{"id": c, "label": ai_models.LABELS[c], "available": ready[c]} for c in ai_models.CHOICES],
-            "ai_default": ai_models.default()}
+            "ai_models": [{"id": c, "label": ai_models.LABELS[c], "available": ready[c],
+                           "blocked": blocked.get(c)} for c in ai_models.CHOICES],
+            "ai_default": ai_models.default(),
+            "ai_budget_exhausted": exhausted}
 
 
 # ---------------------------------------------------------------- analysis jobs
@@ -583,6 +598,11 @@ def analyze(drawing_id: str, body: AnalyzeIn | None = None, user: User = Depends
     style_id = "auto"  # Style is inferred for every application analysis.
     from . import ai_models
     ai_model = (body.ai_model if body else None) or ai_models.default()
+    if ai_model != ai_models.NONE:
+        from . import api_budget
+        why = api_budget.blocked(ai_models.model_id(ai_model))
+        if why:
+            raise HTTPException(402, f"{why} Välj Utan AI - analysen går lika bra utan.")
     if not ai_models.available().get(ai_model):
         raise HTTPException(422, f"{ai_models.LABELS[ai_model]} är inte ansluten på servern. Välj en annan modell eller Utan AI.")
     given: dict | None = None
@@ -1528,6 +1548,8 @@ def agent_ask(job_id: str, body: AgentAsk, user: User = Depends(current_user), d
     # way - a flag that meant something else, a proxy that attaches the credential without setting HTTPS_PROXY -
     # and a wrong "cannot" is worse than a slow "could not": it is a refusal on a false premise. So the call is
     # made, and what comes back is what the reader is told.
+    from . import api_budget
+    api_budget.require()
     model = DrawingModel(_result_dir(j))
     sel = {"pipe_ids": body.pipe_ids or [], "bbox": body.bbox, "page": body.page}
     try:
@@ -1553,6 +1575,8 @@ def vision_check(job_id: str, page: int = 0, user: User = Depends(current_user),
     j = _job(db, user, job_id)
     if j.status != "COMPLETED":
         raise HTTPException(409, "Analysen är inte klar")
+    from . import api_budget
+    api_budget.require()
     credits_api.charge_vision(db, user, j, page)
     try:
         import pymupdf

@@ -673,6 +673,25 @@ class CreditEntry(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class ApiSpend(Base):
+    """En rad i API-reskontran: ett anrop till en språkmodell och vad det kostade tjänsten.
+
+    Taket på vad tjänsten får lägga på språkmodeller (`api_budget.py`) är summan av raderna efter den senaste
+    nollställningen. Varje rad bär sina tokens och priset den räknades med, så att en flyttad prislista inte
+    skriver om vad som redan gått åt."""
+    __tablename__ = "api_spend"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    source: Mapped[str] = mapped_column(String(32), default="")              # tilldelning | agent | röst | andra_läsaren
+    model: Mapped[str] = mapped_column(String(64), default="")
+    tokens_in: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, default=0)
+    cached_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    kr: Mapped[float] = mapped_column(Float, default=0.0)
+    price: Mapped[dict] = mapped_column(JSON, default=dict)                   # priset raden räknades med
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
 class CadRevision(Base):
     """En sparning som ändrade något: vad bladet var då, vem som sparade och vad som rördes.
 

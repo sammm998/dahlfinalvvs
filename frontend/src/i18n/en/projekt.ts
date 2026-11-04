@@ -181,6 +181,8 @@ export const projekt: Record<string, string> = {
   "kontroll av missade": "check for missed labels",
   "rör namngivna, att granska": "pipes named, to review",
   "svep": "sweep",
+  "Alla krediter för AI är förbrukade.": "All AI credits have been used.",
+  "Analysen går lika bra utan AI - ritningens egna belägg avgör.": "The analysis works just as well without AI - the drawing's own evidence decides.",
   "rutor": "tiles",
   "frågor ej ställda (taket)": "questions not asked (cap)",
   "anrop": "requests",

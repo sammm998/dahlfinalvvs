@@ -77,6 +77,23 @@ def _await(d: dict) -> str:
     return d
 
 
+def _meter():
+    try:
+        from . import meter                                  # noqa: PLC0415
+    except ImportError:
+        import meter                                         # noqa: PLC0415
+    return meter
+
+
+def _call(body: dict, source: str) -> dict:
+    """One request, asked of the service's meter first and paid for after."""
+    m = _meter()
+    m.before(body["model"])
+    d = _await(_post(body))
+    m.after(body["model"], d.get("usage"), source)
+    return d
+
+
 def _text_of(d: dict) -> str:
     return "".join(c.get("text", "")
                    for o in d.get("output", []) for c in (o.get("content") or [])
@@ -96,7 +113,7 @@ def transport(effort: str = "low") -> Callable:
     def ask(q) -> str:
         body = {"model": MODEL, "instructions": SYSTEM, "input": q.as_prompt(),
                 "max_output_tokens": MAX_OUTPUT_TOKENS, "reasoning": {"effort": effort}, "background": True}
-        return _text_of(_await(_post(body)))
+        return _text_of(_call(body, "andra_läsaren"))
     return ask
 
 
@@ -115,7 +132,7 @@ def vision_transport(effort: str = "low") -> Callable:
                             "image_url": "data:image/png;base64," + base64.b64encode(png).decode()})
         body = {"model": MODEL, "input": [{"role": "user", "content": content}],
                 "max_output_tokens": 8000, "reasoning": {"effort": effort}, "background": True}
-        return _text_of(_await(_post(body)))
+        return _text_of(_call(body, "granskning"))
     return ask
 
 
@@ -173,7 +190,7 @@ def agent_transport(effort: str = "low") -> Callable:
                 "max_output_tokens": 6000, "reasoning": {"effort": effort}, "background": True}
         if previous_response_id:
             body["previous_response_id"] = previous_response_id
-        d = _await(_post(body))
+        d = _call(body, "agent")
         calls = [{"call_id": o.get("call_id"), "name": o.get("name"), "arguments": o.get("arguments") or "{}"}
                  for o in d.get("output", []) if o.get("type") == "function_call"]
         return {"calls": calls, "text": _text_of(d), "status": d.get("status"), "id": d.get("id")}
