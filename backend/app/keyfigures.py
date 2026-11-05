@@ -220,8 +220,8 @@ def _price(article: dict | None) -> float | None:
     the book holds a few thousand articles at 0 kr, and a row costed at 0 kr would say it costs nothing."""
     if not article:
         return None
-    from .main import _material
-    book = _material()
+    from .main import _material_book
+    book = _material_book()
     if id(book) not in _ARTICLES:
         _ARTICLES.clear()
         _ARTICLES[id(book)] = {r.get("a"): r for r in book["rows"]}

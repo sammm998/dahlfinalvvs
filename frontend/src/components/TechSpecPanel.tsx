@@ -156,7 +156,7 @@ export default function TechSpecPanel({ project }: { project: any }) {
         {catalog?.materialbok?.n ? ` (${catalog.materialbok.n.toLocaleString(locale())} ${tr("artiklar")})` : ""}
         {" · "}
         {catalog?.katalog
-          ? <><b>{tr("Dahls produktkatalog")}</b> ({catalog.katalog.pages} {tr("sidor")})</>
+          ? <><b>{tr("Dahls produktkatalog")}</b> ({catalog.katalog.pages ? `${catalog.katalog.pages} ${tr("sidor")}` : `${(catalog.katalog.n ?? 0).toLocaleString(locale())} ${tr("artiklar")}`})</>
           : <span>{tr("Dahls produktkatalog är inte inläst än")}</span>}
       </p>
       <details className="settings tspec-cat">

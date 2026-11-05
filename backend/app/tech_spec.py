@@ -61,11 +61,14 @@ def material_index() -> MaterialIndex:
     with _LOCK:
         if _INDEX is None:
             ix = MaterialIndex()
-            path = os.path.join(os.path.dirname(__file__), "data", "material.json.gz")
-            if os.path.exists(path):
-                with gzip.open(path, "rt", encoding="utf-8") as fh:
-                    book = json.load(fh)
-                ix.add_material_book(book.get("rows", []), label=f"Materialboken ({book.get('source') or 'materialsortering'})")
+            # samma material som Materialsidan: Dahls katalog när den finns, annars materialboken
+            from .main import _material
+            book = _material()
+            if book.get("rows"):
+                if book.get("kind") == "dahl":
+                    ix.add_material_book(book["rows"], label=book.get("source") or "Dahls produktkatalog", source="katalog")
+                else:
+                    ix.add_material_book(book["rows"], label=f"Materialboken ({book.get('source') or 'materialsortering'})")
             cat = _catalog_index()
             if cat:
                 ix.add_catalog(cat)

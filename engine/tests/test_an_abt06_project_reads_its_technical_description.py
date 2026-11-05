@@ -75,7 +75,7 @@ def test_the_whole_flow(client, pdf):
     cats = {c["value"] for c in got["facets"]["categories"]}
     assert "Golvbrunnar" in cats and "Tvättställ" in cats
     assert {m["value"] for m in got["facets"]["manufacturers"]} >= {"Furhoff", "Purus", "IFÖ", "FMM", "Broen"}
-    assert got["sources"]["materialbok"]["n"] > 1000      # materialboken ligger med tjänsten
+    assert got["sources"]["katalog"]["n"] > 20000         # Dahls produktkatalog ligger med tjänsten
 
     ts = items["TS101/post"]
     assert ts["match"]["status"] == "hittad" and ts["match"]["hits"][0]["ref"] == "7606418"

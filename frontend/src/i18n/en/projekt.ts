@@ -423,6 +423,9 @@ export const projekt: Record<string, string> = {
   "Alla": "All",
   "Varje beteckning på bladet, oavsett disciplin. Rören läses och mäts exakt som i VVS; allt annat bladet skriver listas, markeras och räknas i styck, och rum med area i texten får m². Det bladet själv inte förklarar märks granskas.": "Every designation on the sheet, whatever the discipline. The pipes are read and measured exactly as in HVAC; everything else the sheet writes is listed, marked and counted in pieces, and rooms with an area in their text get m². Whatever the sheet itself does not explain is marked for review.",
   // teknisk beskrivning
+  "artiklar ur": "articles from",
+  "Dahl art.nr": "Dahl art. no.",
+  "Priset kommer ur materialboken på samma RSK-nummer; katalogen skriver inget pris.": "The price comes from the material book on the same RSK number; the catalogue gives no price.",
   "förslag": "suggested",
   "välj storlek ({0})": "choose size ({0})",
   "Beskrivningen anger ingen storlek – välj:": "The description gives no size – choose:",
