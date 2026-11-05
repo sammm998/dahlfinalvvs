@@ -79,6 +79,7 @@ class _Doc:
     page: int | None = None
     price: float | None = None
     unit: str = ""
+    group: set[str] = field(default_factory=set)     # katalogens produktgrupp: belägg för fabrikatet, inget mer
 
 
 class MaterialIndex:
@@ -88,6 +89,7 @@ class MaterialIndex:
         self.docs: list[_Doc] = []
         self.by_token: dict[str, list[int]] = defaultdict(list)
         self.by_ref: dict[str, list[int]] = defaultdict(list)
+        self.by_group: dict[str, list[int]] = defaultdict(list)
         self.sources: dict[str, dict[str, Any]] = {}
         self._sorted: list[str] | None = None
 
@@ -96,6 +98,8 @@ class MaterialIndex:
         self.docs.append(d)
         for t in d.tokens:
             self.by_token[t].append(i)
+        for t in d.group - d.tokens:
+            self.by_group[t].append(i)
         for r in refs:
             self.by_ref[r].append(i)
 
@@ -108,8 +112,11 @@ class MaterialIndex:
                 continue
             extra = " ".join(x for x in (r.get("dahl"), r.get("rsk")) if x)
             refs = {x for x in (a, r.get("rsk"), r.get("dahl")) if x}
+            # katalogens produktgrupp bär ofta fabrikatet ("Kulventiler Beulco", "Pressrör Rostfria Mapress"): det
+            # räknas som belägg för fabrikatet, men inte som modell eller varunamn
+            group = set(words(r.get("gr") or "")) if source == "katalog" else set()
             self._add(_Doc(source, a, name, compact_tokens(name + " " + a + " " + extra), price=r.get("p"),
-                           unit=r.get("e") or "", page=r.get("page")), refs=refs)
+                           unit=r.get("e") or "", page=r.get("page"), group=group), refs=refs)
             n += 1
         self.sources[source] = {"label": label, "n": n}
 
@@ -177,7 +184,7 @@ class MaterialIndex:
         if pipe and aliases and not model_toks:
             # en ledning skrivs med fabrikat och material ("Wafix PP"), sällan med modell: fabrikatets rör
             for a in aliases:
-                for i in self.by_token.get(a, []):
+                for i in self.by_token.get(a, []) + self.by_group.get(a, []):
                     hit(i, 1.0, a, True)
         for t in short_nums:
             for i in self.by_token.get(t, []):
@@ -192,7 +199,7 @@ class MaterialIndex:
                     hit(i, (4.0 if long and not aliases else 2.0), st, long and not aliases)
         for i in list(cand):
             d = self.docs[i]
-            has_brand = bool(aliases & d.tokens)
+            has_brand = bool(aliases & (d.tokens | d.group))
             if aliases and not has_brand and not strong[i]:
                 # Utan fabrikatet är ett tal bara ett tal: 142 finns i hundra benämningar. Ett modellnummer med
                 # bokstäver (AT3700, S600017) eller ett eget serienamn (Mapress, Ballofix) räcker ensamt.
@@ -211,16 +218,19 @@ class MaterialIndex:
             cand[i] += sum(1.0 for x in dims if x in d.tokens)
             if pipe:
                 # en ledning är raka rör - "15x1,2 Mapress elförz rör 3 m" - inte ett T-rör, en böj eller en fördelare
+                # (katalogens benämningar börjar med ord, inte med dimensionen: där räcker ordet rör)
                 straight = ("rör" in d.tokens or any(t.endswith("rör") for t in d.tokens)) \
-                    and not (FITTING_WORDS & d.tokens) and re.match(r"^\d+(?:x[\d,]+)?\s", d.name or "")
-                if not straight:
+                    and not (FITTING_WORDS & d.tokens) \
+                    and (d.source == "katalog" or re.match(r"^\d+(?:x[\d,]+)?\s", d.name or ""))
+                # en serie i beskrivningen (Mapress) är kravet: fabrikatet ensamt (Geberit) gör inte röret
+                if not straight or (series and not (series & (d.tokens | d.group))):
                     del cand[i]
                     continue
                 cand[i] += 1.0
             cand[i] += sum(1.0 for w in material if w in d.tokens or any(t.startswith(w) for t in d.tokens))
             if "f" in d.tokens:
                 cand[i] -= 2.5                      # "lock f rensrör": ett tillbehör för varan, inte varan
-            if stems and not strong[i] and not (aliases & d.tokens):
+            if stems and not strong[i] and not (aliases & (d.tokens | d.group)):
                 cand[i] -= 1.0
         if not cand:
             return self._result("saknas", [], limit)

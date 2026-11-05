@@ -169,8 +169,8 @@ def _split(base: str) -> tuple[str, str]:
 
 
 def _book() -> dict:
-    from .main import _material
-    return _material()
+    from .main import _material_book
+    return _material_book()
 
 
 def _leading_dim(name: str) -> float | None:

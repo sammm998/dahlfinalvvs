@@ -929,6 +929,27 @@ def undo_correction(drawing_id: str, correction_id: str, user: User = Depends(cu
 _MATERIAL: dict | None = None
 
 
+_BOOK: dict | None = None
+
+
+def _material_book() -> dict:
+    """Materialboken med sina priser, som kalkylen och nyckeltalen räknar med. Dahls katalog skriver inga priser
+    ("dagspris gäller") och benämner inte rör med dimensionen först, så kalkylen prissätter ur boken tills
+    katalogen har priser."""
+    global _BOOK
+    if _BOOK is None:
+        import gzip
+        here = os.environ.get("VVS_MATERIAL_DIR") or os.path.join(os.path.dirname(__file__), "data")
+        path = os.path.join(here, "material.json.gz")
+        if os.path.exists(path):
+            with gzip.open(path, "rt", encoding="utf-8") as fh:
+                _BOOK = json.load(fh)
+            _BOOK["kind"] = "materialbok"
+        else:
+            _BOOK = {"n": 0, "rows": [], "source": None, "kind": None}
+    return _BOOK
+
+
 def _material() -> dict:
     """Materialet, läst en gång: Dahls produktkatalog när den finns, annars materialboken.
 
@@ -952,7 +973,7 @@ def _material() -> dict:
             with gzip.open(path, "rt", encoding="utf-8") as fh:
                 return json.load(fh)
 
-        book = load("material.json.gz")
+        book = _material_book()
         dahl = load("dahl_catalog.json.gz")
         if dahl and dahl.get("rows"):
             prices = {r.get("a"): r for r in (book or {}).get("rows", []) if r.get("a")}
@@ -965,8 +986,7 @@ def _material() -> dict:
                     r["p_src"] = "materialsortering"
             dahl["kind"] = "dahl"
             _MATERIAL = dahl
-        elif book:
-            book["kind"] = "materialbok"
+        elif book and book.get("rows"):
             _MATERIAL = book
         else:
             _MATERIAL = {"n": 0, "rows": [], "source": None, "kind": None}

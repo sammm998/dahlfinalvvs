@@ -33,8 +33,10 @@ def main(tmp_path, monkeypatch):
     sys.path.insert(0, os.path.abspath(backend))
     import app.main as m
     monkeypatch.setattr(m, "_MATERIAL", None)
+    monkeypatch.setattr(m, "_BOOK", None)
     yield m
     m._MATERIAL = None
+    m._BOOK = None
 
 
 def test_the_catalog_is_the_material_and_keeps_its_own_numbers(main):
@@ -53,3 +55,8 @@ def test_a_price_the_catalog_does_not_write_comes_from_the_book_and_says_so(main
 def test_the_search_finds_dahls_own_article_number(main):
     out = main.materials(q="1234567", user=None)
     assert out["total"] == 1 and out["book"]["kind"] == "dahl"
+
+
+def test_the_calculation_still_prices_from_the_book(main):
+    """Katalogen har inga priser: kalkylen räknar med materialboken."""
+    assert main._material_book()["kind"] == "materialbok" and main._material_book()["rows"][0]["p"] == 4200.0
