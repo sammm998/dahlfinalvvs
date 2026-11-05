@@ -724,13 +724,53 @@ def _repair_clipped_words(page: RawPage, blocks: list[AnnotationBlock], word_cac
     return repaired
 
 
+COMMA_SIZE = 0.35          # of the row height: the longest a comma's ink runs, where a digit or letter fills it
+
+
+def _read_commas(glyphs: list[Glyph], row_height: float) -> int:
+    """Read the commas of a label that the recogniser left unknown.
+
+    A label that lists the codes of one riser writes them with commas between them: `VVC01-53-16,VV01-53-20,
+    KV01-53-20`. A drawn comma is one short tick at the foot of the row, a fifth of its height, and the
+    recogniser scored it just past what it calls a glyph, so it came out `?` - and a word with a `?` in it is not
+    a code, so the label named nothing and the three pipes under it got no metres. On the same sheet the same
+    tick was read as `/` as often as not, and that is the compound the rest of the reading understands.
+
+    Only an unknown glyph is read, only one no larger than a comma, and only one whose own best guesses are a
+    comma or a slash. Between a code and the letter that opens the next one it is the slash of a compound label;
+    last in the word it is the comma that closes a code in a list, which the row separator strips. Anywhere else
+    it stays unknown: a tick between two digits may be a decimal point, and what it is is not this rule's call."""
+    marks = [i for i, g in enumerate(glyphs) if g.char == "?"]
+    read = 0
+    for i in marks:
+        g = glyphs[i]
+        if max(g.w, g.h) > COMMA_SIZE * max(row_height, 1e-6):
+            continue
+        if not any(a in ",/" for a, _ in g.alternatives[:3]):
+            continue
+        before = glyphs[i - 1].char if i > 0 else ""
+        after = glyphs[i + 1].char if i + 1 < len(glyphs) else ""
+        if not (before.isalnum() or before == "-"):
+            continue
+        if after.isalpha():
+            g.char = "/"
+        elif not after:
+            g.char = ","
+        else:
+            continue
+        read += 1
+    return read
+
+
 def extract_designations(page: RawPage, blocks: list[AnnotationBlock]) -> tuple[list[Designation], DesignationGrammar, dict]:
     grammar = DesignationGrammar()
     # pass 1: observe all code-like word readings (drawing-local structure)
     word_cache: dict[tuple[str, int, int], list] = {}
+    commas = 0
     for b in blocks:
         for ri, br in enumerate(b.rows):
             for wi, w in enumerate(_words(br.line)):
+                commas += _read_commas(w, br.line.height)
                 rd = word_readings(w)
                 word_cache[(b.bid, ri, wi)] = (w, rd)
                 if any(is_code_like(r.text) for r in rd):
@@ -786,7 +826,8 @@ def extract_designations(page: RawPage, blocks: list[AnnotationBlock]) -> tuple[
                     family=f"grammar:{pat}"))
                 stats["designations"] += 1
     designations.sort(key=lambda d: d.did)
-    return designations, grammar, {"blocks": len(blocks), "clipped_words_completed": stats_repair, **stats}
+    return designations, grammar, {"blocks": len(blocks), "clipped_words_completed": stats_repair,
+                                   "commas_read": commas, **stats}
 
 
 def _designation_word(text: str) -> str | None:
