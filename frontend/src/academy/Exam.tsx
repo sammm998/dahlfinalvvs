@@ -21,7 +21,7 @@ function Frame({ children, title }: { children: React.ReactNode; title: string }
   return (
     <div className="acx acx-exam">
       <header className="acx-top">
-        <Link className="acx-brand" to="/academy">Radiator VVS <span>Academy</span></Link>
+        <Link className="acx-brand" to="/academy">Dahl <span>Academy</span></Link>
         <nav className="acx-crumb"><span>{title}</span></nav>
       </header>
       {children}
@@ -146,7 +146,7 @@ function ExamResult({ att, result }: { att: any; result: any }) {
 
         {result.passed ? (
           <div className="acx-result-cta">
-            <p>{tr("Du är Radiator VVS Certified. Certifikatet är utfärdat och går att verifiera med sitt id.")}</p>
+            <p>{tr("Du är Dahl Certified. Certifikatet är utfärdat och går att verifiera med sitt id.")}</p>
             <Link className="fc-btn solid" to={`/certifikat/${result.certifikat}`}>{tr("Öppna certifikatet")} <span aria-hidden="true">→</span></Link>
           </div>
         ) : (

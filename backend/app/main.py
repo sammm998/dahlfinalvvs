@@ -110,7 +110,7 @@ app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in settings.co
 app.include_router(admin_api.router)
 app.include_router(public_api.router)
 app.include_router(projects_api.router)
-# Den gamla akademins framsteg ligger kvar och bär den befintliga lärandevyn; den nya bär Radiator VVS Academy.
+# Den gamla akademins framsteg ligger kvar och bär den befintliga lärandevyn; den nya bär Dahl Academy.
 # De delar prefix men inga vägar, och den gamla tabellen rörs inte.
 app.include_router(academy_legacy.router)
 app.include_router(academy_api.router)

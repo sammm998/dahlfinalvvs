@@ -1,8 +1,8 @@
 @import "../fc/tokens.css";
 
-/* Radiator VVS Academy.
+/* Dahl Academy.
  *
- * Samma tokens som resten av Radiator VVS, men en annan intensitet. En marknadssida ska imponera; en lektion
+ * Samma tokens som resten av Dahl, men en annan intensitet. En marknadssida ska imponera; en lektion
  * ska gå att läsa i fyrtio minuter. Här finns därför ingen scenografi - bara hierarki, kontrast och den
  * rörelse som säger något: en ring som fylls, ett resultat som landar, en modul som låses upp.
  */
@@ -388,7 +388,7 @@
 /* ================================================================ utbildningsportalen
  *
  * Akademin är ljus: en lärplattform läses länge, och papper är lättare för ögat än natt. Samma tokens som resten
- * av Radiator VVS, med de ljusa värdena satta på hela akademin - övningar, quiz, tentor och certifikat byter med.
+ * av Dahl, med de ljusa värdena satta på hela akademin - övningar, quiz, tentor och certifikat byter med.
  */
 .acx {
   --fc-black: #f5f6f8;

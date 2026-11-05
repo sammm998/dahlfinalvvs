@@ -28,7 +28,7 @@ export default function Demos({ compact = false }: { compact?: boolean }) {
         {!compact && (
           <header className="fc-demo-head">
             <p className="fc-label fc-label-on">{tr("Se hur det funkar")}</p>
-            <h2 className="fc-display fc-display-md">{tr("Fem minuter i Radiator VVS")}</h2>
+            <h2 className="fc-display fc-display-md">{tr("Fem minuter i Dahl")}</h2>
             <p className="fc-body">{tr("Inspelat i appen på en riktig ritning – inga skisser, inga redigerade siffror.")}</p>
           </header>
         )}

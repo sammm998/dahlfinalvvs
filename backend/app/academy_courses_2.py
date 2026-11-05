@@ -1,4 +1,4 @@
-"""Radiator VVS Academy, del två: ventilation, entreprenadjuridik, isolering, injustering och projektledning.
+"""Dahl Academy, del två: ventilation, entreprenadjuridik, isolering, injustering och projektledning.
 
 Kurs 1-5 tar den som ska mängda och kalkylera VVS från första blicken på ett blad till ett anbud. De här fem
 tar vid där det slutar: luften, avtalet arbetet utförs under, det som byggs in runt röret, det som ska bevisas

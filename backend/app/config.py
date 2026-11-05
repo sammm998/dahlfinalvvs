@@ -7,7 +7,7 @@ DEV_SECRET = "change-me-in-production"
 
 
 class Settings(BaseSettings):
-    app_name: str = "Radiator VVS"
+    app_name: str = "Dahl"
     database_url: str = "sqlite:///./data/vvs.db"
     storage_root: str = "./data/storage"
     local_installation: bool = False  # set only by the native local launcher

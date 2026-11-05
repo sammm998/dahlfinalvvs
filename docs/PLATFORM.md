@@ -1,4 +1,4 @@
-# Radiator VVS: what it is, what it costs, and where the AI actually sits
+# Dahl: what it is, what it costs, and where the AI actually sits
 
 A reference for two readers at once. Part I is the business picture — what the thing does, what a drawing
 costs us to run, what a customer pays, and where the margin comes from. Part II is the engineering underneath
@@ -13,7 +13,7 @@ figure is unvalidated, it is marked unvalidated.
 
 ## 1. What it is, in one page
 
-Radiator VVS reads a Swedish HVAC pipe drawing and produces a quantity take-off: how many metres of each pipe
+Dahl reads a Swedish HVAC pipe drawing and produces a quantity take-off: how many metres of each pipe
 designation the drawing contains, with the evidence for every metre kept.
 
 An estimator uploads a vector PDF. The system reads the sheet's own designation list, follows each leader line

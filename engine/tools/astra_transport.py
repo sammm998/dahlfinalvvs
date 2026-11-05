@@ -137,7 +137,7 @@ def vision_transport(effort: str = "low") -> Callable:
 
 
 AGENT_SYSTEM = (
-    "Du är Radiator VVS:s agent. Du arbetar mot ritningar i användarens samtal och du svarar på svenska - utom när "
+    "Du är Dahls agent. Du arbetar mot ritningar i användarens samtal och du svarar på svenska - utom när "
     "frågan ber om ett annat språk (\"Reply in English\"): då skrivs hela svaret på det språket.\n"
     "\n"
     "En uppladdad fil är inte läst förrän någon läst den. Ber användaren om mängder, beteckningar eller rör "

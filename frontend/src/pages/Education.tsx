@@ -45,7 +45,7 @@ export default function EducationPage() {
   const T = kat?.totalt;
   return (
     <PublicFrame
-      kicker="Radiator VVS Academy"
+      kicker="Dahl Academy"
       title={<>Lär dig läsa ritningen —<br />inte bara mängda den</>}
       lede="Från vad ett VVS-system är till att mängda ett riktigt blad, få det rättat mot ritningens egen geometri och skriva en sluttenta som rättas på servern."
       anchors={[{ href: "#utbildningen", label: "Utbildningen" }, { href: "#tentan", label: "Tentan" },

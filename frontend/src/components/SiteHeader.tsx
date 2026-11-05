@@ -76,7 +76,7 @@ export default function SiteHeader({ anchors, cta }:
           <Mark color="#6ee7a5" />
           {/* Ordmärket i ett eget element, så den smalaste skärmen kan behålla märket och släppa orden utan att
               släppa ikonen med dem. Namnet finns kvar för uppläsning via aria-label på länken. */}
-          <span className="lp-logo-t">Radiator VVS</span>
+          <span className="lp-logo-t">Dahl</span>
         </Link>
 
         <span className="lp-sp" />

@@ -373,7 +373,7 @@ export default function Landing() {
             <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true">
               <path d="M3 15 H8 V7 H14 V15 H19" stroke="#5b616c" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Radiator VVS
+            Dahl
           </span>
           <span className="sp" />
           <Link to="/hur-det-funkar">{tr("Hur det funkar")}</Link>

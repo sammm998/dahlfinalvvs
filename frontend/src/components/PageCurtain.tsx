@@ -37,7 +37,7 @@ export default function PageCurtain({ label }: { label?: string }) {
   if (state === "vila") return null;
   return (
     <div className={`pc pc-${state}`} aria-hidden="true">
-      <span className="pc-mark">{label || "Radiator VVS"}</span>
+      <span className="pc-mark">{label || "Dahl"}</span>
     </div>
   );
 }

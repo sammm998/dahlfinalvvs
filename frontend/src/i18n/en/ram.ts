@@ -41,8 +41,8 @@ export const ram: Record<string, string> = {
 
   // --- menyn och vägen in -------------------------------------------------------------------------------
   "Direkt in": "Straight in",
-  "Radiator VVS / Meny": "Radiator VVS / Menu",
-  "Radiator VVS, till startsidan": "Radiator VVS, to the start page",
+  "Dahl / Meny": "Dahl / Menu",
+  "Dahl, till startsidan": "Dahl, to the start page",
   "Till startsidan": "To the start page",
   "På den här sidan": "On this page",
   "Kom igång": "Get started",
@@ -63,7 +63,7 @@ export const ram: Record<string, string> = {
   "Ladda om sidan": "Reload the page",
 
   // --- oöversatt med avsikt: märket och adressen är desamma på båda språken ------------------------------
-  "RADIATOR VVS": "RADIATOR VVS",
-  "Radiator VVS Academy": "Radiator VVS Academy",
-  "Radiator VVS / VPR System / 2026": "Radiator VVS / VPR System / 2026",
+  "DAHL": "DAHL",
+  "Dahl Academy": "Dahl Academy",
+  "Dahl / VPR System / 2026": "Dahl / VPR System / 2026",
 };

@@ -14,7 +14,7 @@ import { EASE_REVEAL, useScene, useSmoothScroll } from "./motion";
 import "./fc.css";
 import "./home.css";
 
-/* Radiator VVS:s startsida, som en berättelse i fem kapitel.
+/* Dahls startsida, som en berättelse i fem kapitel.
  *
  * Sidan är inte en lista med funktioner. Den är resan en mängd gör: från bladet, genom läsningen, till
  * kalkylen - och sedan vidare till den som ska lära sig göra det själv. Varje kapitel är en scen med egen
@@ -85,7 +85,7 @@ function Hero() {
       <div className="fc-hero-plan" aria-hidden="true"><Blueprint /></div>
 
       <div className="fc-hero-in">
-        <p className="fc-label fc-hero-eyebrow">{tr("Radiator VVS — Estimation / Intelligence")}</p>
+        <p className="fc-label fc-hero-eyebrow">{tr("Dahl — Estimation / Intelligence")}</p>
         <h1 className="fc-hero-l fc-display fc-display-xl">
           <span className="fc-line"><span className="fc-line-in">{tr("THE FUTURE")}</span></span>
           <span className="fc-line"><span className="fc-line-in">{tr("OF VVS")}</span></span>
@@ -104,7 +104,7 @@ function Hero() {
       <div className="fc-hero-foot">
         <p className="fc-lead">{tr("Från ritning till färdig kalkyl. Varje meter läst ur bladets egna beteckningar.")}</p>
         <div className="fc-hero-cta">
-          <MagneticButton className="solid" href="/login">{tr("Enter Radiator VVS")} <span aria-hidden="true">→</span></MagneticButton>
+          <MagneticButton className="solid" href="/login">{tr("Enter Dahl")} <span aria-hidden="true">→</span></MagneticButton>
           <MagneticButton href="#kap-2">{tr("Se hur den läser")}</MagneticButton>
         </div>
       </div>
@@ -134,7 +134,7 @@ function ChapterOpener({ n, title, sub, id }: { n: string; title: string; sub: s
 
 /* ---------------------------------------------------------------- systemet i bild
  *
- * Riktiga vyer ur den inloggade appen, inte illustrationer: den som funderar på att använda Radiator VVS vill se
+ * Riktiga vyer ur den inloggade appen, inte illustrationer: den som funderar på att använda Dahl vill se
  * vad hon får. En flik per rum; bilden byts i samma ram, så ögat stannar på samma ställe medan innehållet växlar.
  * Bilderna är tagna ur en riktig läsning av ett riktigt blad (public/screens).
  */
@@ -155,7 +155,7 @@ function SystemScreens() {
           <p className="fc-label fc-label-on">{tr("Systemet i bild")}</p>
           <h2 className="fc-display fc-display-md">{tr("Ritningen in.")} <i className="fc-italic">{tr("Mängden, modellen och kalkylen ut.")}</i></h2>
         </header>
-        <div className="fc-scr-tabs" role="tablist" aria-label={tr("Vyer i Radiator VVS")}>
+        <div className="fc-scr-tabs" role="tablist" aria-label={tr("Vyer i Dahl")}>
           {SCREENS.map((sc, i) => (
             <button key={sc.id} role="tab" aria-selected={i === on} className={i === on ? "on" : ""} onClick={() => setOn(i)}>
               <span className="fc-num">0{i + 1}</span> {tr(sc.t)}
@@ -204,7 +204,7 @@ function StickyStatement() {
           {words.map((w) => <span key={w} className="fc-state-w">{w} </span>)}
         </p>
         <p className="fc-body fc-state-b">
-          En mängdning för hand tar dagar och går inte att granska i efterhand. Radiator VVS läser bladet,
+          En mängdning för hand tar dagar och går inte att granska i efterhand. Dahl läser bladet,
           visar vad den grundar varje meter på, och säger ifrån när ritningen är tvetydig.
         </p>
       </div>
@@ -359,7 +359,7 @@ function AcademyChapter() {
   return (
     <section className="fc-ac" id="kap-4">
       <div className="fc-ac-l">
-        <p className="fc-label">{tr("Chapter IV — Radiator VVS Academy")}</p>
+        <p className="fc-label">{tr("Chapter IV — Dahl Academy")}</p>
         <LineReveal as="h2" className="fc-display fc-display-lg" text="KNOWLEDGE BECOMES PRECISION." />
         <p className="fc-body">
           En mängdare som inte förstår bladet kan inte granska en maskin som läst det. Academy lär ut
@@ -382,11 +382,11 @@ function AcademyChapter() {
         <RevealMedia className="fc-ac-cert">
           <div className="fc-cert">
             <div className="fc-cert-top">
-              <span className="fc-cert-mark"><Logo size={16} /> Radiator VVS</span>
+              <span className="fc-cert-mark"><Logo size={16} /> Dahl</span>
               <span className="fc-label">Certificate</span>
             </div>
             <p className="fc-cert-name fc-serif">{tr("Anna Lindqvist")}</p>
-            <p className="fc-cert-title">{tr("Radiator VVS Certified")}<br /><i className="fc-italic">VVS Kalkyl &amp; Mängdning</i></p>
+            <p className="fc-cert-title">{tr("Dahl Certified")}<br /><i className="fc-italic">VVS Kalkyl &amp; Mängdning</i></p>
             <div className="fc-cert-grid">
               <TechnicalLabel k="Resultat" v="87 %" on />
               <TechnicalLabel k="Utfärdat" v="2026-03-14" />
@@ -414,7 +414,7 @@ function FinalChapter() {
       <p className="fc-label">{tr("Chapter V")}</p>
       <WordReveal as="h2" className="fc-display fc-display-xl fc-end-t" text="READY TO CALCULATE DIFFERENTLY?" />
       <div className="fc-end-cta">
-        <MagneticButton className="solid" href="/login">{tr("Enter Radiator VVS")} <span aria-hidden="true">→</span></MagneticButton>
+        <MagneticButton className="solid" href="/login">{tr("Enter Dahl")} <span aria-hidden="true">→</span></MagneticButton>
         <MagneticButton href="/kontakt">{tr("Boka en genomgång")}</MagneticButton>
       </div>
     </section>
@@ -444,7 +444,7 @@ function Footer() {
           <AppLink className="fc-link" to="/projekt">Projekt</AppLink>
         </div>
       </div>
-      <div className="fc-foot-mark" aria-hidden="true">{tr("RADIATOR VVS")}</div>
+      <div className="fc-foot-mark" aria-hidden="true">{tr("DAHL")}</div>
       <div className="fc-foot-base">
         <span className="fc-label">{tr("VPR System / 2026")}</span>
         <span className="fc-label">{tr("Byggd i Sverige")}</span>
@@ -467,7 +467,7 @@ export default function Home() {
 
       <Hero />
       <ChapterOpener n="I" title={tr("The future of calculation")}
-        sub="Radiator VVS läser en VVS-ritning som en mängdare gör det: via beteckningarna och deras hänvisningslinjer, aldrig via närmaste streck. Det som inte går att avgöra får heta tvetydigt." />
+        sub="Dahl läser en VVS-ritning som en mängdare gör det: via beteckningarna och deras hänvisningslinjer, aldrig via närmaste streck. Det som inte går att avgöra får heta tvetydigt." />
       <SystemScreens />
       <Demos />
       <StickyStatement />

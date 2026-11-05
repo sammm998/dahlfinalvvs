@@ -18,7 +18,7 @@ from .academy_seed import seed as seed_content
 from .auth import current_admin, current_user
 from .db import User, get_db
 
-"""Radiator VVS Academy: API:t.
+"""Dahl Academy: API:t.
 
 Regeln som allt annat följer av: **facit lämnar aldrig servern.** Varje utgång här går genom `_ex_out` eller
 `_q_out`, som bygger ett svar fält för fält i stället för att dumpa raden. Lägger någon till en kolumn i
@@ -39,7 +39,7 @@ LEVELS = [
     (300, "Mängdare"),
     (900, "Kalkylator"),
     (2000, "Senior Kalkylator"),
-    (4000, "Radiator VVS Certified"),
+    (4000, "Dahl Certified"),
 ]
 
 

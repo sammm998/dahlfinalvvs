@@ -78,9 +78,9 @@ export const akademi: Record<string, string> = {
   "Kopiera ID": "Copy the ID",
   "Skriv ut / spara som PDF": "Print / save as PDF",
   "Spara som PDF": "Save as PDF",
-  "Verifiera ett Radiator VVS-certifikat": "Verify a Radiator VVS certificate",
-  "Du är Radiator VVS Certified. Certifikatet är utfärdat och går att verifiera med sitt id.":
-    "You are Radiator VVS Certified. The certificate is issued and can be verified by its id.",
+  "Verifiera ett Dahl-certifikat": "Verify a Dahl certificate",
+  "Du är Dahl Certified. Certifikatet är utfärdat och går att verifiera med sitt id.":
+    "You are Dahl Certified. The certificate is issued and can be verified by its id.",
 
   // --- figurerna: beteckningen ----------------------------------------------------------------------------
   "Beteckningen KV1-X31-16 byggs ihop av sina tre delar":

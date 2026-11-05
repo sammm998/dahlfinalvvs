@@ -46,7 +46,7 @@ function Chrome({ children }: { children: React.ReactNode }) {
       {children}
       <footer className="fc-foot">
         <div className="fc-foot-links fc-plat-foot">
-          <Link className="fc-link" to="/">Radiator VVS</Link>
+          <Link className="fc-link" to="/">Dahl</Link>
           <Link className="fc-link" to="/plattformen">Plattformen</Link>
           <Link className="fc-link" to="/vpr">VPR</Link>
           <Link className="fc-link" to="/utbildning">Academy</Link>
@@ -71,7 +71,7 @@ export function PlatformPage() {
           det kom ur.
         </p>
         <div className="fc-plat-cta">
-          <MagneticButton className="solid" href="/login">{tr("Enter Radiator VVS")} <span aria-hidden="true">↗</span></MagneticButton>
+          <MagneticButton className="solid" href="/login">{tr("Enter Dahl")} <span aria-hidden="true">↗</span></MagneticButton>
           <Link className="fc-link" to="/hur-det-funkar">{tr("Hur det funkar")} <span aria-hidden="true">→</span></Link>
         </div>
       </header>

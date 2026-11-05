@@ -170,7 +170,7 @@ const ROUTES = (
     <Route path="/utbildning/:modul" element={<EducationCoursePage />} />
     <Route path="/utbildning/:modul/:lektion" element={<EducationLessonPage />} />
     <Route path="/kontakt" element={<ContactPage />} />
-    {/* Radiator VVS Academy. Verifieringen är öppen med flit: ett certifikat som bara innehavaren kan visa
+    {/* Dahl Academy. Verifieringen är öppen med flit: ett certifikat som bara innehavaren kan visa
         bevisar ingenting. Allt annat kräver konto. */}
     <Route path="/verifiera" element={<VerifyPage />} />
     <Route path="/academy" element={<Guard><AcademyHome /></Guard>} />
@@ -275,7 +275,7 @@ export default function App() {
           title={rail ? tr("Visa sidopanelen") : tr("Fäll ihop sidopanelen")}
           aria-label={rail ? tr("Visa sidopanelen") : tr("Fäll ihop sidopanelen")}><IconRail /></button>
         <div>
-          <Link to="/projekt" className="brand"><Mark /> <span className="wide">Radiator VVS</span></Link>
+          <Link to="/projekt" className="brand"><Mark /> <span className="wide">Dahl</span></Link>
           <div className="org wide" style={{ marginTop: 10 }}>{tr("Mängdning ur ren vektor")}</div>
         </div>
         <nav>
