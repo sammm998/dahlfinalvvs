@@ -3,6 +3,7 @@ import { t as tr } from "../i18n";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ac } from "./api";
 import "./academy.css";
+import { DahlLogo } from "../components/DahlLogo";
 
 /* Certifikatet, och verifieringen av det.
  *
@@ -22,11 +23,7 @@ function Sheet({ c }: { c: { holder: string; title: string; code: string; issued
       <div className="cert-in">
         <header className="cert-top">
           <span className="cert-mark">
-            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M2 13.5h5.2V6h5.6v7.5H18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="square" />
-              <circle cx="7.2" cy="13.5" r="1.7" fill="currentColor" />
-            </svg>
-            Radiator VVS
+            <DahlLogo height={20} title="Dahl" />
           </span>
           <span className="cert-label">{tr("Certificate of Competence")}</span>
         </header>
@@ -35,7 +32,7 @@ function Sheet({ c }: { c: { holder: string; title: string; code: string; issued
         <p className="cert-name">{c.holder}</p>
         <p className="cert-for">{tr("har genomfört och godkänts i")}</p>
         <p className="cert-title">
-          Radiator VVS Certified<br />
+          Dahl Certified<br />
           <i>VVS Kalkyl &amp; Mängdning</i>
         </p>
 
@@ -49,7 +46,7 @@ function Sheet({ c }: { c: { holder: string; title: string; code: string; issued
         <footer className="cert-foot">
           <div className="cert-rule" />
           <p className="cert-label">
-            Verifiera på {window.location.host}/verifiera med certifikat-ID {c.code} · Radiator VVS VPR System
+            Verifiera på {window.location.host}/verifiera med certifikat-ID {c.code} · Dahl VPR System
           </p>
         </footer>
       </div>
@@ -81,7 +78,7 @@ export function CertificatePage() {
   return (
     <div className="acx cert-page">
       <header className="acx-top no-print">
-        <Link className="acx-brand" to="/academy">Radiator VVS <span>Academy</span></Link>
+        <Link className="acx-brand" to="/academy"><DahlLogo height={18} title="Dahl" /> <span>Academy</span></Link>
         <nav className="acx-crumb"><span>Certifikat</span></nav>
         <div className="cert-acts">
           <button className="fc-btn sm" onClick={() => window.print()}>{tr("Skriv ut / spara som PDF")}</button>
@@ -120,13 +117,13 @@ export function VerifyPage() {
   return (
     <div className="acx cert-verify">
       <header className="acx-top">
-        <Link className="acx-brand" to="/">Radiator VVS</Link>
+        <Link className="acx-brand" to="/"><DahlLogo height={18} title="Dahl" /></Link>
         <nav className="acx-crumb"><span>Verifiering</span></nav>
       </header>
 
       <section className="vfy">
         <p className="fc-label">Certifikatkontroll</p>
-        <h1 className="fc-display fc-display-md">{tr("Verifiera ett Radiator VVS-certifikat")}</h1>
+        <h1 className="fc-display fc-display-md">{tr("Verifiera ett Dahl-certifikat")}</h1>
         <p className="acx-lead">
           Skriv in certifikat-ID:t som står på certifikatet. Kontrollen kräver ingen inloggning.
         </p>
@@ -143,7 +140,7 @@ export function VerifyPage() {
           <div className={`vfy-out ${out.giltigt ? "ok" : "no"}`} role="status">
             <p className="vfy-badge">
               <span aria-hidden="true">{out.giltigt ? "✓" : "✕"}</span>
-              {out.giltigt ? "Giltigt Radiator VVS-certifikat" : "Inget giltigt certifikat"}
+              {out.giltigt ? "Giltigt Dahl-certifikat" : "Inget giltigt certifikat"}
             </p>
             {out.giltigt ? (
               <dl className="vfy-dl">

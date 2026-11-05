@@ -17,7 +17,7 @@
   --warn-bg: #fdf3e0;
   --bad: #a32020;
   --bad-bg: #fbeced;
-  --accent: #0d0d0d;
+  --accent: #004976;
   /* Depth, as one idea applied everywhere: light from above, surfaces that lift.
      Three elevations, each a close contact shadow plus a wide ambient one - a single blur reads as a sticker,
      two read as an object above a surface. The hairline on top is the light catching the near edge. */
@@ -202,9 +202,9 @@ button {
   text-transform: uppercase;
   /* A solid pill reads as a shape on the page; a pill lit from above reads as something to press. The gradient
      is the light, the inner hairline is its near edge, and the shadow is what it stands on. */
-  background: linear-gradient(180deg, #2a2a2a, var(--ink));
+  background: linear-gradient(180deg, #0a5a8f, #004976);
   color: #fff;
-  border: 1px solid var(--ink);
+  border: 1px solid #004976;
   border-radius: 999px;
   padding: 13px 24px;
   cursor: pointer;
@@ -962,7 +962,7 @@ button.drill:hover { background: var(--chip); opacity: 1; }
 .auth-form .swap button:hover { opacity: 0.6; }
 
 .auth .aside {
-  background: #0b0d10;
+  background: #001d32;
   color: #e9ecf1;
   padding: 56px 52px;
   display: flex;
@@ -2403,7 +2403,7 @@ tr.pa-fixed td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
 .tabs .tabs-cta {
   margin-left: auto; align-self: center; white-space: nowrap; text-decoration: none;
   font-family: var(--mono); font-size: 10px; letter-spacing: var(--track); text-transform: uppercase;
-  color: #fff; background: linear-gradient(180deg, #2a2a2a, var(--ink)); border: 1px solid var(--ink);
+  color: #fff; background: linear-gradient(180deg, #0a5a8f, #004976); border: 1px solid #004976;
   border-radius: 999px; padding: 8px 14px; box-shadow: var(--e1), inset 0 1px 0 rgba(255, 255, 255, 0.14);
   transition: transform 0.16s var(--ease), box-shadow 0.16s var(--ease);
 }
@@ -2975,7 +2975,7 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
 }
 .ac-course::before {
   content: ""; position: absolute; inset: 0 0 auto; height: 2px;
-  background: linear-gradient(90deg, #6ee7a5, rgba(110, 231, 165, 0));
+  background: linear-gradient(90deg, #00b5e2, rgba(0, 181, 226, 0));
   transform: scaleX(0); transform-origin: 0 50%;
   transition: transform 0.4s var(--ease);
 }
@@ -2991,7 +2991,7 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
   border-radius: 9px; border: 1px solid var(--line-2);
   font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; color: var(--ink);
 }
-.ac-course.full .ac-no { background: rgba(110, 231, 165, 0.16); border-color: rgba(110, 231, 165, 0.5); }
+.ac-course.full .ac-no { background: rgba(0, 181, 226, 0.16); border-color: rgba(0, 181, 226, 0.5); }
 .ac-course h3 { margin: 0 0 8px; font-size: 18px; letter-spacing: -0.015em; }
 .ac-course > p { margin: 0 0 14px; color: var(--muted, #6a6a6a); font-size: 14.5px; line-height: 1.6; }
 .ac-course-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 5px; }
@@ -3001,7 +3001,7 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
   flex: none; width: 15px; height: 15px; border-radius: 50%;
   border: 1.5px solid var(--line-2); position: relative;
 }
-.ac-course-list li.done .tick { background: #6ee7a5; border-color: #6ee7a5; }
+.ac-course-list li.done .tick { background: #00b5e2; border-color: #00b5e2; }
 .ac-course-list li.done .tick::after {
   content: ""; position: absolute; left: 4px; top: 1.5px; width: 4px; height: 8px;
   border: solid #0b2f1c; border-width: 0 1.7px 1.7px 0; transform: rotate(42deg);
@@ -3010,7 +3010,7 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
 .ac-course-foot { display: flex; align-items: center; gap: 12px; margin-top: auto; }
 .ac-course-foot .lp-mono { font-size: 11px; color: var(--faint); white-space: nowrap; }
 .ac-bar { flex: 1; height: 4px; border-radius: 99px; background: rgba(125, 125, 125, 0.2); overflow: hidden; }
-.ac-bar i { display: block; height: 100%; border-radius: 99px; background: #6ee7a5; transition: width 0.7s var(--ease); }
+.ac-bar i { display: block; height: 100%; border-radius: 99px; background: #00b5e2; transition: width 0.7s var(--ease); }
 .ac-course-go {
   margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line);
   font-size: 13.5px; color: var(--ink); opacity: 0.55;
@@ -3044,7 +3044,7 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
 }
 .ac-lessons li a:hover { transform: translateX(3px); border-color: var(--line-2); box-shadow: var(--e1); }
 .ac-lessons .tick { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line-2); position: relative; }
-.ac-lessons li.done .tick { background: #6ee7a5; border-color: #6ee7a5; }
+.ac-lessons li.done .tick { background: #00b5e2; border-color: #00b5e2; }
 .ac-lessons li.done .tick::after {
   content: ""; position: absolute; left: 5.5px; top: 2px; width: 4px; height: 9px;
   border: solid #0b2f1c; border-width: 0 1.8px 1.8px 0; transform: rotate(42deg);
@@ -3082,7 +3082,7 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
 .ac-read > p:first-child { font-size: 18.5px; color: var(--ink); }
 .ac-ul { margin: 0 0 20px; padding: 0; list-style: none; display: grid; gap: 9px; }
 .ac-ul li { position: relative; padding-left: 20px; color: var(--muted, #4a4a4a); }
-.ac-ul li::before { content: ""; position: absolute; left: 2px; top: 11px; width: 6px; height: 6px; border-radius: 50%; background: #6ee7a5; }
+.ac-ul li::before { content: ""; position: absolute; left: 2px; top: 11px; width: 6px; height: 6px; border-radius: 50%; background: #00b5e2; }
 .ac-terms { margin: 0 0 22px; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
 .ac-terms > div { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 16px; padding: 14px 18px; background: var(--glass); }
 .ac-terms dt { font-weight: 600; font-size: 15px; }
@@ -3090,8 +3090,8 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
 @media (max-width: 640px) { .ac-terms > div { grid-template-columns: 1fr; gap: 4px; } }
 .ac-note {
   margin: 0 0 22px; padding: 16px 18px 16px 20px;
-  border-left: 2.5px solid #6ee7a5; border-radius: 0 11px 11px 0;
-  background: rgba(110, 231, 165, 0.08);
+  border-left: 2.5px solid #00b5e2; border-radius: 0 11px 11px 0;
+  background: rgba(0, 181, 226, 0.08);
   font-size: 15.5px; line-height: 1.68;
 }
 .ac-fig { margin: 0 0 24px; }
@@ -3101,7 +3101,7 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
 .ac-sidefig { padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--glass); box-shadow: var(--e1); }
 .ac-shorts { list-style: none; margin: 16px 0 0; padding: 16px 0 0; border-top: 1px solid var(--line); display: grid; gap: 10px; }
 .ac-shorts li { position: relative; padding-left: 18px; font-size: 14px; line-height: 1.6; color: var(--muted, #6a6a6a); }
-.ac-shorts li::before { content: ""; position: absolute; left: 0; top: 9px; width: 5px; height: 5px; border-radius: 50%; background: #6ee7a5; }
+.ac-shorts li::before { content: ""; position: absolute; left: 0; top: 9px; width: 5px; height: 5px; border-radius: 50%; background: #00b5e2; }
 @media (max-width: 1000px) { .ac-side { position: static; } }
 
 .ac-quiz { margin: clamp(26px, 5vh, 42px) 0 0; padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--glass); }
@@ -3119,10 +3119,10 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
   flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px;
   border: 1px solid var(--line-2); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11.5px; color: var(--faint);
 }
-.ac-opt.right { border-color: #6ee7a5; background: rgba(110, 231, 165, 0.12); }
-.ac-opt.right .mark { background: #6ee7a5; border-color: #6ee7a5; color: #0b2f1c; }
+.ac-opt.right { border-color: #00b5e2; background: rgba(0, 181, 226, 0.12); }
+.ac-opt.right .mark { background: #00b5e2; border-color: #00b5e2; color: #0b2f1c; }
 .ac-opt.wrong { border-color: rgba(214, 90, 90, 0.6); background: rgba(214, 90, 90, 0.08); }
-.ac-opt.is-answer:not(.right) { border-color: rgba(110, 231, 165, 0.55); }
+.ac-opt.is-answer:not(.right) { border-color: rgba(0, 181, 226, 0.55); }
 .ac-why { margin: 16px 0 0; font-size: 15px; line-height: 1.65; color: var(--muted, #6a6a6a); }
 .ac-why.ok { color: var(--ink); }
 
@@ -3135,7 +3135,7 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
 .ac-badge {
   display: inline-flex; align-items: center; gap: 9px;
   padding: 9px 16px; border-radius: 999px;
-  border: 1px solid rgba(110, 231, 165, 0.5); background: rgba(110, 231, 165, 0.12);
+  border: 1px solid rgba(0, 181, 226, 0.5); background: rgba(0, 181, 226, 0.12);
   font-size: 14.5px;
 }
 .ac-badge b { color: #1d7a4c; }
@@ -3154,7 +3154,7 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
   border-color: var(--lp-line); box-shadow: none;
 }
-.lp .ac-resume { background: linear-gradient(135deg, rgba(110, 231, 165, 0.07), rgba(255, 255, 255, 0.015) 55%); }
+.lp .ac-resume { background: linear-gradient(135deg, rgba(0, 181, 226, 0.07), rgba(255, 255, 255, 0.015) 55%); }
 .lp .ac-course:hover, .lp .ac-lessons li a:hover, .lp .ac-step:hover { border-color: var(--lp-line-2); box-shadow: none; }
 .lp .ac-terms { background: var(--lp-line); border-color: var(--lp-line); }
 .lp .ac-no, .lp .ac-opt .mark { border-color: var(--lp-line-2); color: var(--lp-ink); }
@@ -3167,8 +3167,8 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
 .lp .ac-bar { background: rgba(255, 255, 255, 0.12); }
 .lp .ac-tabs button { border-color: var(--lp-line); color: var(--lp-dim); }
 .lp .ac-tabs button.on { background: var(--lp-ink); border-color: var(--lp-ink); color: #0a0b0d; }
-.lp .ac-badge b { color: #6ee7a5; }
-.lp .ac-note { background: rgba(110, 231, 165, 0.09); }
+.lp .ac-badge b { color: #00b5e2; }
+.lp .ac-note { background: rgba(0, 181, 226, 0.09); }
 .lp .ac-lessons .tick, .lp .ac-course-list .tick { border-color: var(--lp-line-2); }
 
 /* akademins huvudrad: logotypen är en väg tillbaka, inte bara en etikett */
@@ -3220,7 +3220,7 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
   border: 1px solid rgba(255, 255, 255, 0.18); background: transparent; color: inherit;
   border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer;
 }
-.bcad-doing-b.on { background: #6ee7a5; border-color: #6ee7a5; color: #06130c; font-weight: 600; }
+.bcad-doing-b.on { background: #00b5e2; border-color: #00b5e2; color: #06130c; font-weight: 600; }
 .bcad-doing-b kbd {
   font-family: ui-monospace, monospace; font-size: 10px; opacity: 0.7;
   border: 1px solid currentColor; border-radius: 4px; padding: 0 4px;
@@ -3352,3 +3352,10 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
 @media (max-width: 720px) {
   .alldesignations .legendfilters input { width: 100%; }
 }
+
+/* Dahls logotyp i sidolisten: hela ordbilden när listen är bred, bara snedstrecken när den är ihopfälld. */
+.side .brand { color: #004976; }
+.side .brand .rail-only { display: none; }
+.app.railed .side .brand .rail-only { display: block; }
+@media (max-width: 900px) { .side .brand .rail-only { display: block; } }
+.auth-logo { display: inline-block; color: #004976; margin-bottom: clamp(28px, 6vh, 56px); }

@@ -6,7 +6,7 @@ from .academy_models import Course, Exam, Exercise, Lesson, Module, Question
 from .academy_courses_2 import COURSES_2, EXERCISES_2
 from .academy_plans import BAD, STAM, VARME
 
-"""Innehållet i Radiator VVS Academy.
+"""Innehållet i Dahl Academy.
 
 Skrivet för svensk VVS-praxis och för den som ska mängda och kalkylera på riktigt. Där ett kontor kan göra på
 flera sätt står det uttryckligen att det är så - en utbildning som låtsas att det finns ett svar på allt lär
@@ -121,7 +121,7 @@ KURS1 = {
                     ]),
                     WARN("Närmaste rör är inte samma sak som rätt rör. I en bunt ligger KV, VV och VVC några "
                          "centimeter isär, och bara hänvisningslinjen kan säga vilken etikett som gäller vilket rör. "
-                         "Det är därför Radiator VVS aldrig gissar på närhet."),
+                         "Det är därför Dahl aldrig gissar på närhet."),
                     PLAN("stam-1", "Tre stigare i samma schakt. Geometrin kan inte skilja dem åt — etiketten kan."),
                 ]},
                 {"slug": "skala", "title": "Skalan och varför den måste kontrolleras", "minutes": 5, "blocks": [
@@ -198,7 +198,7 @@ KURS1 = {
                         ["Klammer", "Ett per c/c-avstånd enligt monteringsanvisning, typiskt 1,5–2,5 m."],
                         ["Isolering", "Mäts som rörlängd, men bara på de system som ska isoleras."],
                     ]),
-                    NOTE("Radiator VVS räknar rörlängd ur bladets geometri. Rördelar är en kalkylpost, inte en "
+                    NOTE("Dahl räknar rörlängd ur bladets geometri. Rördelar är en kalkylpost, inte en "
                          "mängdpost — det är en viktig skillnad när du granskar en maskinmängd."),
                 ]},
                 {"slug": "kontroll", "title": "Kontrollen som tar två minuter", "minutes": 5, "blocks": [
@@ -460,7 +460,7 @@ KURS3 = {
                      "Dubbla poster med olika namn för samma sak.",
                      "Apparater utan anslutande ledning, och ledningar utan apparat.",
                  ]),
-                 NOTE("När du granskar en maskinmängd: be om bevisningen. Radiator VVS kan visa vilket bläck varje "
+                 NOTE("När du granskar en maskinmängd: be om bevisningen. Dahl kan visa vilket bläck varje "
                       "meter kom ur. En mängd utan bevis är en siffra, inte en mängd."),
              ]},
          ],
@@ -515,14 +515,14 @@ KURS4 = {
 }
 
 KURS5 = {
-    "slug": "futurecalc-vpr", "title": "Radiator VVS & VPR", "level": "grund", "order": 5, "hours": 4.0,
+    "slug": "futurecalc-vpr", "title": "Dahl & VPR", "level": "grund", "order": 5, "hours": 4.0,
     "blurb": "Verktyget: projekt, läsning, mängdning, material, kalkyl, rapport och anbud.",
     "moduler": [
         {"slug": "kom-igang", "title": "Kom igång", "xp": 100, "requires": "",
          "blurb": "Skapa projekt, ladda upp ritning, läsa av resultatet.",
          "lektioner": [
              {"slug": "projekt", "title": "Projekt och ritningar", "minutes": 5, "blocks": [
-                 P("Allt i Radiator VVS hänger under ett projekt. Ett projekt är en handling: alla blad som hör "
+                 P("Allt i Dahl hänger under ett projekt. Ett projekt är en handling: alla blad som hör "
                    "ihop, med sina revideringar."),
                  UL(["Skapa projekt", "Ladda upp ritningar som PDF", "Starta läsning per blad",
                      "Granska mängden mot bladet", "Ta ut kalkyl och anbud"]),
@@ -540,7 +540,7 @@ KURS5 = {
          ],
          "fragor": [
              {"slug": "q-vpr-1", "kind": "single", "area": "teori", "points": 10, "in_exam": True,
-              "prompt": "Vad betyder det att en beteckning är tvetydig i Radiator VVS?",
+              "prompt": "Vad betyder det att en beteckning är tvetydig i Dahl?",
               "options": ["Läsningen misslyckades", "Hänvisningslinjen når flera möjliga rör och läsningen vägrar gissa",
                           "Beteckningen är felstavad", "Röret saknar dimension"],
               "answer": {"index": 1},
@@ -819,7 +819,7 @@ EXERCISES = [
 # avtalet arbetet utförs under, och förmågan att se när en färdig kalkyl är fel. Delarnas vikt säger vad som
 # kostar mest när det blir fel; section_min_pct att ingen del får lämnas tom och räknas upp av de andra.
 EXAM = {
-    "slug": "fc-certified-vvs", "title": "Radiator VVS Certified — VVS Kalkyl & Mängdning",
+    "slug": "fc-certified-vvs", "title": "Dahl Certified — VVS Kalkyl & Mängdning",
     "course": "grund-vvs-kalkyl", "pass_pct": 80, "section_min_pct": 60, "minutes": 0,
     "sections": [
         {"area": "teori", "title": "Del 1 — Kalkylens grunder och entreprenadformer", "weight": 20, "n": 8},

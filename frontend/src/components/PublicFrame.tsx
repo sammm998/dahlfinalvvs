@@ -8,11 +8,12 @@ import SiteHeader, { PUBLIC_LINKS } from "./SiteHeader";
 import Nav from "../fc/Nav";
 import { CustomCursor, LineReveal, ScrollProgress } from "../fc/primitives";
 import { useSmoothScroll } from "../fc/motion";
+import { DahlLogo } from "./DahlLogo";
 
 /* Ramen kring de publika sidorna.
  *
  * Priser, om oss, hur det funkar, utbildning och kontakt ska vara rum i samma hus som startsidan, inte fem
- * hemsidor. Ramen bär därför samma sak som startsidan gör: Radiator VVS:s typsnitt och färger, samma rad högst
+ * hemsidor. Ramen bär därför samma sak som startsidan gör: Dahls typsnitt och färger, samma rad högst
  * upp med sin fullskärmsmeny, samma mjuka rullning, samma muspekare, och en hjälte med kapitelskyltens rytm -
  * etikett, stor rubrik som kommer fram rad för rad, ingress bredvid i stället för under.
  *
@@ -89,11 +90,7 @@ export default function PublicFrame({ kicker, title, lede, children, wide = fals
         <div className="pub-foot-in">
           <div className="pub-foot-brand">
             <span className="lp-logo" style={{ fontSize: 15 }}>
-              <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true">
-                <path d="M3 15 H8 V7 H14 V15 H19" stroke="#6ee7a5" strokeWidth="2.3" fill="none"
-                  strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Radiator VVS
+              <DahlLogo height={22} title="Dahl" />
             </span>
             <p>{tr("Mängden som ritningen redan säger. Varje meter med sitt belägg kvar.")}</p>
           </div>
@@ -108,7 +105,7 @@ export default function PublicFrame({ kicker, title, lede, children, wide = fals
             <Link to="/kontakt">{tr("Kontakta oss")}</Link>
           </nav>
         </div>
-        <div className="fc-foot-mark" aria-hidden="true">{tr("RADIATOR VVS")}</div>
+        <div className="fc-foot-mark" aria-hidden="true"><DahlLogo height="1em" className="fc-foot-logo" /></div>
       </footer>
     </div>
   );

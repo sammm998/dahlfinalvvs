@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base, _now, _uuid
 
-"""Radiator VVS Academy: utbildningen som data i stället för som kod.
+"""Dahl Academy: utbildningen som data i stället för som kod.
 
 Den förra akademin bodde i en TypeScript-fil. Det fungerar tills någon vill ändra en lektion utan att bygga om
 frontenden, lägga till en övning, eller se vilka som klarat sluttentan - och då fungerar det inte alls. Här är

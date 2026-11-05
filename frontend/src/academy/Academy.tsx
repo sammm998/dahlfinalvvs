@@ -5,8 +5,9 @@ import Exercise from "./Exercise";
 import TrainingDrawing from "./TrainingDrawing";
 import { ac, type Block, type ExerciseOut, type PlanData } from "./api";
 import "./academy.css";
+import { DahlLogo } from "../components/DahlLogo";
 
-/* Radiator VVS Academy - utbildningsportalen.
+/* Dahl Academy - utbildningsportalen.
  *
  * Tre vyer, som i en riktig lärplattform: översikten (var du är, vad du fortsätter med, katalogen), kurssidan
  * (kursplanen modul för modul, vad du lär dig, tentan) och lektionen (kursplanen i sidan, texten i mitten,
@@ -60,11 +61,7 @@ function Shell({ children, crumb }: { children: React.ReactNode; crumb?: React.R
     <div className="acx acp">
       <header className="acx-top acp-top">
         <Link className="acx-brand" to="/academy">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path d="M2 13.5h5.2V6h5.6v7.5H18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="square" />
-            <circle cx="7.2" cy="13.5" r="1.7" fill="currentColor" />
-          </svg>
-          Radiator VVS <span>Academy</span>
+          <DahlLogo height={18} title="Dahl" /> <span>Academy</span>
         </Link>
         <nav className="acp-nav">
           <Link to="/academy">{tr("Översikt")}</Link>
@@ -124,7 +121,7 @@ export function AcademyHome() {
     <Shell>
       <section className="acp-hero">
         <div className="acp-hero-main">
-          <p className="acp-eyebrow">{tr("Radiator VVS Academy")}</p>
+          <p className="acp-eyebrow">{tr("Dahl Academy")}</p>
           <h1>{cont ? tr("Välkommen tillbaka") : tr("Lär dig mängda och kalkylera VVS")}</h1>
           <p className="acp-lead">
             {me.kurser.length} {tr("utbildningar i VVS-kalkyl, mängdning, ventilation, mark och entreprenadjuridik.")}
@@ -206,7 +203,7 @@ export function AcademyHome() {
                 <Link key={c.code} className="acp-cert" to={`/certifikat/${c.code}`}>
                   <span className="acp-badge"><Icon name="award" size={22} /></span>
                   <div>
-                    <span className="acp-eyebrow">{tr("Radiator VVS Certified")}</span>
+                    <span className="acp-eyebrow">{tr("Dahl Certified")}</span>
                     <b>{c.title}</b>
                     <span className="acp-muted">{c.code} · {c.score} % · {c.issued.slice(0, 10)}</span>
                   </div>

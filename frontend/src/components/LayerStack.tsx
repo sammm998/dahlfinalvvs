@@ -88,12 +88,12 @@ function Plate({ kind, k }: { kind: string; k: number }) {
       {/* the same shape, now owned: a colour per identity, and a length beside it */}
       <g fill="none" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"
          pathLength={1} strokeDasharray="1" strokeDashoffset={1 - draw}>
-        <path d="M40 70 H160 V116 H280" stroke="#6ee7a5" />
+        <path d="M40 70 H160 V116 H280" stroke="#00b5e2" />
         <path d="M40 116 H160" stroke="#60a5fa" />
         <path d="M100 70 V150 H240" stroke="#f0abfc" />
       </g>
       <g fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="9.5" opacity={draw}>
-        <text x="44" y="62" fill="#6ee7a5">S3-R8-110 · 24,8 m</text>
+        <text x="44" y="62" fill="#00b5e2">S3-R8-110 · 24,8 m</text>
         <text x="44" y="134" fill="#60a5fa">{tr("KV1-X31-16 · 12,1 m")}</text>
         <text x="112" y="166" fill="#f0abfc">{tr("VV1-X31-16 · 18,2 m")}</text>
       </g>

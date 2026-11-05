@@ -7,6 +7,7 @@ import { getToken } from "../api";
 import gsap from "gsap";
 import { EASE_REVEAL, prefersStill } from "./motion";
 import { MagneticButton } from "./primitives";
+import { DahlLogo, DahlMark } from "../components/DahlLogo";
 
 /* Raden högst upp, och rummet bakom den.
  *
@@ -27,7 +28,7 @@ export const NAV_LINKS = [
   { to: "/utbildning", label: "Academy", n: "03" },
   { to: "/architecture", label: "Architecture", n: "04" },
   { to: "/priser", label: "Priser", n: "05" },
-  { to: "/om-oss", label: "Radiator VVS", n: "06" },
+  { to: "/om-oss", label: "Dahl", n: "06" },
   { to: "/kontakt", label: "Kontakt", n: "07" },
 ];
 
@@ -40,6 +41,25 @@ export default function Nav({ light = false }: { light?: boolean }) {
   const opener = useRef<HTMLButtonElement>(null);
 
   useEffect(() => { setOpen(false); }, [pathname]);
+
+  /* Raden byter färg efter ytan den står över. Förr gjorde mix-blend-mode: difference det jobbet, men den
+     inverterar färgerna: Dahls cyan blev orange över de ljusa sektionerna. Nu tittar raden vad som ligger under
+     den och tar det ljusa temats färger när det är en .fc-light-yta. */
+  const [onLight, setOnLight] = useState(false);
+  useEffect(() => {
+    let raf = 0;
+    const check = () => {
+      raf = 0;
+      const under = document.elementsFromPoint(window.innerWidth / 2, 36)
+        .find((el) => !el.closest(".fc-nav") && !el.closest(".fc-menu"));
+      setOnLight(!!under?.closest(".fc-light"));
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(check); };
+    check();
+    window.addEventListener("scroll", on, { passive: true });
+    window.addEventListener("resize", on);
+    return () => { window.removeEventListener("scroll", on); window.removeEventListener("resize", on); if (raf) cancelAnimationFrame(raf); };
+  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -91,10 +111,9 @@ export default function Nav({ light = false }: { light?: boolean }) {
 
   return (
     <>
-      <header className={`fc-nav${light ? " light" : ""}`}>
-        <Link className="fc-nav-mark" to="/" aria-label={tr("Radiator VVS, till startsidan")}>
-          <Logo />
-          <span>Radiator VVS</span>
+      <header className={`fc-nav${light ? " light" : ""}${light || onLight ? " on-light" : ""}`}>
+        <Link className="fc-nav-mark" to="/" aria-label={tr("Dahl, till startsidan")}>
+          <DahlLogo height={20} />
         </Link>
         <nav className="fc-nav-links" aria-label="Huvudmeny">
           {NAV_LINKS.slice(0, 4).map((l) => (
@@ -104,7 +123,7 @@ export default function Nav({ light = false }: { light?: boolean }) {
         <div className="fc-nav-right">
           <LangSwitch />
           <MagneticButton className="sm solid fc-nav-cta" href="/login">
-            Enter Radiator VVS <span aria-hidden="true">↗</span>
+            Enter Dahl <span aria-hidden="true">↗</span>
           </MagneticButton>
           <button ref={opener} className="fc-nav-menu" onClick={() => setOpen(true)}
             aria-expanded={open} aria-haspopup="dialog">
@@ -117,7 +136,7 @@ export default function Nav({ light = false }: { light?: boolean }) {
       {open && (
         <div ref={panel} className="fc-menu" role="dialog" aria-modal="true" aria-label="Meny">
           <div className="fc-menu-top">
-            <span className="fc-label">{tr("Radiator VVS / Meny")}</span>
+            <span className="fc-label">{tr("Dahl / Meny")}</span>
             <button className="fc-menu-x" onClick={() => { setOpen(false); opener.current?.focus(); }}>
               Stäng <span aria-hidden="true">✕</span>
             </button>
@@ -134,7 +153,7 @@ export default function Nav({ light = false }: { light?: boolean }) {
               ))}
             </ul>
             {/* Genvägarna ska leda dit den som klickar faktiskt kan komma. Projekt och Academy ligger bakom
-                inloggningen, så för den som inte är inloggad var "Radiator VVS Academy" en resa till
+                inloggningen, så för den som inte är inloggad var "Dahl Academy" en resa till
                 inloggningssidan - och för den som är inloggad ett hopp rakt från den mörka publika sidan in i
                 det ljusa verktyget, utan något steg emellan. Utloggad pekar spalten därför på det publika:
                 utbildningssidan och dokumentationen, med inloggningen först. Inloggad pekar den in i
@@ -144,7 +163,7 @@ export default function Nav({ light = false }: { light?: boolean }) {
               {inne ? (
                 <>
                   <Link className="fc-link" to="/projekt">Projekt</Link>
-                  <Link className="fc-link" to="/academy">{tr("Radiator VVS Academy")}</Link>
+                  <Link className="fc-link" to="/academy">{tr("Dahl Academy")}</Link>
                   <Link className="fc-link" to="/mangda">{tr("Mängda ett blad")}</Link>
                 </>
               ) : (
@@ -156,11 +175,11 @@ export default function Nav({ light = false }: { light?: boolean }) {
               )}
               <Link className="fc-link" to="/dokumentation">Dokumentation</Link>
               <p className="fc-label" style={{ marginTop: 28 }}>Kontakt</p>
-              <a className="fc-link" href="https://www.radiatorvvs.se/" target="_blank" rel="noreferrer">radiatorvvs.se</a>
+              <a className="fc-link" href="https://www.dahl.se/" target="_blank" rel="noreferrer">dahl.se</a>
             </div>
           </div>
           <div className="fc-menu-foot">
-            <span className="fc-label">{tr("Radiator VVS / VPR System / 2026")}</span>
+            <span className="fc-label">{tr("Dahl / VPR System / 2026")}</span>
           </div>
         </div>
       )}
@@ -168,12 +187,7 @@ export default function Nav({ light = false }: { light?: boolean }) {
   );
 }
 
-/** Märket: två rör som möts i en nod. Samma figur som mängdningen bygger sina nät av. */
+/** Märket: Dahls två snedstreck. */
 export function Logo({ size = 18 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M2 13.5h5.2V6h5.6v7.5H18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="square" />
-      <circle cx="7.2" cy="13.5" r="1.7" fill="currentColor" />
-    </svg>
-  );
+  return <DahlMark size={size} />;
 }

@@ -47,7 +47,7 @@ export default function HowItWorksPage() {
       <section className="pub-sec" id="demo">
         <div className="pub-sec-head">
           <div className="lp-kicker">{tr("Se hur det funkar")}</div>
-          <h2>{tr("Fem minuter i Radiator VVS")}</h2>
+          <h2>{tr("Fem minuter i Dahl")}</h2>
           <p className="pub-sec-lede">{tr("Inspelat i appen på en riktig ritning – inga skisser, inga redigerade siffror.")}</p>
         </div>
         <Demos compact />

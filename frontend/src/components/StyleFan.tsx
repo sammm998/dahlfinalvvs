@@ -15,7 +15,7 @@ const SHEETS: { name: string; note: string; draw: (k: number) => React.ReactNode
     name: "Streckad",
     note: "korta streck, jämn lucka",
     draw: (k) => (
-      <g stroke="#6ee7a5" strokeWidth="3" strokeLinecap="round" strokeDasharray="13 6"
+      <g stroke="#00b5e2" strokeWidth="3" strokeLinecap="round" strokeDasharray="13 6"
          pathLength={1} strokeDashoffset={0} opacity={k}>
         <path d="M24 96 H150 V52 H272" fill="none" />
         <path d="M24 140 H196" fill="none" />

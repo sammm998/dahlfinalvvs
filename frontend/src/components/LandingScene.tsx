@@ -11,7 +11,7 @@ const BEATS = [
 ];
 
 const RUNS: { d: string; c: string; m: number }[] = [
-  { d: "M120 300 H360 V186 H620", c: "#6ee7a5", m: 24.8 },
+  { d: "M120 300 H360 V186 H620", c: "#00b5e2", m: 24.8 },
   { d: "M120 372 H468 V300", c: "#60a5fa", m: 18.2 },
   { d: "M620 186 H812 V402 H520", c: "#f0abfc", m: 31.4 },
   { d: "M240 300 V444 H520", c: "#fbbf24", m: 12.1 },

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { lang, setLang, t as tr } from "../i18n";
+import { DahlLogo } from "./DahlLogo";
 
 /* En meny, överallt.
  *
@@ -36,15 +37,6 @@ export function LangSwitch({ className = "" }: { className?: string }) {
   );
 }
 
-function Mark({ size = 17, color = "currentColor" }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 22 22" aria-hidden="true">
-      <path d="M3 15 H8 V7 H14 V15 H19" stroke={color} strokeWidth="2.3" fill="none"
-        strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export default function SiteHeader({ anchors, cta }:
   { anchors?: { href: string; label: string }[]; cta?: { to: string; label: string } }) {
   const { pathname } = useLocation();
@@ -73,10 +65,7 @@ export default function SiteHeader({ anchors, cta }:
         </button>
 
         <Link className="lp-logo lp-pill" to="/" aria-label={tr("Till startsidan")}>
-          <Mark color="#6ee7a5" />
-          {/* Ordmärket i ett eget element, så den smalaste skärmen kan behålla märket och släppa orden utan att
-              släppa ikonen med dem. Namnet finns kvar för uppläsning via aria-label på länken. */}
-          <span className="lp-logo-t">Radiator VVS</span>
+          <DahlLogo height={18} />
         </Link>
 
         <span className="lp-sp" />

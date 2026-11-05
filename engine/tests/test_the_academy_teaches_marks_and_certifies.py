@@ -1,4 +1,4 @@
-"""Radiator VVS Academy från första lektionen till ett verifierbart certifikat.
+"""Dahl Academy från första lektionen till ett verifierbart certifikat.
 
 Provet går hela vägen en människa går: öppna en utbildning, läsa en lektion, mängda ett rör på en ritning, få
 rättat, göra quiz, skriva sluttentan, ladda om mitt i den, lämna in, och få ett certifikat som någon annan kan

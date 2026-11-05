@@ -16,6 +16,7 @@ import { useParallax, useSmoothScroll } from "../components/lp-smooth";
 import RevealLines from "../components/Reveal";
 import ChapterBar from "../components/ChapterBar";
 import { tiltStyle, usePointerParallax, useTilt } from "../components/tilt";
+import { DahlLogo } from "../components/DahlLogo";
 
 /* The drawing in the hero is the product's own subject: a dash-dot waste run with a branch, two labels on
    leaders, and the marks the engine puts back on the paper. It draws itself in once, then the labels land. */
@@ -24,8 +25,8 @@ function Drawing() {
     <svg viewBox="0 0 1040 380" role="img" aria-label={tr("Planritning där rören markerats och mätts")}>
       <defs>
         <linearGradient id="lpFade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#6ee7a5" stopOpacity="0.95" />
-          <stop offset="1" stopColor="#6ee7a5" stopOpacity="0.55" />
+          <stop offset="0" stopColor="#00b5e2" stopOpacity="0.95" />
+          <stop offset="1" stopColor="#00b5e2" stopOpacity="0.55" />
         </linearGradient>
         <clipPath id="lpWipe" clipPathUnits="userSpaceOnUse">
           <rect className="lp-wipe" x="0" y="0" width="1040" height="380" />
@@ -51,7 +52,7 @@ function Drawing() {
       </g>
 
       {/* connection circles where the runs stop */}
-      <g className="lp-pop" fill="#07080a" stroke="#6ee7a5" strokeWidth="2.2">
+      <g className="lp-pop" fill="#07080a" stroke="#00b5e2" strokeWidth="2.2">
         <circle cx="120" cy="260" r="5.5" />
         <circle cx="900" cy="96" r="5.5" />
       </g>
@@ -61,8 +62,8 @@ function Drawing() {
 
       {/* labels on their leaders, the way the sheet writes them */}
       <g className="lp-pop" style={{ animationDelay: "1.65s" }}>
-        <path d="M470 96 L560 100" stroke="#6ee7a5" strokeOpacity="0.5" strokeWidth="1.2" fill="none" />
-        <path d="M372 74 H470" stroke="#6ee7a5" strokeOpacity="0.5" strokeWidth="1.2" fill="none" />
+        <path d="M470 96 L560 100" stroke="#00b5e2" strokeOpacity="0.5" strokeWidth="1.2" fill="none" />
+        <path d="M372 74 H470" stroke="#00b5e2" strokeOpacity="0.5" strokeWidth="1.2" fill="none" />
         <text x="372" y="66" fill="#f4f5f7" fontSize="16" fontFamily="ui-monospace, SFMono-Regular, monospace">
           S1-P5-110
         </text>
@@ -370,10 +371,7 @@ export default function Landing() {
       <footer className="lp-wrap">
         <div className="lp-foot">
           <span className="lp-logo" style={{ fontSize: 14 }}>
-            <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true">
-              <path d="M3 15 H8 V7 H14 V15 H19" stroke="#5b616c" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Radiator VVS
+            <DahlLogo height={18} title="Dahl" />
           </span>
           <span className="sp" />
           <Link to="/hur-det-funkar">{tr("Hur det funkar")}</Link>

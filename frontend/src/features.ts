@@ -38,7 +38,7 @@ export const FEATURES: Feature[] = [
     lede: tr("Ladda upp en VVS-ritning. Systemet läser bladets egen beteckningslista, följer varje hänvisningslinje till det rör den pekar på, och mäter i ritningens egen skala. Varje meter behåller sitt belägg."),
     card: tr("Beteckning, ledare, rör, skala — en mängd där varje rad går att öppna."),
     art: "read",
-    accent: "#6ee7a5",
+    accent: "#00b5e2",
     keys: [
       { n: "80,1 %", l: tr("av referensens meter återfunna över 59 uppmätta blad") },
       { n: "0", l: tr("gissningar — identitet endast via riktiga ledarlinjer") },

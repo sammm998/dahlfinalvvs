@@ -273,7 +273,7 @@
 /* Mörkret har djup: ett svagt grönt och blått sken bakom hjälten och slutet i stället för en platt yta. */
 .fc-hero, .fc-end {
   background:
-    radial-gradient(60% 50% at 82% 18%, rgba(110, 231, 165, 0.10), transparent 70%),
+    radial-gradient(60% 50% at 82% 18%, rgba(0, 181, 226, 0.10), transparent 70%),
     radial-gradient(55% 60% at 10% 90%, rgba(80, 130, 255, 0.10), transparent 70%),
     var(--fc-black);
 }
@@ -295,15 +295,15 @@
 /* Produkterna: mörka kort med ett ljus i övre kanten, som glas mot natten. */
 .fc-show-card {
   background:
-    radial-gradient(120% 60% at 0% 0%, rgba(110, 231, 165, 0.08), transparent 60%),
+    radial-gradient(120% 60% at 0% 0%, rgba(0, 181, 226, 0.08), transparent 60%),
     linear-gradient(180deg, var(--fc-bg-2), var(--fc-bg));
   box-shadow: var(--fc-shadow);
 }
-.fc-show-card:hover { border-color: rgba(110, 231, 165, 0.35); }
+.fc-show-card:hover { border-color: rgba(0, 181, 226, 0.35); }
 
 /* 3D-scenens textplatta följer mörkret i stället för att vara kolsvart. */
-.fc-rise-meta { background: rgba(13, 17, 23, 0.66); }
-.fc-rise-t h2, .fc-rise-t p { text-shadow: 0 2px 24px rgba(13, 17, 23, 0.85); }
+.fc-rise-meta { background: rgba(0, 24, 42, 0.66); }
+.fc-rise-t h2, .fc-rise-t p { text-shadow: 0 2px 24px rgba(0, 24, 42, 0.85); }
 
 /* ---------------------------------------------------------------- hjältens film */
 .fc-hero-media { position: absolute; inset: 0; z-index: -2; overflow: hidden; background: #07090c url("/hero-poster.jpg") center / cover no-repeat; }
@@ -313,20 +313,20 @@
 .fc-hero-shade {
   position: absolute; inset: 0;
   background:
-    linear-gradient(90deg, rgba(8, 11, 15, 0.88) 0%, rgba(8, 11, 15, 0.55) 45%, rgba(8, 11, 15, 0.25) 100%),
-    linear-gradient(0deg, rgba(8, 11, 15, 0.92) 0%, rgba(8, 11, 15, 0) 42%),
-    radial-gradient(50% 50% at 85% 15%, rgba(110, 231, 165, 0.14), transparent 70%);
+    linear-gradient(90deg, rgba(0, 30, 52, 0.88) 0%, rgba(0, 30, 52, 0.55) 45%, rgba(0, 30, 52, 0.25) 100%),
+    linear-gradient(0deg, rgba(0, 30, 52, 0.92) 0%, rgba(0, 30, 52, 0) 42%),
+    radial-gradient(50% 50% at 85% 15%, rgba(0, 181, 226, 0.14), transparent 70%);
 }
 .fc-hero { background: #07090c; }
 .fc-hero .fc-hero-plan { opacity: 0.22; mix-blend-mode: screen; }
 @media (prefers-reduced-motion: reduce) { .fc-hero-video { display: none; } }
-@media (max-width: 760px) { .fc-hero-shade { background: linear-gradient(0deg, rgba(8, 11, 15, 0.94) 10%, rgba(8, 11, 15, 0.5) 100%); } }
+@media (max-width: 760px) { .fc-hero-shade { background: linear-gradient(0deg, rgba(0, 30, 52, 0.94) 10%, rgba(0, 30, 52, 0.5) 100%); } }
 
 /* ---------------------------------------------------------------- systemet i bild */
 .fc-scr {
   padding: clamp(70px, 13vh, 150px) var(--fc-gut);
   background:
-    radial-gradient(50% 40% at 50% 0%, rgba(110, 231, 165, 0.08), transparent 70%),
+    radial-gradient(50% 40% at 50% 0%, rgba(0, 181, 226, 0.08), transparent 70%),
     var(--fc-black);
 }
 .fc-scr-in { max-width: 1240px; margin: 0 auto; display: grid; gap: clamp(22px, 4vh, 40px); justify-items: center; text-align: center; }
@@ -348,7 +348,7 @@
   margin: 0; width: 100%; position: relative; aspect-ratio: 16 / 10;
   border-radius: 14px; overflow: hidden; background: #fbfaf8;
   border: 1px solid var(--fc-line);
-  box-shadow: 0 50px 120px -40px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 80px -20px rgba(110, 231, 165, 0.18);
+  box-shadow: 0 50px 120px -40px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 80px -20px rgba(0, 181, 226, 0.18);
 }
 .fc-scr-bar {
   position: absolute; inset: 0 0 auto 0; height: 34px; z-index: 2;
@@ -388,7 +388,7 @@
   transition: border-color var(--fc-d-fast), background var(--fc-d-fast), color var(--fc-d-fast);
 }
 .fc-demo-list button:hover { border-color: var(--fc-line-3); color: var(--fc-ink); }
-.fc-demo-list button.on { border-color: rgba(110, 231, 165, 0.45); background: var(--fc-bg-3); color: var(--fc-ink); }
+.fc-demo-list button.on { border-color: rgba(0, 181, 226, 0.45); background: var(--fc-bg-3); color: var(--fc-ink); }
 .fc-demo-list .fc-num { font-size: 12px; color: var(--fc-accent); padding-top: 3px; }
 .fc-demo-txt { display: grid; gap: 4px; }
 .fc-demo-txt b { font-weight: 600; font-size: 15.5px; color: var(--fc-ink); letter-spacing: -0.01em; }
@@ -399,3 +399,6 @@
 }
 .fc-demo-list .fc-num, .fc-scr-tabs .fc-num { font-family: var(--fc-mono); letter-spacing: 0.08em; }
 .fc-demo-list button { height: auto; min-height: 0; overflow: hidden; }
+
+/* Den stora logotypen i foten: ordbilden i ytans egen ton, snedstrecken i Dahl-cyan. */
+.fc-foot-logo { margin: 0 auto; height: 0.78em; max-width: 100%; }
