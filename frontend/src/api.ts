@@ -70,12 +70,12 @@ export const api = {
   me: () => req("/api/auth/me"),
   knowledge: () => req("/api/knowledge"),
   projects: () => req("/api/projects"),
-  createProject: (name: string, description: string, contract_form = "AB04", discipline = "vvs", tech_spec = false) =>
-    req("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, description, contract_form, discipline, tech_spec }) }),
+  createProject: (name: string, description: string, contract_form = "AB04", discipline = "vvs", tech_spec = false, abt_variant = "ritningar") =>
+    req("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, description, contract_form, discipline, tech_spec, abt_variant }) }),
   // the disciplines the service knows, built or not: the choice shows them all and lets the built ones be chosen
   disciplines: () => req("/api/disciplines"),
   // contract form and discipline after the fact: the server refuses a change that is not confirmed
-  setProjectForm: (id: string, body: { contract_form?: string; discipline?: string; tech_spec?: boolean; confirm: boolean }) =>
+  setProjectForm: (id: string, body: { contract_form?: string; discipline?: string; tech_spec?: boolean; abt_variant?: string; confirm: boolean }) =>
     req(`/api/projects/${id}/form`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   project: (id: string) => req(`/api/projects/${id}`),
   // ABT 06: rooms read from the A-plans' room labels, counted page by page

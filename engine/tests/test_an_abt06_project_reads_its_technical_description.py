@@ -108,6 +108,22 @@ def test_the_whole_flow(client, pdf):
     assert client.get(f"/api/projects/{p['id']}/tech-specs", headers=H).json() == []
 
 
+def test_abt06_comes_in_two_variants(client):
+    """Med ritningar (handlingens blad, med eller utan beskrivning) eller med bara den tekniska beskrivningen."""
+    H = _login(client, "varianter@example.com")
+    ritn = client.post("/api/projects", json={"name": "R", "contract_form": "ABT06"}, headers=H).json()
+    assert ritn["abt_variant"] == "ritningar" and ritn["tech_spec"] is False
+    only = client.post("/api/projects", json={"name": "B", "contract_form": "ABT06", "abt_variant": "beskrivning"},
+                       headers=H).json()
+    assert only["abt_variant"] == "beskrivning" and only["tech_spec"] is True   # bara beskrivningen: den finns alltid
+    ab = client.post("/api/projects", json={"name": "A", "contract_form": "AB04", "abt_variant": "beskrivning"}, headers=H).json()
+    assert ab["abt_variant"] == "" and ab["tech_spec"] is False
+    changed = client.patch(f"/api/projects/{ritn['id']}/form", json={"abt_variant": "beskrivning"}, headers=H).json()
+    assert changed["abt_variant"] == "beskrivning" and changed["tech_spec"] is True
+    assert client.patch(f"/api/projects/{ritn['id']}/form", json={"abt_variant": "x"}, headers=H).status_code == 422
+    assert {p["abt_variant"] for p in client.get("/api/projects", headers=H).json()} == {"beskrivning", ""}
+
+
 def test_a_file_that_is_not_a_pdf_is_refused(client):
     H = _login(client, "tredje@example.com")
     p = client.post("/api/projects", json={"name": "X", "contract_form": "ABT06", "tech_spec": True}, headers=H).json()

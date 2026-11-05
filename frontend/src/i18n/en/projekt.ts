@@ -423,6 +423,11 @@ export const projekt: Record<string, string> = {
   "Alla": "All",
   "Varje beteckning på bladet, oavsett disciplin. Rören läses och mäts exakt som i VVS; allt annat bladet skriver listas, markeras och räknas i styck, och rum med area i texten får m². Det bladet själv inte förklarar märks granskas.": "Every designation on the sheet, whatever the discipline. The pipes are read and measured exactly as in HVAC; everything else the sheet writes is listed, marked and counted in pieces, and rooms with an area in their text get m². Whatever the sheet itself does not explain is marked for review.",
   // teknisk beskrivning
+  "ABT 06 – underlag": "ABT 06 – basis",
+  "Ritningar": "Drawings",
+  "Handlingens alla blad läses: rum, ytor, enheter, symboler och ritade installationer. En teknisk beskrivning kan läggas till.": "All sheets of the documents are read: rooms, areas, units, symbols and drawn installations. A technical description can be added.",
+  "Endast teknisk beskrivning": "Technical description only",
+  "Inga ritningar. Allt material tas ur den tekniska beskrivningen och söks i Dahls katalog.": "No drawings. All material is taken from the technical description and looked up in Dahl's catalogue.",
   "Enligt ritning": "Per drawing",
   "Levereras av annan": "Supplied by others",
   "Ingår ej i VS": "Not in the plumbing contract",

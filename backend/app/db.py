@@ -71,6 +71,9 @@ class Project(Base):
     discipline: Mapped[str] = mapped_column(String(24), default="")         # "" | vvs | sprinkler | kyla | ventilation ...
     # ABT 06 med teknisk beskrivning: projektet läser en beskrivning utan ritningar och tar ut dess material
     tech_spec: Mapped[bool] = mapped_column(Boolean, default=False)
+    # ABT 06 i två varianter: "ritningar" läser handlingens alla blad (och kan ha en beskrivning bredvid),
+    # "beskrivning" har bara den tekniska beskrivningen och inga ritningar. Tomt är "ritningar".
+    abt_variant: Mapped[str] = mapped_column(String(16), default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
     owner: Mapped[User] = relationship(back_populates="projects")
     drawings: Mapped[list["Drawing"]] = relationship(back_populates="project", cascade="all, delete-orphan")
@@ -764,6 +767,7 @@ _ADDED_COLUMNS = (
     ("analysis_jobs", "discipline", "VARCHAR(24) DEFAULT ''"),
     ("project_estimates", "unit_names", "JSON"),
     ("projects", "tech_spec", "BOOLEAN DEFAULT FALSE"),
+    ("projects", "abt_variant", "VARCHAR(16) DEFAULT ''"),
 )
 
 
