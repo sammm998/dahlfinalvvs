@@ -1,6 +1,6 @@
 import AiModelDialog from "./components/AiModelDialog";
 import { useEffect, useState } from "react";
-import { t as tr } from "./i18n";
+import { t as tr, trf, locale } from "./i18n";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, getToken, setToken, currentEmail, flushEvents, track } from "./api";
 import Landing from "./pages/Landing";
@@ -209,6 +209,12 @@ export default function App() {
     if (!getToken()) { setRole(""); return; }
     api.myRole().then((r) => setRole(r.role)).catch(() => setRole(""));
   }, [pathname]);
+  // den gemensamma budgeten: alla som är inloggade ser vad som är kvar, direkt i sidopanelen
+  const [left, setLeft] = useState<number | null>(null);
+  useEffect(() => {
+    if (!getToken()) { setLeft(null); return; }
+    api.credits().then((r) => setLeft(r.budget?.remaining_kr ?? null)).catch(() => setLeft(null));
+  }, [pathname]);
 
   // Vad besökaren gjorde. En klick sparas som en ruta i fönstret och inte som en punkt på en skärm: andelar
   // av bredden och höjden, så att bilden gäller alla skärmstorlekar på en gång. Det som skickas med är vad
@@ -291,7 +297,10 @@ export default function App() {
             <IconMaterial /> <span className="wide">{tr("Material")}</span>
           </Link>
           <Link to="/credits" className={path.startsWith("/credits") ? "on" : ""}>
-            <IconCredits /> <span className="wide">Credits</span>
+            <IconCredits /> <span className="wide">Credits{left !== null && (
+              <span className="muted small" style={{ marginLeft: 6 }} title={tr("Kvar av den gemensamma budgeten")}>
+                {trf("{0} kr kvar", Math.round(left).toLocaleString(locale()))}
+              </span>)}</span>
           </Link>
           {(role === "admin" || role === "partner") && (
             <Link to="/admin" className={path.startsWith("/admin") ? "on" : ""}>

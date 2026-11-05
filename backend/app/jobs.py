@@ -8,6 +8,7 @@ import json
 import sys
 import threading
 import logging
+import contextvars
 from concurrent.futures import ThreadPoolExecutor
 
 from .config import settings
@@ -295,6 +296,10 @@ def run_job(job_id: str) -> None:
                    if k in ("resubmitted_after_restart", "given_scale", "credits", "assignment_mode", "source_style",
                             "ai_model")}
         ai_model = (job.summary or {}).get("ai_model")
+        # vems läsning det är, läst medan sessionen är öppen: raderna i den gemensamma AI-budgeten säger vem
+        who = drawing.project.owner_id if drawing is not None and drawing.project is not None else None
+        from .api_budget import WHO
+        WHO.set(who)                 # analysens egen process får det med sig (analysis_worker.analyze_isolated)
         gs = (job.summary or {}).get("given_scale") or None
         by_hand = {int(gs["page"]): float(gs["meters_per_pdf_point"])} if gs else None
         job.status = "RUNNING"; job.started_at = dt.datetime.now(dt.timezone.utc); job.result_key = result_key
@@ -360,7 +365,8 @@ def run_job(job_id: str) -> None:
                  finished_at=dt.datetime.now(dt.timezone.utc), summary=done)
         # With a model chosen, the agent works on what the reading's own checks left open. The reading is complete
         # and shown already; what the agent changes arrives as corrections marked as its own.
-        _agent.submit(_run_agent, job_id, out_dir, pdf_path, ai_model)
+        # en tråd ur en pool ärver inte anropets sammanhang; kopian bär med sig vem läsningen gäller
+        _agent.submit(contextvars.copy_context().run, _run_agent, job_id, out_dir, pdf_path, ai_model)
     except UnsupportedInputError as e:
         # not a defect: no page carries a drawing - no vector geometry, and no scan or image to read either
         _set(job_id, status="FAILED", stage="FAILED", finished_at=dt.datetime.now(dt.timezone.utc),

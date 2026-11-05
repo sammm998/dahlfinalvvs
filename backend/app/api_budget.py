@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from contextvars import ContextVar
 from typing import Any
 
 from sqlalchemy import func
@@ -45,6 +46,11 @@ log = logging.getLogger("vvs.api_budget")
 # The meter holds where the service runs: switched on by the service at start-up and in an analysis's own process
 # (install_meter). Code that builds a transport for itself - a test with a stand-in model, a script - asks freely.
 _ACTIVE = False
+
+
+# Vem som frågar: satt per anrop till tjänsten (main.py) och i en analys egen process (analysis_worker.py), så att
+# varje rad i reskontran säger vems budgetanvändning den var. Budgeten är gemensam; raden visar vem.
+WHO: ContextVar[str | None] = ContextVar("api_budget_who", default=None)
 
 
 class BudgetExhausted(RuntimeError):
@@ -146,6 +152,33 @@ def status(db) -> dict[str, Any]:
             "prices": cfg["prices"], "by_source": sorted(rows, key=lambda r: -r["kr"])}
 
 
+def shared(db, recent: int = 60) -> dict[str, Any]:
+    """Den gemensamma budgeten som alla inloggade ser: taket, vad som gått åt och vad som är kvar, per användning,
+    per person och per modell, och de senaste raderna. Prislistan och växelkursen hör till administrationen."""
+    from .db import ApiSpend
+    st = status(db)
+    cfg = settings_of(db)
+    base = db.query(ApiSpend)
+    if cfg.get("reset_at"):
+        base = base.filter(ApiSpend.created_at >= dt.datetime.fromisoformat(cfg["reset_at"]))
+
+    def grouped(col):
+        q = base.with_entities(col, func.count(ApiSpend.id), func.sum(ApiSpend.kr)).group_by(col)
+        return sorted(({"key": k or "", "requests": int(n), "kr": round(float(s or 0), 2)} for k, n, s in q.all()),
+                      key=lambda r: -r["kr"])
+
+    rows = base.order_by(ApiSpend.created_at.desc()).limit(recent).all()
+    first = base.with_entities(func.min(ApiSpend.created_at)).scalar()
+    return {"limit_kr": st["limit_kr"], "spent_kr": st["spent_kr"], "remaining_kr": st["remaining_kr"],
+            "exhausted": st["exhausted"], "since": cfg.get("reset_at") or (first.isoformat() if first else None),
+            "requests": int(base.count()),
+            "by_source": grouped(ApiSpend.source), "by_user": grouped(ApiSpend.user_email),
+            "by_model": grouped(ApiSpend.model),
+            "recent": [{"at": r.created_at, "user": r.user_email or "", "source": r.source, "model": r.model,
+                        "tokens": int((r.tokens_in or 0) + (r.tokens_out or 0)), "kr": round(float(r.kr or 0), 4)}
+                       for r in rows]}
+
+
 def blocked(model: str | None = None, db=None) -> str | None:
     """Why the service may not call `model` now, or None when it may."""
     if not _ACTIVE:
@@ -198,7 +231,14 @@ def charge(model: str | None, tokens_in: int = 0, tokens_out: int = 0, cached: i
         cfg = settings_of(db)
         kr = cost_kr(model, tokens_in, tokens_out, cached, cache_write, cfg)
         price = dict(price_for(model, cfg["prices"]) or {}, usd_sek=cfg["usd_sek"])
-        db.add(ApiSpend(source=source[:32], model=(model or "")[:64], tokens_in=int(tokens_in or 0),
+        uid = WHO.get() or ""
+        email = ""
+        if uid:
+            from .db import User
+            u = db.get(User, uid)
+            email = (u.email if u else "")[:255]
+        db.add(ApiSpend(user_id=uid[:32], user_email=email, source=source[:32], model=(model or "")[:64],
+                        tokens_in=int(tokens_in or 0),
                         tokens_out=int(tokens_out or 0), cached_tokens=int(cached or 0),
                         cache_write_tokens=int(cache_write or 0), kr=float(kr or 0.0), price=price))
         db.commit()

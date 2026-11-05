@@ -189,8 +189,6 @@ export const api = {
   // credits: saldot, priset för ett blad innan det läses, och paketen
   credits: () => req("/api/credits"),
   price: (drawingId: string) => req(`/api/drawings/${drawingId}/price`),
-  buyCredits: (packageId: string) =>
-    req("/api/credits/purchase", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ package_id: packageId }) }),
   publicPricing: () => req("/api/public/pricing"),
   contact: (body: { name: string; email: string; company?: string; subject?: string; message: string }) =>
     req("/api/public/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),

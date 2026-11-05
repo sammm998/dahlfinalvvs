@@ -157,7 +157,7 @@ export default function ProjectPage() {
               <button className="secondary small" disabled={busy || !canStart(d)} onClick={async () => {
                 setErr("");
                 try { const j = await api.analyze(d.id); window.location.href = `/jobs/${j.id}`; }
-                catch (ex: any) { setErr(/402/.test(ex.message) ? `${ex.message.replace(/\s*\(402\)$/, "")} Fyll på under Credits.` : ex.message); }
+                catch (ex: any) { setErr(ex.message); }
               }}>{tr("Analysera")}</button>
             </div>
           </Tilted>

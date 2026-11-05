@@ -708,6 +708,9 @@ class ApiSpend(Base):
     skriver om vad som redan gått åt."""
     __tablename__ = "api_spend"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    # vem som använde budgeten: budgeten är gemensam, och alla ser vad som gått åt och till vad
+    user_id: Mapped[str] = mapped_column(String(32), default="")
+    user_email: Mapped[str] = mapped_column(String(255), default="")
     source: Mapped[str] = mapped_column(String(32), default="")              # tilldelning | agent | röst | andra_läsaren
     model: Mapped[str] = mapped_column(String(64), default="")
     tokens_in: Mapped[int] = mapped_column(Integer, default=0)
@@ -768,6 +771,8 @@ _ADDED_COLUMNS = (
     ("project_estimates", "unit_names", "JSON"),
     ("projects", "tech_spec", "BOOLEAN DEFAULT FALSE"),
     ("projects", "abt_variant", "VARCHAR(16) DEFAULT ''"),
+    ("api_spend", "user_id", "VARCHAR(32) DEFAULT ''"),
+    ("api_spend", "user_email", "VARCHAR(255) DEFAULT ''"),
 )
 
 

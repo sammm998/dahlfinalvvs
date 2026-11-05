@@ -51,6 +51,9 @@ def _child(connection, args, kwargs, rule_values):
         from .api_budget import install_meter
         install_meter()
         label_audit = kwargs.pop('label_audit', False)
+        # vems läsning det är: raderna i den gemensamma AI-budgeten säger vem
+        from .api_budget import WHO
+        WHO.set(rule_values.pop('__who__', None))
         from vvs_engine.cli import analyze_pdf
         from vvs_engine import rules, disciplines
         discipline = kwargs.pop('discipline', None)
@@ -144,7 +147,9 @@ def analyze_isolated(*args, progress=None, film_sink=None, rule_values=None, **k
     deadline=time.monotonic()+budget if budget is not None else float('inf')
     context=multiprocessing.get_context('spawn')
     receive,send=context.Pipe(duplex=False)
-    process=context.Process(target=_child,args=(send,args,kwargs,rule_values or {}),daemon=True)
+    from .api_budget import WHO
+    rule_values = dict(rule_values or {}, __who__=WHO.get())   # vem läsningen gäller följer med till processen
+    process=context.Process(target=_child,args=(send,args,kwargs,rule_values),daemon=True)
     oom_before = _oom_kills()
     last_stage = None
     process.start();send.close()

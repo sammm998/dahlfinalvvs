@@ -17,7 +17,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from . import (abt as abt_api, academy as academy_legacy, academy_api, admin as admin_api, cad as cad_api,
+from . import (abt as abt_api, api_budget, academy as academy_legacy, academy_api, admin as admin_api, cad as cad_api,
                calc as calc_api, credits as credits_api, desk as desk_api, exports, jobs,
                keyfigures as keyfigures_api, markups as markups_api, projects_api, public as public_api)
 from vvs_engine.output.schema import upgrade
@@ -82,6 +82,32 @@ async def _lifespan(_app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=_lifespan)
+
+
+class _Who:
+    """Vem anropet gäller, så att varje rad i den gemensamma AI-budgeten säger vem som använde den.
+
+    Sätts här och inte i current_user: ett beroende körs i en egen tråd, och det som sätts där når inte fram till
+    anropet. Ett ASGI-mellanled sätter värdet innan anropet körs, och anropets tråd får en kopia av det."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            auth = dict(scope.get("headers") or []).get(b"authorization", b"").decode("latin-1")
+            uid = None
+            if auth.lower().startswith("bearer "):
+                try:
+                    import jwt
+                    uid = jwt.decode(auth[7:], settings.secret_key, algorithms=["HS256"]).get("sub")
+                except Exception:
+                    uid = None
+            api_budget.WHO.set(uid)
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(_Who)
 
 
 @app.exception_handler(Exception)

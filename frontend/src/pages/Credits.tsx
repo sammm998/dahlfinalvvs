@@ -1,118 +1,123 @@
 import { useEffect, useState } from "react";
-import { t as tr, locale } from "../i18n";
+import { t as tr, trf, locale } from "../i18n";
 import { Link } from "react-router-dom";
 import { api } from "../api";
-import Tilted from "../components/Tilted";
 
-/* Credits: vad kontot har, vad en läsning kostar och vad som hänt med potten.
+/* Credits: den gemensamma budgeten.
  *
- * Saldot är summan av raderna i reskontran och ingenting annat, så sidan visar raderna - varje läsning, varje
- * köp, varje återbetalning med sitt skäl. Den som undrar varför saldot hoppade upp ska kunna läsa det här, inte
- * behöva fråga. */
+ * Alla konton delar en budget på 10 000 kr för det som faktiskt kostar pengar - anropen till språkmodellerna
+ * (agenten, andra blicken, den tekniska beskrivningen). Ingen köper credits och ingen läsning dras från ett eget
+ * saldo. Sidan visar samma sak för alla som loggar in: taket, vad som gått åt, vad som är kvar, till vad, av vem
+ * och de senaste raderna. */
 
 const DATE = new Intl.DateTimeFormat(locale(), { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-const KIND: Record<string, string> = {
-  prov: "Provcredits", kop: "Köp", lasning: "Läsning", syn: "Andra blick", aterbetalning: "Återbetalning", tilldelning: "Tilldelning",
+const SOURCE: Record<string, string> = {
+  agent: "Agenten", vision: "Andra blick", analysis: "Analys", tb: "Teknisk beskrivning", tech_spec: "Teknisk beskrivning",
+  academy: "Lär dig VVS", cad: "CAD", desk: "Mängda",
 };
 
 export const fmtCredits = (v: number) => v.toLocaleString(locale(), { maximumFractionDigits: 2 });
+const kr = (v: number) => `${v.toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr`;
+
+function Breakdown({ title, rows, label, total }: { title: string; rows: any[]; label: (k: string) => string; total: number }) {
+  return (
+    <section style={{ flex: "1 1 280px", minWidth: 0 }}>
+      <h2>{title}</h2>
+      <div className="tablewrap">
+        <table className="qty">
+          <thead><tr><th>{tr("Vad")}</th><th>{tr("Anrop")}</th><th>{tr("Använt")}</th><th>{tr("Andel")}</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key || "-"}>
+                <td>{label(r.key)}</td>
+                <td>{r.requests.toLocaleString(locale())}</td>
+                <td>{kr(r.kr)}</td>
+                <td>{total > 0 ? `${Math.round((r.kr / total) * 100)} %` : "–"}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && <tr><td colSpan={4} className="empty">{tr("Ingenting har använts än.")}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 export default function CreditsPage() {
   const [me, setMe] = useState<any>(null);
   const [err, setErr] = useState("");
-  const [busy, setBusy] = useState("");
-  const [bought, setBought] = useState<any>(null);
-  const load = () => api.credits().then(setMe).catch((e) => setErr(e.message));
-  useEffect(() => { load(); }, []);
-  const buy = async (id: string) => {
-    setBusy(id); setErr(""); setBought(null);
-    try { const r = await api.buyCredits(id); setBought(r.entry); await load(); }
-    catch (e: any) { setErr(e.message); } finally { setBusy(""); }
-  };
-  if (!me) return <main>{err ? <p className="error">{err}</p> : "Laddar…"}</main>;
-  const p = me.prices;
+  useEffect(() => { api.credits().then(setMe).catch((e) => setErr(e.message)); }, []);
+  if (!me) return <main>{err ? <p className="error">{err}</p> : tr("Laddar…")}</main>;
+  const b = me.budget;
+  const used = b.limit_kr > 0 ? Math.min(100, (b.spent_kr / b.limit_kr) * 100) : 100;
+  const bar = b.exhausted ? "var(--red, #c0392b)" : used > 80 ? "#d68a00" : "var(--accent, #004976)";
   return (
     <main>
-      <p className="crumb"><Link to="/projekt">Projekt</Link> {tr("/ Credits")}</p>
+      <p className="crumb"><Link to="/projekt">{tr("Projekt")}</Link> {tr("/ Credits")}</p>
       <div className="head">
         <div>
           <h1>Credits</h1>
           <p className="lead">
-            {me.local_installation
-              ? tr("Obegränsad lokal analys. Du kan läsa och läsa om ritningar utan credits.")
-              : me.exempt
-              ? "Det här kontot driver tjänsten och betalar inte för sina egna läsningar."
-              : "En läsning kostar credits. Priset visas innan den körs, och en läsning som inte kunde ge en meter kostar ingenting."}
+            {tr("Alla konton delar en gemensam budget. Det som kostar pengar är anropen till AI-modellerna - agenten, andra blicken och läsningen av tekniska beskrivningar - och de dras härifrån. Analys av ritningar utan AI kostar ingenting.")}
           </p>
         </div>
         <div className="row">
           <div className="stat">
-            <div className="k">{me.local_installation ? tr("Lokal installation") : "Saldo"}</div>
-            <div className="v">{me.local_installation ? tr("Obegränsad") : <>{fmtCredits(me.balance)} <span className="unit">credits</span></>}</div>
+            <div className="k">{tr("Kvar")}</div>
+            <div className="v">{kr(b.remaining_kr)}</div>
+          </div>
+          <div className="stat">
+            <div className="k">{tr("Använt")}</div>
+            <div className="v">{kr(b.spent_kr)}</div>
+          </div>
+          <div className="stat">
+            <div className="k">{tr("Budget")}</div>
+            <div className="v">{kr(b.limit_kr)}</div>
           </div>
         </div>
       </div>
-      {err && <p className="error" style={{ marginTop: 18 }}>{err}</p>}
-      {bought && (
-        <p className="ok" style={{ marginTop: 18 }}>
-          {bought.note}. Credits finns på kontot nu; fakturan skickas till kontots adress.
+
+      <div style={{ marginTop: 18 }}>
+        <div style={{ height: 12, borderRadius: 6, background: "var(--line, #e3e8ec)", overflow: "hidden" }}
+          role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(used)}>
+          <div style={{ width: `${used}%`, height: "100%", background: bar }} />
+        </div>
+        <p className="muted small" style={{ marginTop: 6 }}>
+          {trf("{0} % av budgeten använd · {1} anrop", used.toLocaleString(locale(), { maximumFractionDigits: 1 }), b.requests.toLocaleString(locale()))}
+          {b.since ? ` · ${trf("sedan {0}", DATE.format(new Date(b.since)))}` : ""}
         </p>
-      )}
-
-      {!me.local_installation && <>
-      <div className="rule" />
-      <h2>{tr("Vad en läsning kostar")}</h2>
-      <p className="muted">
-        Priset följer bladet: formatet och mängden bläck. Ett blad med fler än {Number(p.ink_step_paths).toLocaleString(locale())} banor
-        kostar {fmtCredits(p.ink_step_credits)} credit mer per påbörjat sådant steg, upp till {fmtCredits(p.ink_cap_credits)} credits.
-        Priset står på ritningen innan du trycker på Analysera.
-      </p>
-      <div className="tablewrap">
-        <table className="qty">
-          <thead><tr><th>Format</th><th>{tr("A3 och mindre")}</th><th>A2</th><th>A1</th><th>A0</th><th>{tr("Större än A0")}</th><th>Andra blick (syn)</th><th>{tr("Skannad sida")}</th></tr></thead>
-          <tbody>
-            <tr>
-              <td>{tr("Credits per sida")}</td>
-              {["A3", "A2", "A1", "A0", "A0+"].map((k) => <td key={k}>{fmtCredits(p.sheet[k])}</td>)}
-              <td>{fmtCredits(p.vision_page)} per sida</td>
-              <td>+{fmtCredits(p.raster_page ?? 1)} per sida</td>
-            </tr>
-          </tbody>
-        </table>
+        {b.exhausted && (
+          <p className="error">{tr("Budgeten är slut. AI-funktionerna är pausade tills administratören höjer eller nollställer budgeten.")}</p>
+        )}
       </div>
 
       <div className="rule" />
-      <h2>{tr("Fyll på")}</h2>
-      <p className="muted">Priser exklusive moms. Köpet faktureras; credits finns på kontot direkt.</p>
-      <div className="grid4">
-        {(p.packages || []).map((pk: any) => (
-          <Tilted as="article" deg={2} lift={5} className="card" key={pk.id}>
-            <div className="ttl">{pk.name}</div>
-            <div className="big">{pk.credits.toLocaleString(locale())} <span className="unit">credits</span></div>
-            <div className="sub">{pk.kr.toLocaleString(locale())} kr · {(pk.kr / pk.credits).toLocaleString(locale(), { maximumFractionDigits: 2 })} kr per credit</div>
-            <p className="muted small">{pk.lead}</p>
-            <button disabled={!!busy} onClick={() => buy(pk.id)}>{busy === pk.id ? "Registrerar…" : "Köp"}</button>
-          </Tilted>
-        ))}
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+        <Breakdown title={tr("Till vad")} rows={b.by_source} total={b.spent_kr} label={(k) => tr(SOURCE[k] || k || "Övrigt")} />
+        <Breakdown title={tr("Av vem")} rows={b.by_user} total={b.spent_kr}
+          label={(k) => (k ? (k === me.me ? trf("{0} (du)", k) : k) : tr("Tjänsten själv"))} />
+      </div>
+      <div style={{ marginTop: 28 }}>
+        <Breakdown title={tr("Per modell")} rows={b.by_model} total={b.spent_kr} label={(k) => k || "–"} />
       </div>
 
       <div className="rule" />
-      </>}
-      <h2>Reskontra</h2>
+      <h2>{tr("Senaste användningen")}</h2>
       <div className="tablewrap">
         <table className="qty">
-          <thead><tr><th>{tr("När")}</th><th>Vad</th><th>Credits</th><th>{tr("Skäl")}</th><th>Status</th></tr></thead>
+          <thead><tr><th>{tr("När")}</th><th>{tr("Vem")}</th><th>{tr("Till vad")}</th><th>{tr("Modell")}</th><th>{tr("Tokens")}</th><th>{tr("Kostnad")}</th></tr></thead>
           <tbody>
-            {me.entries.map((e: any) => (
-              <tr key={e.id}>
-                <td>{DATE.format(new Date(e.created_at))}</td>
-                <td>{KIND[e.kind] || e.kind}</td>
-                <td style={{ color: e.credits < 0 ? "var(--red, #c0392b)" : "var(--green, #1b7f4b)" }}>{e.credits > 0 ? "+" : ""}{fmtCredits(e.credits)}</td>
-                <td className="muted">{e.note}{e.ref && e.kind === "lasning" ? <> · <Link to={`/jobs/${e.ref}`}>{tr("läsningen")}</Link></> : null}</td>
-                <td>{e.status || ""}</td>
+            {b.recent.map((r: any, i: number) => (
+              <tr key={i}>
+                <td>{DATE.format(new Date(r.at))}</td>
+                <td>{r.user || tr("Tjänsten själv")}</td>
+                <td>{tr(SOURCE[r.source] || r.source || "Övrigt")}</td>
+                <td className="muted">{r.model}</td>
+                <td>{r.tokens.toLocaleString(locale())}</td>
+                <td>{kr(r.kr)}</td>
               </tr>
             ))}
-            {me.entries.length === 0 && <tr><td colSpan={5} className="empty">{tr("Ingenting har hänt än.")}</td></tr>}
+            {b.recent.length === 0 && <tr><td colSpan={6} className="empty">{tr("Ingenting har använts än.")}</td></tr>}
           </tbody>
         </table>
       </div>
@@ -120,18 +125,13 @@ export default function CreditsPage() {
   );
 }
 
-/** Priset för ett blad, hämtat innan läsningen: används på projekt- och ritningssidan bredvid knappen. */
+/** Priset för ett blad innan läsningen. Läsningar dras inte längre från något saldo, så det finns inget att visa;
+ *  komponenten finns kvar för sidorna som använder den. */
 export function PriceTag({ drawingId, onQuote }: { drawingId: string; onQuote?: (q: any) => void }) {
-  const [q, setQ] = useState<any>(null);
   useEffect(() => {
     let on = true;
-    api.price(drawingId).then((r) => { if (on) { setQ(r); onQuote?.(r); } }).catch(() => { /* priset visas när det finns */ });
+    api.price(drawingId).then((r) => { if (on) onQuote?.(r); }).catch(() => { /* inget pris att visa */ });
     return () => { on = false; };
   }, [drawingId]);
-  if (!q || q.exempt) return null;
-  return (
-    <span className={`badge ${q.enough ? "" : "warn"}`} title={q.reason}>
-      {fmtCredits(q.credits)} credits{q.enough ? "" : ` · saldo ${fmtCredits(q.balance)}`}
-    </span>
-  );
+  return null;
 }

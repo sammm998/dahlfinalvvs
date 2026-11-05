@@ -44,7 +44,7 @@ export default function DrawingPage() {
           <button onClick={async () => {
             setErr("");
             try { await api.analyze(d.id, undefined, 0, "combined", "auto"); load(); }
-            catch (ex: any) { setErr(/402/.test(ex.message) ? `${ex.message.replace(/\s*\(402\)$/, "")} Fyll på under Credits.` : ex.message); }
+            catch (ex: any) { setErr(ex.message); }
           }}>{tr("Ny analys")}</button>
         </div>
       </div>
