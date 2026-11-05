@@ -3,7 +3,7 @@ import { t as tr, locale } from "../i18n";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import Tilted from "../components/Tilted";
-import { ContractFormChoice, DisciplineChoice, Discipline, FALLBACK_DISCIPLINES, CONTRACT_LABEL } from "../components/ProjectForm";
+import { ContractFormChoice, DisciplineChoice, Discipline, FALLBACK_DISCIPLINES, CONTRACT_LABEL, TechSpecChoice } from "../components/ProjectForm";
 
 const DATE = new Intl.DateTimeFormat(locale(), { day: "2-digit", month: "short", year: "numeric" });
 
@@ -17,6 +17,7 @@ export default function Projects() {
   const [busy, setBusy] = useState(false);
   const [contract, setContract] = useState("AB04");
   const [discipline, setDiscipline] = useState("vvs");
+  const [techSpec, setTechSpec] = useState(false);
   const [disciplines, setDisciplines] = useState<Discipline[]>(FALLBACK_DISCIPLINES);
   const load = () => api.projects().then(setProjects).catch((e) => setErr(e.message));
   useEffect(() => { load(); api.disciplines().then((d) => d?.length && setDisciplines(d)).catch(() => { /* bara VVS */ }); }, []);
@@ -25,8 +26,8 @@ export default function Projects() {
     e.preventDefault();
     setBusy(true);
     try {
-      await api.createProject(name, desc, contract, discipline);
-      setName(""); setDesc(""); setContract("AB04"); setDiscipline("vvs"); setOpen(false); setErr("");
+      await api.createProject(name, desc, contract, discipline, contract === "ABT06" && techSpec);
+      setName(""); setDesc(""); setContract("AB04"); setDiscipline("vvs"); setTechSpec(false); setOpen(false); setErr("");
       load();
     } catch (ex: any) { setErr(ex.message); } finally { setBusy(false); }
   };
@@ -59,6 +60,7 @@ export default function Projects() {
             <input id="p-desc" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={tr("Valfritt")} />
           </div>
           <ContractFormChoice value={contract} onChange={setContract} />
+          {contract === "ABT06" && <TechSpecChoice value={techSpec} onChange={setTechSpec} />}
           <DisciplineChoice value={discipline} onChange={setDiscipline} disciplines={disciplines} />
           <button type="submit" disabled={busy}>{busy ? tr("Skapar…") : tr("Skapa projekt")}</button>
         </form>
@@ -81,6 +83,7 @@ export default function Projects() {
               <Link className="ttl" to={`/projects/${p.id}`}>{p.name}</Link>
               <div className="sub">{p.description || "—"}
                 {p.contract_form === "ABT06" && <> · <span className="badge small">{CONTRACT_LABEL.ABT06}</span></>}
+                {p.tech_spec && <> · <span className="badge small">{tr("Teknisk beskrivning")}</span></>}
                 {p.discipline && p.discipline !== "vvs" && <> · <span className="badge small">{tr(disciplines.find((d) => d.id === p.discipline)?.name ?? p.discipline)}</span></>}
               </div>
             </div>

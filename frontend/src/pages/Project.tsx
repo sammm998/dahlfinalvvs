@@ -6,7 +6,8 @@ import { api, fileSize } from "../api";
 import { StatusBadge } from "../components/Status";
 import Tilted from "../components/Tilted";
 import { PriceTag } from "./Credits";
-import { ContractFormChoice, DisciplineChoice, Discipline, FALLBACK_DISCIPLINES, ProjectBadges } from "../components/ProjectForm";
+import { ContractFormChoice, DisciplineChoice, Discipline, FALLBACK_DISCIPLINES, ProjectBadges, TechSpecChoice } from "../components/ProjectForm";
+import TechSpecPanel from "../components/TechSpecPanel";
 import { AbtPanel } from "../components/AbtRooms";
 
 const DATE = new Intl.DateTimeFormat(locale(), { day: "2-digit", month: "short", year: "numeric" });
@@ -23,12 +24,12 @@ export default function ProjectPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [disciplines, setDisciplines] = useState<Discipline[]>(FALLBACK_DISCIPLINES);
   // changing the contract form or the discipline afterwards: chosen here, said back, and only then sent
-  const [changing, setChanging] = useState<{ contract_form: string; discipline: string } | null>(null);
+  const [changing, setChanging] = useState<{ contract_form: string; discipline: string; tech_spec: boolean } | null>(null);
   useEffect(() => { api.disciplines().then((d) => d?.length && setDisciplines(d)).catch(() => { /* bara VVS */ }); }, []);
   const load = () => api.project(id!).then(setProject).catch((e) => setErr(e.message));
   const saveForm = async () => {
     if (!changing) return;
-    try { await api.setProjectForm(id!, { ...changing, confirm: true }); setChanging(null); await load(); }
+    try { await api.setProjectForm(id!, { ...changing, tech_spec: changing.contract_form === "ABT06" && changing.tech_spec, confirm: true }); setChanging(null); await load(); }
     catch (ex: any) { setErr(ex.message); }
   };
   // the list only changes while a reading is running, or just after an upload; otherwise it can sit still
@@ -95,7 +96,7 @@ export default function ProjectPage() {
           <p className="lead">{project.description || tr("Ritningar i projektet")}</p>
           <div className="row" style={{ gap: 8, marginTop: 8 }}>
             <ProjectBadges project={project} disciplines={disciplines} />
-            {!changing && <button className="ghost small" onClick={() => setChanging({ contract_form: project.contract_form, discipline: project.discipline })}>{tr("Ändra")}</button>}
+            {!changing && <button className="ghost small" onClick={() => setChanging({ contract_form: project.contract_form, discipline: project.discipline, tech_spec: !!project.tech_spec })}>{tr("Ändra")}</button>}
           </div>
         </div>
         <div className="row">
@@ -111,14 +112,16 @@ export default function ProjectPage() {
       {changing && (
         <div className="card" style={{ marginTop: 18, maxWidth: 640 }}>
           <ContractFormChoice value={changing.contract_form} onChange={(v) => setChanging({ ...changing, contract_form: v })} name="contract-change" />
+          {changing.contract_form === "ABT06" && <TechSpecChoice value={changing.tech_spec} onChange={(v) => setChanging({ ...changing, tech_spec: v })} name="tech-spec-change" />}
           <DisciplineChoice value={changing.discipline} onChange={(v) => setChanging({ ...changing, discipline: v })} disciplines={disciplines} name="discipline-change" />
           <p className="muted small">{tr("Bytet gäller nya läsningar i projektet. Läsningar som redan är gjorda ändras inte.")}</p>
           <div className="row" style={{ gap: 8 }}>
-            <button onClick={saveForm} disabled={changing.contract_form === project.contract_form && changing.discipline === project.discipline}>{tr("Bekräfta ändringen")}</button>
+            <button onClick={saveForm} disabled={changing.contract_form === project.contract_form && changing.discipline === project.discipline && changing.tech_spec === !!project.tech_spec}>{tr("Bekräfta ändringen")}</button>
             <button className="secondary" onClick={() => setChanging(null)}>{tr("Avbryt")}</button>
           </div>
         </div>
       )}
+      {project.tech_spec && <TechSpecPanel project={project} />}
       {project.contract_form === "ABT06" && <AbtPanel project={project} />}
       {progress && <p role="status" aria-live="polite">{progress}</p>}
       {notice && <p role="status">{notice}</p>}

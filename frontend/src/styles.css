@@ -3359,3 +3359,21 @@ button.d3-open:hover { box-shadow: 0 6px 20px rgba(18, 158, 176, 0.45), inset 0 
 .app.railed .side .brand .rail-only { display: block; }
 @media (max-width: 900px) { .side .brand .rail-only { display: block; } }
 .auth-logo { display: inline-block; color: #004976; margin-bottom: clamp(28px, 6vh, 56px); }
+
+/* ---------- teknisk beskrivning ---------- */
+.tspec h2 { font-size: 22px; letter-spacing: -0.02em; }
+.tspec-src { margin: 10px 0 4px; }
+.tspec-group h3 { margin: 22px 0 6px; font-size: 15px; letter-spacing: -0.01em; color: #004976; }
+.tspec-table td { white-space: normal; vertical-align: top; }
+.tspec-table td.lf-mono, .tspec-table td.num { white-space: nowrap; }
+.tspec-row { cursor: pointer; }
+.tspec-row:hover td { background: rgba(0, 73, 118, 0.035); }
+.tspec-row.open td { background: rgba(0, 181, 226, 0.07); }
+.tspec-row.k-tillbehor td:nth-child(3) { padding-left: 22px; }
+.tspec-row.k-krav td, .tspec-row.k-arbete td { color: var(--muted); }
+.tspec-hit { max-width: 280px; font-size: 12.5px; }
+.tspec-detail td { background: #f6f9fb; white-space: normal; }
+.tspec-hits { margin: 6px 0 10px; padding-left: 18px; }
+.tspec-mail { position: fixed; right: 24px; top: 24px; width: min(620px, calc(100vw - 32px)); z-index: 60;
+  max-height: calc(100vh - 48px); overflow: auto; box-shadow: var(--e3); }
+.chip.on { background: #004976; color: #fff; border-color: #004976; }

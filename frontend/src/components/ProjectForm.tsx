@@ -35,6 +35,18 @@ export function ContractFormChoice({ value, onChange, name = "contract" }: { val
   );
 }
 
+/* ABT 06 med teknisk beskrivning: projektet läser en beskrivning utan ritningar och tar ut allt material den
+ * föreskriver. Valet finns bara för ABT 06 - där entreprenören själv projekterar ur beskrivningen. */
+export function TechSpecChoice({ value, onChange, name = "tech-spec" }: { value: boolean; onChange: (v: boolean) => void; name?: string }) {
+  return (
+    <label className={`choice-card${value ? " on" : ""}`} style={{ marginBottom: 14 }}>
+      <input type="checkbox" name={name} checked={value} onChange={(e) => onChange(e.target.checked)} />
+      <span><b>{tr("Teknisk beskrivning")}</b>
+        <span className="muted small">{tr("Analysera en teknisk beskrivning utan ritningar: allt material med kod, antal, fabrikat, typ och RSK, sökt i Dahls katalog.")}</span></span>
+    </label>
+  );
+}
+
 export function DisciplineChoice({ value, onChange, disciplines, name = "discipline" }:
   { value: string; onChange: (v: string) => void; disciplines: Discipline[]; name?: string }) {
   return (
@@ -67,6 +79,7 @@ export function ProjectBadges({ project, disciplines }: { project: any; discipli
     <span className="row" style={{ gap: 6 }}>
       <span className="badge" title={tr("Entreprenadform")}>{CONTRACT_LABEL[project.contract_form] ?? project.contract_form}</span>
       <span className="badge" title={tr("Disciplin")}>{tr(d?.name ?? project.discipline)}</span>
+      {project.tech_spec && <span className="badge">{tr("Teknisk beskrivning")}</span>}
     </span>
   );
 }

@@ -124,6 +124,8 @@ app.include_router(credits_api.router)
 app.include_router(abt_api.router)
 app.include_router(keyfigures_api.router)
 app.include_router(desk_api.router)
+from . import tech_spec as tech_spec_api  # noqa: E402
+app.include_router(tech_spec_api.router)
 
 
 # ---------------------------------------------------------------- health / auth
@@ -248,6 +250,8 @@ class ProjectIn(BaseModel):
     # AB 04 och VVS är förval: ett projekt skapat utan val är det som alla projekt varit (docs/abt06-plan.md)
     contract_form: str = "AB04"
     discipline: str = "vvs"
+    # ABT 06 med teknisk beskrivning (tech_spec.py): gäller bara ABT 06, och sparas inte för AB 04
+    tech_spec: bool = False
 
 
 CONTRACT_FORMS = ("AB04", "ABT06")
@@ -270,6 +274,7 @@ def _checked_modes(contract_form: str | None, discipline: str | None) -> tuple[s
 class ProjectFormIn(BaseModel):
     contract_form: str | None = None
     discipline: str | None = None
+    tech_spec: bool | None = None
     confirm: bool = False
 
 
@@ -298,7 +303,8 @@ def _proj_out(p: Project):
     from vvs_engine import disciplines as disc
     return {"id": p.id, "name": p.name, "description": p.description, "created_at": p.created_at, "n_drawings": len(p.drawings),
             # tomt är vad projektet var innan valen fanns: AB 04 och VVS
-            "contract_form": p.contract_form or "AB04", "discipline": disc.normalize(p.discipline)}
+            "contract_form": p.contract_form or "AB04", "discipline": disc.normalize(p.discipline),
+            "tech_spec": bool(p.tech_spec) and (p.contract_form or "AB04") == "ABT06"}
 
 
 def _drawing_out(d: Drawing):
@@ -330,7 +336,8 @@ def list_projects(user: User = Depends(current_user), db: Session = Depends(get_
 def create_project(body: ProjectIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     contract_form, discipline = _checked_modes(body.contract_form, body.discipline)
     p = Project(owner_id=user.id, name=body.name.strip() or "Namnlöst projekt", description=body.description,
-                contract_form=contract_form, discipline=discipline)
+                contract_form=contract_form, discipline=discipline,
+                tech_spec=bool(body.tech_spec) and contract_form == "ABT06")
     db.add(p); db.commit()
     return _proj_out(p)
 
@@ -350,6 +357,13 @@ def change_project_form(project_id: str, body: ProjectFormIn, user: User = Depen
     sagt. Läsningar som redan är gjorda ändras inte. Bytet skrivs i händelseloggen med vad det var och vad det blev."""
     p = _project(db, user, project_id)
     contract_form, discipline = _checked_modes(body.contract_form, body.discipline)
+    if body.tech_spec is not None and body.tech_spec != bool(p.tech_spec):
+        # Den tekniska beskrivningen läggs till eller tas bort utan bekräftelse: den ändrar inte hur något redan
+        # läst räknas, den visar eller döljer bara beskrivningens material. Den hör till ABT 06.
+        if body.tech_spec and (contract_form or p.contract_form or "AB04") != "ABT06":
+            raise HTTPException(422, "Teknisk beskrivning väljs till ABT 06.")
+        p.tech_spec = body.tech_spec
+        db.commit()
     before = {"contract_form": p.contract_form or "AB04", "discipline": _proj_out(p)["discipline"]}
     after = {"contract_form": contract_form or before["contract_form"], "discipline": discipline or before["discipline"]}
     if after == before:

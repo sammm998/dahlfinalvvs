@@ -69,6 +69,8 @@ class Project(Base):
     # projekt var innan valen fanns: AB 04 och VVS, läst precis som förut.
     contract_form: Mapped[str] = mapped_column(String(8), default="")       # "" | AB04 | ABT06
     discipline: Mapped[str] = mapped_column(String(24), default="")         # "" | vvs | sprinkler | kyla | ventilation ...
+    # ABT 06 med teknisk beskrivning: projektet läser en beskrivning utan ritningar och tar ut dess material
+    tech_spec: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
     owner: Mapped[User] = relationship(back_populates="projects")
     drawings: Mapped[list["Drawing"]] = relationship(back_populates="project", cascade="all, delete-orphan")
@@ -125,6 +127,28 @@ class Drawing(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
     project: Mapped[Project] = relationship(back_populates="drawings")
     jobs: Mapped[list["AnalysisJob"]] = relationship(back_populates="drawing", cascade="all, delete-orphan")
+
+
+class TechSpec(Base):
+    """En teknisk beskrivning i ett projekt, läst till materialposter (vvs_engine.tb).
+
+    Posterna sparas som de lästes. Matchningen mot materialboken och katalogen görs när de visas, så att en
+    katalog som läses in senare gäller för beskrivningar som redan finns.
+    """
+    __tablename__ = "tech_specs"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    filename: Mapped[str] = mapped_column(String(512))
+    storage_key: Mapped[str] = mapped_column(String(1024))
+    sha256: Mapped[str] = mapped_column(String(64))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    n_pages: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="COMPLETED")    # COMPLETED | FAILED
+    error: Mapped[str] = mapped_column(Text, default="")
+    title: Mapped[str] = mapped_column(String(255), default="")
+    items: Mapped[list] = mapped_column(JSON, default=list)
+    stats: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class AnalysisJob(Base):
@@ -739,6 +763,7 @@ _ADDED_COLUMNS = (
     ("drawings", "flow", "VARCHAR(16) DEFAULT ''"),
     ("analysis_jobs", "discipline", "VARCHAR(24) DEFAULT ''"),
     ("project_estimates", "unit_names", "JSON"),
+    ("projects", "tech_spec", "BOOLEAN DEFAULT FALSE"),
 )
 
 

@@ -70,12 +70,12 @@ export const api = {
   me: () => req("/api/auth/me"),
   knowledge: () => req("/api/knowledge"),
   projects: () => req("/api/projects"),
-  createProject: (name: string, description: string, contract_form = "AB04", discipline = "vvs") =>
-    req("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, description, contract_form, discipline }) }),
+  createProject: (name: string, description: string, contract_form = "AB04", discipline = "vvs", tech_spec = false) =>
+    req("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, description, contract_form, discipline, tech_spec }) }),
   // the disciplines the service knows, built or not: the choice shows them all and lets the built ones be chosen
   disciplines: () => req("/api/disciplines"),
   // contract form and discipline after the fact: the server refuses a change that is not confirmed
-  setProjectForm: (id: string, body: { contract_form?: string; discipline?: string; confirm: boolean }) =>
+  setProjectForm: (id: string, body: { contract_form?: string; discipline?: string; tech_spec?: boolean; confirm: boolean }) =>
     req(`/api/projects/${id}/form`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   project: (id: string) => req(`/api/projects/${id}`),
   // ABT 06: rooms read from the A-plans' room labels, counted page by page
@@ -164,6 +164,17 @@ export const api = {
   settings: () => req("/api/settings"),
   setSettings: (body: any) => req("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   materials: (qs: string) => req(`/api/materials?${qs}`),
+  // ---- teknisk beskrivning (backend/app/tech_spec.py) ----
+  techSpecs: (projectId: string) => req(`/api/projects/${projectId}/tech-specs`),
+  uploadTechSpec: (projectId: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/tech-specs`, { method: "POST", body: fd }); },
+  techSpec: (id: string) => req(`/api/tech-specs/${id}`),
+  deleteTechSpec: (id: string) => req(`/api/tech-specs/${id}`, { method: "DELETE" }),
+  techSpecMail: (id: string, body: { ids?: string[]; to?: string }) =>
+    req(`/api/tech-specs/${id}/mail`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  catalog: () => req("/api/catalog"),
+  catalogImport: (url: string) =>
+    req("/api/catalog/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) }),
+  catalogUpload: (file: File) => { const fd = new FormData(); fd.append("file", file); return req("/api/catalog/upload", { method: "POST", body: fd }); },
   setRule: (id: string, body: any) =>
     req(`/api/rules/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   fetchBlob: async (path: string) => {
