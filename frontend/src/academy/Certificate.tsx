@@ -3,6 +3,7 @@ import { t as tr } from "../i18n";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ac } from "./api";
 import "./academy.css";
+import { DahlLogo } from "../components/DahlLogo";
 
 /* Certifikatet, och verifieringen av det.
  *
@@ -22,11 +23,7 @@ function Sheet({ c }: { c: { holder: string; title: string; code: string; issued
       <div className="cert-in">
         <header className="cert-top">
           <span className="cert-mark">
-            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M2 13.5h5.2V6h5.6v7.5H18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="square" />
-              <circle cx="7.2" cy="13.5" r="1.7" fill="currentColor" />
-            </svg>
-            Dahl
+            <DahlLogo height={20} title="Dahl" />
           </span>
           <span className="cert-label">{tr("Certificate of Competence")}</span>
         </header>
@@ -81,7 +78,7 @@ export function CertificatePage() {
   return (
     <div className="acx cert-page">
       <header className="acx-top no-print">
-        <Link className="acx-brand" to="/academy">Dahl <span>Academy</span></Link>
+        <Link className="acx-brand" to="/academy"><DahlLogo height={18} title="Dahl" /> <span>Academy</span></Link>
         <nav className="acx-crumb"><span>Certifikat</span></nav>
         <div className="cert-acts">
           <button className="fc-btn sm" onClick={() => window.print()}>{tr("Skriv ut / spara som PDF")}</button>
@@ -120,7 +117,7 @@ export function VerifyPage() {
   return (
     <div className="acx cert-verify">
       <header className="acx-top">
-        <Link className="acx-brand" to="/">Dahl</Link>
+        <Link className="acx-brand" to="/"><DahlLogo height={18} title="Dahl" /></Link>
         <nav className="acx-crumb"><span>Verifiering</span></nav>
       </header>
 

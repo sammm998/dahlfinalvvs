@@ -8,6 +8,7 @@ import SiteHeader, { PUBLIC_LINKS } from "./SiteHeader";
 import Nav from "../fc/Nav";
 import { CustomCursor, LineReveal, ScrollProgress } from "../fc/primitives";
 import { useSmoothScroll } from "../fc/motion";
+import { DahlLogo } from "./DahlLogo";
 
 /* Ramen kring de publika sidorna.
  *
@@ -89,11 +90,7 @@ export default function PublicFrame({ kicker, title, lede, children, wide = fals
         <div className="pub-foot-in">
           <div className="pub-foot-brand">
             <span className="lp-logo" style={{ fontSize: 15 }}>
-              <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true">
-                <path d="M3 15 H8 V7 H14 V15 H19" stroke="#6ee7a5" strokeWidth="2.3" fill="none"
-                  strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Dahl
+              <DahlLogo height={22} title="Dahl" />
             </span>
             <p>{tr("Mängden som ritningen redan säger. Varje meter med sitt belägg kvar.")}</p>
           </div>
@@ -108,7 +105,7 @@ export default function PublicFrame({ kicker, title, lede, children, wide = fals
             <Link to="/kontakt">{tr("Kontakta oss")}</Link>
           </nav>
         </div>
-        <div className="fc-foot-mark" aria-hidden="true">{tr("DAHL")}</div>
+        <div className="fc-foot-mark" aria-hidden="true"><DahlLogo height="1em" className="fc-foot-logo" /></div>
       </footer>
     </div>
   );

@@ -150,7 +150,7 @@ function Cad({ accent }: P) {
       </g>
       <g fill="none" strokeWidth="3.6">
         <path d="M230 300 H470 V520" stroke={accent} />
-        <path d="M600 260 H980" stroke="#6ee7a5" strokeOpacity="0.8" />
+        <path d="M600 260 H980" stroke="#00b5e2" strokeOpacity="0.8" />
         <path d="M600 470 H980 V560" stroke="#fbbf24" strokeOpacity="0.8" />
       </g>
       {[[230, 300], [470, 520], [980, 260], [980, 560]].map(([x, y]) => (
@@ -223,7 +223,7 @@ function Three({ accent }: P) {
       </g>
       <g fill="none" strokeWidth="4">
         <path d="M300 540 L720 446 L900 530" stroke={accent} />
-        <path d="M420 566 L840 470" stroke="#6ee7a5" strokeOpacity="0.7" />
+        <path d="M420 566 L840 470" stroke="#00b5e2" strokeOpacity="0.7" />
       </g>
       {/* stigare genom bjälklaget */}
       {[[560, 480], [790, 500]].map(([x, y], i) => (
@@ -248,7 +248,7 @@ function Link3d({ accent }: P) {
         {["KV1-X31-16", "VV1-X31-16", "S3-R8-110", "VS1-S13-22"].map((t, i) => (
           <g key={t}>
             <rect x="120" y={220 + i * 72} width="420" height="56" rx="8"
-              fill={i === 3 ? "rgba(110,231,165,0.1)" : "rgba(255,255,255,0.025)"}
+              fill={i === 3 ? "rgba(0, 181, 226,0.1)" : "rgba(255,255,255,0.025)"}
               stroke={i === 3 ? accent : "#2a2f37"} strokeWidth="1.6" />
             <text x="148" y={256 + i * 72} fill="#e8ecf1" fontSize="19" fontFamily="ui-monospace, monospace">{t}</text>
             <text x="500" y={256 + i * 72} fill="#8b929e" fontSize="18" textAnchor="end"
@@ -468,7 +468,7 @@ function Academy({ accent }: P) {
       </g>
       {[0, 1, 2].map((i) => (
         <rect key={i} x="700" y={496 + i * 52} width="380" height="42" rx="8"
-          fill={i === 1 ? "rgba(110,231,165,0.12)" : "rgba(255,255,255,0.02)"}
+          fill={i === 1 ? "rgba(0, 181, 226,0.12)" : "rgba(255,255,255,0.02)"}
           stroke={i === 1 ? accent : "#2a2f37"} strokeWidth="1.6" />
       ))}
     </Frame>

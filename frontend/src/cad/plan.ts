@@ -397,7 +397,7 @@ function drawEntity(g: CanvasRenderingContext2D, doc: CadDocument, e: Entity, st
     case "floor": case "ceiling": { poly(e.p, true); g.fillStyle = ghost ? "rgba(31,111,235,0.08)" : e.type === "floor" ? "rgba(120,130,140,0.08)" : "rgba(180,160,90,0.10)"; g.fill(); g.setLineDash(e.type === "ceiling" ? [8, 4] : []); g.stroke(); g.setLineDash([]); break; }
     case "roof": { poly(e.p, true); g.setLineDash([10, 5]); g.strokeStyle = "#8a6d3b"; g.stroke(); g.setLineDash([]); if (e.ridge) { const A = S(e.ridge[0]), B = S(e.ridge[1]); g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(B[0], B[1]); g.lineWidth = 2; g.stroke(); } break; }
     case "room": {
-      poly(e.p, true); g.fillStyle = ghost ? "rgba(31,111,235,0.08)" : "rgba(110,231,165,0.10)"; g.fill();
+      poly(e.p, true); g.fillStyle = ghost ? "rgba(31,111,235,0.08)" : "rgba(0, 181, 226,0.10)"; g.fill();
       let cx = 0, cy = 0; for (const p of e.p) { cx += p[0]; cy += p[1]; } const C = S([cx / e.p.length, cy / e.p.length]);
       const area = Math.abs(e.p.reduce((s, p, i) => { const q = e.p[(i + 1) % e.p.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2 / 1e6;
       g.fillStyle = "#1b4d33"; g.font = "12px system-ui, sans-serif"; g.textAlign = "center"; g.fillText(`${e.number ? e.number + " " : ""}${e.name || "Rum"}`, C[0], C[1] - 2); g.font = "11px ui-monospace, monospace"; g.fillText(`${area.toLocaleString(locale(), { maximumFractionDigits: 1 })} m²`, C[0], C[1] + 12); g.textAlign = "left";

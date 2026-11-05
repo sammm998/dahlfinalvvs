@@ -36,17 +36,10 @@ import TakeoffPickPage from "./pages/TakeoffPick";
 import BuildingCadPage from "./pages/BuildingCad";
 import AgentPage from "./pages/Agent";
 import CadPickPage from "./pages/CadPick";
+import { DahlLogo, DahlMark } from "./components/DahlLogo";
 
 function Guard({ children }: { children: JSX.Element }) {
   return getToken() ? children : <Navigate to="/login" replace />;
-}
-
-function Mark() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M2 13h5V6h6v7h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square" />
-    </svg>
-  );
 }
 
 function IconProjects() {
@@ -275,7 +268,7 @@ export default function App() {
           title={rail ? tr("Visa sidopanelen") : tr("Fäll ihop sidopanelen")}
           aria-label={rail ? tr("Visa sidopanelen") : tr("Fäll ihop sidopanelen")}><IconRail /></button>
         <div>
-          <Link to="/projekt" className="brand"><Mark /> <span className="wide">Dahl</span></Link>
+          <Link to="/projekt" className="brand" aria-label="Dahl"><span className="rail-only"><DahlMark size={22} /></span><span className="wide"><DahlLogo height={20} /></span></Link>
           <div className="org wide" style={{ marginTop: 10 }}>{tr("Mängdning ur ren vektor")}</div>
         </div>
         <nav>

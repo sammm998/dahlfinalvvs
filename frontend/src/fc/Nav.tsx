@@ -7,6 +7,7 @@ import { getToken } from "../api";
 import gsap from "gsap";
 import { EASE_REVEAL, prefersStill } from "./motion";
 import { MagneticButton } from "./primitives";
+import { DahlLogo, DahlMark } from "../components/DahlLogo";
 
 /* Raden högst upp, och rummet bakom den.
  *
@@ -40,6 +41,25 @@ export default function Nav({ light = false }: { light?: boolean }) {
   const opener = useRef<HTMLButtonElement>(null);
 
   useEffect(() => { setOpen(false); }, [pathname]);
+
+  /* Raden byter färg efter ytan den står över. Förr gjorde mix-blend-mode: difference det jobbet, men den
+     inverterar färgerna: Dahls cyan blev orange över de ljusa sektionerna. Nu tittar raden vad som ligger under
+     den och tar det ljusa temats färger när det är en .fc-light-yta. */
+  const [onLight, setOnLight] = useState(false);
+  useEffect(() => {
+    let raf = 0;
+    const check = () => {
+      raf = 0;
+      const under = document.elementsFromPoint(window.innerWidth / 2, 36)
+        .find((el) => !el.closest(".fc-nav") && !el.closest(".fc-menu"));
+      setOnLight(!!under?.closest(".fc-light"));
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(check); };
+    check();
+    window.addEventListener("scroll", on, { passive: true });
+    window.addEventListener("resize", on);
+    return () => { window.removeEventListener("scroll", on); window.removeEventListener("resize", on); if (raf) cancelAnimationFrame(raf); };
+  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -91,10 +111,9 @@ export default function Nav({ light = false }: { light?: boolean }) {
 
   return (
     <>
-      <header className={`fc-nav${light ? " light" : ""}`}>
+      <header className={`fc-nav${light ? " light" : ""}${light || onLight ? " on-light" : ""}`}>
         <Link className="fc-nav-mark" to="/" aria-label={tr("Dahl, till startsidan")}>
-          <Logo />
-          <span>Dahl</span>
+          <DahlLogo height={20} />
         </Link>
         <nav className="fc-nav-links" aria-label="Huvudmeny">
           {NAV_LINKS.slice(0, 4).map((l) => (
@@ -168,12 +187,7 @@ export default function Nav({ light = false }: { light?: boolean }) {
   );
 }
 
-/** Märket: två rör som möts i en nod. Samma figur som mängdningen bygger sina nät av. */
+/** Märket: Dahls två snedstreck. */
 export function Logo({ size = 18 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M2 13.5h5.2V6h5.6v7.5H18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="square" />
-      <circle cx="7.2" cy="13.5" r="1.7" fill="currentColor" />
-    </svg>
-  );
+  return <DahlMark size={size} />;
 }

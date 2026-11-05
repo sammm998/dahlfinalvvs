@@ -4,6 +4,7 @@ import { t as tr } from "../i18n";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { usePointerParallax } from "../components/tilt";
+import { DahlLogo } from "../components/DahlLogo";
 
 /* The same run as on the front page, drawn small: a labelled pipe and one the drawing does not name. */
 function Motif() {
@@ -13,17 +14,17 @@ function Motif() {
         <path d="M20 24 H300 V166 H20 Z M160 24 V166 M20 100 H160" />
       </g>
       <g fill="none" strokeWidth="2.8" strokeLinecap="butt">
-        <path d="M46 138 H210 V70 H330" stroke="#6ee7a5" strokeOpacity="0.9" strokeDasharray="14 5 2.5 5" />
+        <path d="M46 138 H210 V70 H330" stroke="#00b5e2" strokeOpacity="0.9" strokeDasharray="14 5 2.5 5" />
         <path d="M210 138 H286" stroke="#60a5fa" strokeOpacity="0.85" strokeDasharray="14 5 2.5 5" />
         <path d="M348 132 H438" stroke="#4b5160" strokeDasharray="14 5 2.5 5" />
       </g>
       <g fill="#0a0b0d" strokeWidth="1.8">
-        <circle cx="46" cy="138" r="4" stroke="#6ee7a5" />
-        <circle cx="330" cy="70" r="4" stroke="#6ee7a5" />
+        <circle cx="46" cy="138" r="4" stroke="#00b5e2" />
+        <circle cx="330" cy="70" r="4" stroke="#00b5e2" />
         <circle cx="286" cy="138" r="4" stroke="#60a5fa" />
       </g>
       <g fontFamily="ui-monospace, SFMono-Regular, monospace">
-        <path d="M414 62 H344 L332 70" stroke="#6ee7a5" strokeOpacity="0.45" strokeWidth="1" fill="none" />
+        <path d="M414 62 H344 L332 70" stroke="#00b5e2" strokeOpacity="0.45" strokeWidth="1" fill="none" />
         <text x="344" y="40" fill="#f0f2f5" fontSize="12.5">S1-P5-110</text>
         <text x="344" y="56" fill="#8b929e" fontSize="11.5">24,8 m</text>
         <text x="348" y="122" fill="#5b616c" fontSize="11.5">{tr("onämnd")}</text>
@@ -67,6 +68,7 @@ export default function Login() {
       <LangSwitch className="login-language" />
       <div className="auth-form">
         <form onSubmit={submit}>
+          <a href="/" className="auth-logo" aria-label="Dahl"><DahlLogo height={26} /></a>
           <h1>{mode === "login" ? tr("Logga in") : tr("Skapa konto")}</h1>
           <p className="sub">
             {mode === "login"

@@ -68,8 +68,9 @@
   will-change: transform;
 }
 .fc-btn:hover { background: var(--fc-ink); color: var(--fc-black); border-color: var(--fc-ink); }
-.fc-btn.solid { background: var(--fc-ink); color: var(--fc-black); border-color: var(--fc-ink); }
-.fc-btn.solid:hover { background: var(--fc-accent); border-color: var(--fc-accent); color: var(--fc-accent-ink); }
+/* Den fyllda knappen bär Dahls färg: cyan på mörkt, marinblå på ljust (accenten byter värde i .fc-light). */
+.fc-btn.solid { background: var(--fc-accent); color: var(--fc-accent-ink); border-color: var(--fc-accent); }
+.fc-btn.solid:hover { background: var(--fc-ink); border-color: var(--fc-ink); color: var(--fc-black); }
 .fc-btn.sm { height: 44px; padding: 0 20px; font-size: 10.5px; }
 .fc-btn:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 3px; }
 .fc-mag-in { display: inline-flex; align-items: center; gap: 10px; will-change: transform; }
@@ -172,8 +173,23 @@ html.fc-loading, html.fc-loading body { overflow: hidden; }
   position: fixed; top: 0; left: 0; right: 0; z-index: 80;
   display: flex; align-items: center; gap: clamp(18px, 3vw, 44px);
   padding: 20px var(--fc-gut);
-  mix-blend-mode: difference;                 /* raden läses mot både mörkt och ljust utan att byta klass */
+  transition: color 0.3s;
 }
+/* Över en ljus yta tar raden det ljusa temats färger (se Nav.tsx). */
+.fc-nav.on-light {
+  --fc-black: #f4f2ee;
+  --fc-ink: #0b2233;
+  --fc-ink-60: rgba(11, 34, 51, 0.66);
+  --fc-ink-40: rgba(11, 34, 51, 0.48);
+  --fc-ink-24: rgba(11, 34, 51, 0.26);
+  --fc-line: rgba(11, 34, 51, 0.12);
+  --fc-line-2: rgba(11, 34, 51, 0.07);
+  --fc-line-3: rgba(11, 34, 51, 0.22);
+  --fc-accent: #004976;
+  --fc-accent-dim: rgba(0, 73, 118, 0.1);
+  --fc-accent-ink: #ffffff;
+}
+.fc-nav.on-light .fc-nav-mark { color: #004976; }
 .fc-nav-mark {
   display: inline-flex; align-items: center; gap: 9px;
   color: var(--fc-ink); text-decoration: none;
@@ -265,3 +281,6 @@ html.fc-loading, html.fc-loading body { overflow: hidden; }
 .bp-dim text { font-family: var(--fc-mono); font-size: 11px; fill: var(--fc-ink-40); letter-spacing: 0.08em; }
 .bp-scale { color: var(--fc-ink-24); fill: var(--fc-ink-24); }
 .bp-scale text { font-family: var(--fc-mono); font-size: 10px; fill: var(--fc-ink-40); letter-spacing: 0.12em; }
+.fc-nav.on-light .sh-lang { background: rgba(255, 255, 255, 0.7); border-color: rgba(11, 34, 51, 0.15); color: #0b2233; }
+.fc-nav.on-light .sh-lang button:hover { color: #0b2233; }
+.fc-nav.on-light .sh-lang button.on { color: #fff; background: #004976; }

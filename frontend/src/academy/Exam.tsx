@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import Exercise from "./Exercise";
 import { ac } from "./api";
 import "./academy.css";
+import { DahlLogo } from "../components/DahlLogo";
 
 /* Sluttentan och quizet.
  *
@@ -21,7 +22,7 @@ function Frame({ children, title }: { children: React.ReactNode; title: string }
   return (
     <div className="acx acx-exam">
       <header className="acx-top">
-        <Link className="acx-brand" to="/academy">Dahl <span>Academy</span></Link>
+        <Link className="acx-brand" to="/academy"><DahlLogo height={18} title="Dahl" /> <span>Academy</span></Link>
         <nav className="acx-crumb"><span>{title}</span></nav>
       </header>
       {children}

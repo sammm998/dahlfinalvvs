@@ -13,6 +13,7 @@ import {
 import { EASE_REVEAL, useScene, useSmoothScroll } from "./motion";
 import "./fc.css";
 import "./home.css";
+import { DahlLogo } from "../components/DahlLogo";
 
 /* Dahls startsida, som en berättelse i fem kapitel.
  *
@@ -382,7 +383,7 @@ function AcademyChapter() {
         <RevealMedia className="fc-ac-cert">
           <div className="fc-cert">
             <div className="fc-cert-top">
-              <span className="fc-cert-mark"><Logo size={16} /> Dahl</span>
+              <span className="fc-cert-mark"><DahlLogo height={16} title="Dahl" /></span>
               <span className="fc-label">Certificate</span>
             </div>
             <p className="fc-cert-name fc-serif">{tr("Anna Lindqvist")}</p>
@@ -444,7 +445,7 @@ function Footer() {
           <AppLink className="fc-link" to="/projekt">Projekt</AppLink>
         </div>
       </div>
-      <div className="fc-foot-mark" aria-hidden="true">{tr("DAHL")}</div>
+      <div className="fc-foot-mark" aria-hidden="true"><DahlLogo height="1em" className="fc-foot-logo" /></div>
       <div className="fc-foot-base">
         <span className="fc-label">{tr("VPR System / 2026")}</span>
         <span className="fc-label">{tr("Byggd i Sverige")}</span>

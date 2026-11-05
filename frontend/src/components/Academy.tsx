@@ -34,7 +34,7 @@ export function ProgressRing({ done, of, size = 108 }: { done: number; of: numbe
     <div className="ac-ring" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--ac-track)" strokeWidth="6" />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#6ee7a5" strokeWidth="6"
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#00b5e2" strokeWidth="6"
           strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct)}
           transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: "stroke-dashoffset 0.8s cubic-bezier(0.22,1,0.36,1)" }} />
       </svg>
