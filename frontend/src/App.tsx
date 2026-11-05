@@ -210,11 +210,12 @@ export default function App() {
     api.myRole().then((r) => setRole(r.role)).catch(() => setRole(""));
   }, [pathname]);
   // den gemensamma budgeten: alla som är inloggade ser vad som är kvar, direkt i sidopanelen
-  const [left, setLeft] = useState<number | null>(null);
+  const [budget, setBudget] = useState<any>(null);
   useEffect(() => {
-    if (!getToken()) { setLeft(null); return; }
-    api.credits().then((r) => setLeft(r.budget?.remaining_kr ?? null)).catch(() => setLeft(null));
+    if (!getToken()) { setBudget(null); return; }
+    api.credits().then((r) => setBudget(r.budget ?? null)).catch(() => setBudget(null));
   }, [pathname]);
+  const left: number | null = budget ? budget.remaining_kr : null;
 
   // Vad besökaren gjorde. En klick sparas som en ruta i fönstret och inte som en punkt på en skärm: andelar
   // av bredden och höjden, så att bilden gäller alla skärmstorlekar på en gång. Det som skickas med är vad
@@ -317,7 +318,23 @@ export default function App() {
           </button>
         </div>
       </aside>
-      <div className="main">{ROUTES}</div>
+      <div className="main">
+        {budget && budget.warning >= 80 && (
+          // alla inloggade ser samma varning: från 80 %, starkare från 95 %, och när budgeten är slut
+          <div role="alert" style={{
+            margin: "12px 16px 0", padding: "10px 14px", borderRadius: 8, fontSize: 14,
+            background: budget.exhausted ? "#fdecea" : budget.warning >= 95 ? "#fde8d7" : "#fff6d6",
+            border: `1px solid ${budget.exhausted ? "#e6a09a" : budget.warning >= 95 ? "#ebb48a" : "#ecd27a"}`,
+            color: "#3a2a00" }}>
+            <b>{budget.exhausted ? tr("AI-budgeten är slut.") : trf("AI-budgeten är till {0} % använd.", Math.floor(budget.used_pct))}</b>{" "}
+            {budget.exhausted
+              ? tr("AI-funktionerna är pausade för alla tills administratören höjer taket eller nollställer räkningen.")
+              : trf("{0} kr kvar av {1} kr, gemensamt för alla.", Math.round(budget.remaining_kr).toLocaleString(locale()), Math.round(budget.limit_kr).toLocaleString(locale()))}{" "}
+            <Link to="/credits">{tr("Se vad som använts")}</Link>
+          </div>
+        )}
+        {ROUTES}
+      </div>
     </div>
   );
 }

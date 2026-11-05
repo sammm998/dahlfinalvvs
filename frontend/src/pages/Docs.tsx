@@ -361,26 +361,24 @@ const SECTIONS: Sec[] = [
   },
   {
     id: "credits",
-    h: "Vad en läsning kostar",
+    h: "Credits – den gemensamma budgeten",
     body: (
       <>
         <p>
-          En läsning betalas i <b>credits</b>. Priset räknas ur bladet självt — pappersformatet och mängden bläck
-          (antal banor) — och står på ritningen innan du trycker på Analysera. Det som visas är det som dras; ingen
-          efterdebitering. Andra läsaren, projektanalysen, kalkylen, anbudet, mängdningsverktyget, CAD-rummet och
-          exporterna kostar inga credits. En andra blick med syn på en färdig läsning kostar en credit per sida, och
-          begärs bara när du ber om den.
+          Ingen köper credits och ingen läsning dras från ett eget saldo. Alla konton delar en <b>gemensam budget på
+          10 000 kr</b> för det som faktiskt kostar pengar: anropen till AI-modellerna – agenten, röstsamtalet, andra
+          blicken och AI-tilldelningen i analysen. Läsningen av ritningar och tekniska beskrivningar, projektanalysen,
+          kalkylen, anbudet, mängdningsverktyget, CAD-rummet och exporterna ingår.
         </p>
-        <p className="pull">{tr("En läsning som inte kunde ge en enda meter kostar ingenting.")}</p>
+        <p className="pull">{tr("Alla som loggar in ser samma sak: vad som är kvar, vad som använts, till vad och av vem.")}</p>
         <p>
-          Saknar bladet skala, eller går läsningen fel, betalas priset tillbaka av sig självt — med skälet i din
-          reskontra. Skriver du in skalan för hand och läser om, är det en ny läsning under den skalan och kostar
-          som en sådan. Credits hör till kontot, inte till inloggningen: ett kontor delar en pott. Köp faktureras;
-          credits finns på kontot i samma stund. Priserna står på <a href="/priser">prissidan</a> och är samma lista
-          som drar priset — den kan inte säga något annat än det som gäller.
+          Under <a href="/credits">Credits</a> står taket, det använda och det som är kvar, uppdelat per del, per person
+          och per modell, med filter för period och person och allt som CSV. Från 80 % ser alla en varning, och
+          administratörerna får ett meddelande vid 80 %, 95 % och när budgeten är slut. Då pausas AI-funktionerna för
+          alla tills taket höjs eller räkningen nollställs under Administration.
         </p>
         <p className="note">
-          Ingenting i prislistan når läsningen. Ett pris kan aldrig flytta en meter.
+          Ingenting i budgeten når läsningen. En kostnad kan aldrig flytta en meter.
         </p>
       </>
     ),

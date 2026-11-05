@@ -34,7 +34,7 @@ const LAYERS: { tag: string; h: string; p: string; items: string[] }[] = [
       tr("auth, projekt och ritningar; lagring på disk eller objektlager"),
       tr("jobb med strömmad status - varje steg syns medan det händer"),
       tr("artefakter ut som de skrevs, plus exporter (CSV, XLSX, Bluebeam-markering, anbud)"),
-      tr("credits: vad en läsning drar, och återbetalning när den inte gav något"),
+      tr("credits: den gemensamma AI-budgeten – vad som använts, till vad och av vem"),
       tr("admin: systemhälsa, rättelser, inlärning, regler, prissättning"),
     ],
   },
@@ -101,7 +101,7 @@ export default function ArchitecturePage() {
         <ol className="pub-steps">
           <li className="pub-step"><span className="no">01</span><div>
             <h3>{tr("Filen läggs undan och ett jobb skapas")}</h3>
-            <p>{tr("Tjänsten sparar ritningen, drar credits och lägger jobbet i kö. En skannad PDF avvisas direkt: där finns bara bildpunkter, och på bildpunkter gissar man.")}</p></div></li>
+            <p>{tr("Tjänsten sparar ritningen och lägger jobbet i kö. En skannad PDF avvisas direkt: där finns bara bildpunkter, och på bildpunkter gissar man.")}</p></div></li>
           <li className="pub-step"><span className="no">02</span><div>
             <h3>{tr("Arbetartråden kör motorn, med en tidsbudget")}</h3>
             <p>{tr("Varje steg strömmas ut medan det händer. Går bladet över tidsbudgeten avbryts det och säger det, i stället för att hålla arbetaren för alltid.")}</p></div></li>

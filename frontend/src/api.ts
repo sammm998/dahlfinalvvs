@@ -186,10 +186,19 @@ export const api = {
 
   // ---- att driva tjänsten -------------------------------------------------------------------------------
   myRole: () => req("/api/me/role"),
-  // credits: saldot, priset för ett blad innan det läses, och paketen
-  credits: () => req("/api/credits"),
+  // credits: den gemensamma budgeten, med filter för period, person och del
+  credits: (q: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(Object.entries(q).filter(([, v]) => v)).toString();
+    return req(`/api/credits${qs ? `?${qs}` : ""}`);
+  },
+  creditsCsvPath: (q: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(Object.entries(q).filter(([, v]) => v)).toString();
+    return `/api/credits.csv${qs ? `?${qs}` : ""}`;
+  },
   price: (drawingId: string) => req(`/api/drawings/${drawingId}/price`),
-  publicPricing: () => req("/api/public/pricing"),
+  // röstsamtalets förbrukning, som OpenAI rapporterar den i samtalet: bokförs på den gemensamma budgeten
+  liveUsage: (jobId: string, kind: "response" | "transcription", usage: any) =>
+    req(`/api/jobs/${jobId}/live/usage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, usage }) }),
   contact: (body: { name: string; email: string; company?: string; subject?: string; message: string }) =>
     req("/api/public/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   version: () => req("/api/version"),

@@ -223,7 +223,7 @@ export default function AgentPage() {
           <p className="deskhint small muted">
             {laste.length > 1
               ? <>Enter skickar, Shift+Enter ny rad. Du kan be den <button className="linky" onClick={() => send(`Jämför ${laste[0].filnamn} med ${laste[1].filnamn}`)}>{tr("jämföra två blad")}</button>.</>
-              : <>Enter skickar, Shift+Enter ny rad. En läsning kostar credits, precis som i analysen.</>}
+              : <>Enter skickar, Shift+Enter ny rad. Agentens svar tas ur den gemensamma AI-budgeten.</>}
           </p>
         </div>
       </div>

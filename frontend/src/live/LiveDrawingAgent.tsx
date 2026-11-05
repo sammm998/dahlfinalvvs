@@ -119,7 +119,10 @@ export default function LiveDrawingAgent({ jobId, onClose, execute, onMotion, on
         try {
           const event = JSON.parse(e.data);
           if (event.type === 'error') { setErr(event.error?.message || tr("Samtalsfel")); return; }
-          if (event.type === 'conversation.item.input_audio_transcription.completed') add(event.item_id, tr("Du"), event.transcript);
+          if (event.type === 'conversation.item.input_audio_transcription.completed') {
+            add(event.item_id, tr("Du"), event.transcript);
+            if (event.usage) void api.liveUsage(jobId, 'transcription', event.usage).catch(() => { /* bokföringen får inte störa samtalet */ });
+          }
           if (event.type === 'response.output_audio_transcript.delta' || event.type === 'response.output_text.delta') {
             add(event.item_id, 'Agent', event.delta, true);
             const t = (spoken.current.get(event.item_id) ?? '') + event.delta;
@@ -131,6 +134,10 @@ export default function LiveDrawingAgent({ jobId, onClose, execute, onMotion, on
             const t = spoken.current.get(event.item_id); if (t) said.current?.(t); spoken.current.delete(event.item_id);
           }
           if (event.type !== 'response.done') return;
+          // vad svaret kostade går till den gemensamma budgeten; är den slut avslutas samtalet
+          if (event.response?.usage) void api.liveUsage(jobId, 'response', event.response.usage).then((r: any) => {
+            if (r?.exhausted && gen === generation.current) { stop(); setErr(tr("Den gemensamma AI-budgeten är slut. Samtalet avslutades.")); }
+          }).catch(() => { /* bokföringen får inte störa samtalet */ });
           if (event.response?.status === 'failed' || event.response?.status === 'incomplete') {
             setErr(event.response?.status_details?.error?.message || tr("Agentens svar kunde inte slutföras. Försök skicka igen."));
             return;

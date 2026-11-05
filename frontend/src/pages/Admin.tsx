@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { t as tr, locale, num as exakt } from "../i18n";
 import { api } from "../api";
 import { Accounts, Content, Crm, Experiments, Heatmap, Partners } from "../components/AdminBusiness";
-import { Messages, Pricing } from "../components/AdminPricing";
+import { Messages } from "../components/AdminMessages";
 import { AgentRecipes, Corrections, Learning, LearnedRules, Readings, RulesMoved } from "../components/AdminReading";
 import { RulesCatalogue } from "../components/AdminRules";
 import { Assumptions } from "../components/AdminSettings";
@@ -22,7 +22,7 @@ import { ApiBudget } from "../components/AdminApiBudget";
  */
 
 type Section = "overblick" | "lasningar" | "rattelser" | "inlarning" | "recept" | "regler_larda" | "regler" | "antaganden"
-  | "konton" | "priser" | "partners" | "crm" | "meddelanden" | "innehall" | "prov" | "heatmap" | "system" | "ai_kostnad";
+  | "konton" | "partners" | "crm" | "meddelanden" | "innehall" | "prov" | "heatmap" | "system" | "ai_kostnad";
 
 const SECTIONS: { id: Section; label: string; group: string; lead: string }[] = [
   { id: "overblick", label: "Överblick", group: "Läsningen", lead: "Hur läsningen mår, och vad som väntar på någon." },
@@ -34,15 +34,14 @@ const SECTIONS: { id: Section; label: string; group: string; lead: string }[] = 
   { id: "regler", label: "Regler", group: "Läsningen", lead: "Varje gräns läsningen använder, med skäl och figur. En flyttad regel gäller nästa läsning, för alla." },
   { id: "antaganden", label: "Antaganden", group: "Läsningen", lead: "Hur det lästa räknas ihop till en mängd: våningshöjd, stigare, skrafferade ytor." },
   { id: "konton", label: "Konton", group: "Företaget", lead: "Kontona, deras planer och vad de betalar. Ingenting här når läsningen." },
-  { id: "priser", label: "Priser & credits", group: "Företaget", lead: "Vad ett blad kostar kunden i credits, vad det kostar tjänsten i kronor, och marginalen däremellan. Paketen, reskontran och köp att fakturera." },
   { id: "partners", label: "Partners", group: "Företaget", lead: "Vilka som hänvisat kunder, vad de tjänat på det, och vad som är utbetalt." },
   { id: "crm", label: "Kundvård", group: "Företaget", lead: "Anteckningar per konto: vad som sagts, lovats och väntar." },
-  { id: "meddelanden", label: "Meddelanden", group: "Företaget", lead: "Det som skrivits på kontaktsidan: vem, vad, och om någon svarat." },
+  { id: "meddelanden", label: "Meddelanden", group: "Företaget", lead: "Det som skrivits på kontaktsidan, och tjänstens egna varningar om AI-budgeten: vem, vad, och om någon svarat." },
   { id: "innehall", label: "Innehåll", group: "Företaget", lead: "Texterna på landningssidan och i dokumentationen, redigerbara utan en driftsättning." },
   { id: "prov", label: "A/B-prov", group: "Företaget", lead: "Två varianter av samma sak, och vilken som gick bäst." },
   { id: "heatmap", label: "Heatmap", group: "Företaget", lead: "Var i gränssnittet folk klickar, och var de ger upp." },
   { id: "system", label: "Systemet", group: "Systemet", lead: "Vad som kör och hur det mår: byggning, andra läsaren, kö, lager, databas." },
-  { id: "ai_kostnad", label: "AI-kostnad", group: "Systemet", lead: "Vad tjänsten lagt på språkmodeller, taket och prislistan. När taket är nått låses AI och det står att alla krediter för AI är förbrukade; läsning utan AI går som vanligt." },
+  { id: "ai_kostnad", label: "AI-kostnad", group: "Systemet", lead: "Den gemensamma AI-budgeten: taket (10 000 kr), prislistan och nollställningen. Alla inloggade ser förbrukningen under Credits och en varning från 80 %; när taket är nått låses AI för alla." },
 ];
 
 const pct = (v: number | null | undefined) =>
@@ -285,7 +284,6 @@ export default function AdminPage() {
           {sec === "regler" && <RulesSection />}
           {sec === "antaganden" && <Assumptions />}
           {sec === "konton" && <Accounts />}
-          {sec === "priser" && <Pricing />}
           {sec === "meddelanden" && <Messages />}
           {sec === "partners" && <Partners />}
           {sec === "crm" && <Crm />}

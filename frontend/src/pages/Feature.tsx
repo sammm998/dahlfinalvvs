@@ -126,7 +126,7 @@ export default function FeaturePage() {
         <section className="ft-close">
           <Reveal>
             <RevealLines text={f.toLabel} />
-            <p className="ft-p">{tr("Det kostar ingenting att prova — ett nytt konto får credits att läsa ett par ritningar med.")}</p>
+            <p className="ft-p">{tr("Det kostar ingenting att läsa en ritning – AI-delarna tas ur en gemensam budget som alla ser.")}</p>
             <div className="ft-cta">
               <Link className="lp-btn primary lg" to={f.to}>{f.toLabel} <span aria-hidden="true">→</span></Link>
               <Link className="lp-btn ghost lg" to="/priser">{tr("Se vad det kostar")}</Link>
