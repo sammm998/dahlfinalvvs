@@ -171,6 +171,7 @@ LABELS = {
     "röst": "Röstsamtal",
     "röst_transkribering": "Röstsamtal – transkribering",
     "röst_text": "Samtalsagent i text",
+    "tb": "Teknisk beskrivning (AI)",
 }
 
 

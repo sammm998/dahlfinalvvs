@@ -69,7 +69,7 @@ export default function CreditsPage() {
         <div>
           <h1>Credits</h1>
           <p className="lead">
-            {tr("Alla konton delar en gemensam budget. Det som kostar pengar är anropen till AI-modellerna – agenten, röstsamtalet, andra blicken och AI-tilldelningen i analysen – och de dras härifrån. Allt annat ingår.")}
+            {tr("Alla konton delar en gemensam budget. Det som kostar pengar är anropen till AI-modellerna – agenten, röstsamtalet, andra blicken, AI-tilldelningen i analysen och AI-kontrollen av tekniska beskrivningar – och de dras härifrån. Allt annat ingår.")}
           </p>
         </div>
         <div className="row">
