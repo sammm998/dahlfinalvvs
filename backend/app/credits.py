@@ -178,8 +178,10 @@ def balance(db: Session, user: User) -> float:
 
 
 def is_exempt(user: User) -> bool:
-    """Den privata lokala installationen och tjänstens administratörer läser utan credits."""
-    return settings.local_installation or (user.role or "member") == "admin"
+    """Ingen läsning dras från ett konto längre. Alla konton delar en gemensam budget på 10 000 kr för det som
+    faktiskt kostar pengar - anropen till språkmodeller (api_budget.py) - och den syns för alla under Credits.
+    Läsning utan AI kostar ingenting."""
+    return True
 
 
 def post(db: Session, user: User | None, key: str, credits: float, kind: str, ref: str | None = None,
@@ -334,12 +336,11 @@ def public_pricing(db: Session = Depends(get_db)):
 
 @router.get("/api/credits")
 def my_credits(user: User = Depends(current_user), db: Session = Depends(get_db)):
-    key = owner_key(user)
-    rows = (db.query(CreditEntry).filter(CreditEntry.owner_key == key)
-            .order_by(CreditEntry.created_at.desc()).limit(100).all())
-    return {"balance": balance_cc(db, key) / 100.0, "owner": key, "exempt": is_exempt(user),
-            "local_installation": settings.local_installation,
-            "prices": _public_prices(price_list(db)), "entries": [_entry_out(e) for e in rows]}
+    """Den gemensamma budgeten: samma svar för alla inloggade, oavsett konto."""
+    from . import api_budget
+    b = api_budget.shared(db)
+    return {"shared": True, "budget": b, "balance": b["remaining_kr"], "exempt": True,
+            "local_installation": settings.local_installation, "me": user.email}
 
 
 @router.get("/api/drawings/{drawing_id}/price")
@@ -360,8 +361,7 @@ class PurchaseIn(BaseModel):
 def purchase(body: PurchaseIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Köp ett paket. Credits finns på kontot direkt; kronorna faktureras, och köpet står som fakturerat tills
     en administratör markerar det betalt. Ingen kortbetalning i den här vägen - den är byggd för firmor."""
-    if settings.local_installation:
-        raise HTTPException(409, "Lokala analyser är obegränsade och behöver inga creditköp.")
+    raise HTTPException(410, "Credits köps inte längre. Alla delar en gemensam budget på 10 000 kr, som syns under Credits.")
     pl = price_list(db)
     p = next((x for x in (pl.get("packages") or []) if x.get("id") == body.package_id), None)
     if p is None:

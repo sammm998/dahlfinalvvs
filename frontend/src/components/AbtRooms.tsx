@@ -99,7 +99,7 @@ export default function AbtRooms({ project }: { project: any }) {
           {priced(offer).length === 0 ? <p>{tr("Ritningen har inga rum, enheter eller symboler att läsa. Det kostar ingenting.")}</p> : (
             <p>
               {trf("{0} sidor har rum, enheter eller symboler: {1} rumsetiketter, {2} enheter och {3} symbolgrupper.", priced(offer).length, offer.labels, offer.units ?? 0, offer.symbols ?? 0)}{" "}
-              {offer.exempt ? tr("Läsningen kostar inga credits här.") : offer.already_paid ? tr("Ritningen är redan betald – att läsa den igen kostar ingenting.")
+              {offer.exempt ? tr("Läsningen dras inte från något saldo.") : offer.already_paid ? tr("Ritningen är redan betald – att läsa den igen kostar ingenting.")
                 : trf("Läsningen kostar {0} credits – bladpriset för de sidorna.", num(offer.credits, 1))}
             </p>
           )}
