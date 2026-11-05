@@ -1,5 +1,20 @@
 {
- "id": "el", "name": "El", "status": "later", "kind": "symbol", "measures": ["COUNT", "LENGTH"], "order": 5,
- "engine": {},
- "notes": "Symbolräkning och linjära kabelstegar. Inte påbörjad."
+ "id": "el",
+ "name": "El",
+ "status": "active",
+ "kind": "symbol",
+ "measures": [
+  "COUNT",
+  "LENGTH"
+ ],
+ "order": 5,
+ "engine": {
+  "register.FOCUS": "komponent"
+ },
+ "notes": "Symboler och apparater räknas i styck per beteckning; kabelstegar och ledningar med bredd mäts i meter där en etikett namnger dem.",
+ "wide": {
+  "pipeline.OTHER_RUNS_NAME_RUNS": true,
+  "pipeline.DUCT_SIZES_ARE_SIZES": true,
+  "measure.DOUBLE_LINE_BY_SIZE_ONLY": true
+ }
 }

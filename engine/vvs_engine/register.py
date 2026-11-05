@@ -493,7 +493,10 @@ def register_of_designations(pa) -> dict[str, Any]:
         "square_metres": round(sum(x["quantity"] for x in entries if x["unit"] == "m²"), 2),
         "to_review": sum(1 for x in entries if x["state"] == "granskas"),
     }
-    return {"entries": entries, "totals": totals, "not_counted": dict(excluded)}
+    from . import disciplines as _disc
+    return {"entries": entries, "totals": totals, "not_counted": dict(excluded),
+            # which kind of entry the discipline being read is about: the list opens on it
+            "discipline": _disc.current().id, "focus": _disc.value("register.FOCUS", None)}
 
 
 class _Named:

@@ -27,6 +27,8 @@ export type Register = {
   totals: { entries: number; by_kind: Record<string, number>; metres: number; pieces: number; square_metres: number;
             to_review: number; wide_metres?: number };
   not_counted?: Record<string, number>;
+  discipline?: string;     // the discipline the sheet was read as
+  focus?: string | null;   // the kind of entry that discipline is about: the list opens on it
 };
 
 const KIND_SV: Record<string, string> = {
@@ -80,7 +82,8 @@ export default function AllDesignations({ register, onZoom, onShowPipe, onShowRu
   focus?: { name: string; at: number } | null;                  // a frame picked on the sheet: its row, opened
 }) {
   const [q, setQ] = useState("");
-  const [kind, setKind] = useState("alla");
+  // a discipline's own kind first - ducts for ventilation, symbols for electrical, rooms for building
+  const [kind, setKind] = useState(register.focus || "alla");
   const [state, setState] = useState("alla");
   const [open, setOpen] = useState<string | null>(null);
 

@@ -1,5 +1,21 @@
 {
- "id": "ventilation", "name": "Ventilation", "status": "planned", "kind": "duct", "measures": ["LENGTH", "AREA", "COUNT"], "order": 4,
- "engine": {},
- "notes": "Kanaler med Ø och b×h; meter per system och dimension, m² plåt och isolering härledda; don, spjäll och aggregat räknade."
+ "id": "ventilation",
+ "name": "Ventilation",
+ "status": "active",
+ "kind": "duct",
+ "measures": [
+  "LENGTH",
+  "AREA",
+  "COUNT"
+ ],
+ "order": 4,
+ "engine": {
+  "register.FOCUS": "ledning"
+ },
+ "notes": "Kanaler med Ø och b×h mäts per system och dimension; don, spjäll och aggregat räknas i styck. Kanaler som ingen etikett namnger ligger kvar att granska.",
+ "wide": {
+  "pipeline.OTHER_RUNS_NAME_RUNS": true,
+  "pipeline.DUCT_SIZES_ARE_SIZES": true,
+  "measure.DOUBLE_LINE_BY_SIZE_ONLY": true
+ }
 }

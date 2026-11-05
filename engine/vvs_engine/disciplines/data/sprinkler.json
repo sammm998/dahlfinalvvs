@@ -1,5 +1,20 @@
 {
- "id": "sprinkler", "name": "Sprinkler", "status": "planned", "kind": "pipe", "measures": ["LENGTH", "COUNT"], "order": 2,
- "engine": {},
- "notes": "Rör mäts som i VVS; huvuden och ventilstationer räknas där de kan identifieras säkert. Systemkoderna verifieras mot riktiga ritningar innan något byggs (SBF 120 tillsammans med SS-EN 12845)."
+ "id": "sprinkler",
+ "name": "Sprinkler",
+ "status": "active",
+ "kind": "pipe",
+ "measures": [
+  "LENGTH",
+  "COUNT"
+ ],
+ "order": 2,
+ "engine": {
+  "register.FOCUS": "ledning"
+ },
+ "notes": "Sprinklerrör mäts som i VVS, med systemkoderna bladets förklaringslista skriver; sprinklerhuvuden, ventilstationer och andra komponenter räknas i styck i registret. Det bladet inte förklarar märks granskas.",
+ "wide": {
+  "pipeline.OTHER_RUNS_NAME_RUNS": true,
+  "pipeline.DUCT_SIZES_ARE_SIZES": true,
+  "measure.DOUBLE_LINE_BY_SIZE_ONLY": true
+ }
 }

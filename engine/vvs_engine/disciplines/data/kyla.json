@@ -1,5 +1,20 @@
 {
- "id": "kyla", "name": "Kyla", "status": "planned", "kind": "pipe", "measures": ["LENGTH", "COUNT"], "order": 3,
- "engine": {},
- "notes": "Köldbärare och kylmedel (KB, KM, KP i dagens systemtabell). Koderna verifieras mot riktiga kylritningar innan något byggs."
+ "id": "kyla",
+ "name": "Kyla",
+ "status": "active",
+ "kind": "pipe",
+ "measures": [
+  "LENGTH",
+  "COUNT"
+ ],
+ "order": 3,
+ "engine": {
+  "register.FOCUS": "ledning"
+ },
+ "notes": "Köldbärare och kylmedel (KB, KM, KP) mäts som rör i VVS, med bladets egen förklaringslista; aggregat och komponenter räknas i styck.",
+ "wide": {
+  "pipeline.OTHER_RUNS_NAME_RUNS": true,
+  "pipeline.DUCT_SIZES_ARE_SIZES": true,
+  "measure.DOUBLE_LINE_BY_SIZE_ONLY": true
+ }
 }
