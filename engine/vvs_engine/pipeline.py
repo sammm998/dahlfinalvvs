@@ -2064,7 +2064,7 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
     # Den som valt "Alla" får varje beteckning bladet skriver, inte bara rören. Rören är VVS-läsningens egna, och
     # en VVS-läsning får ingenting av det här - den ser ut exakt som förut. Andra discipliners ledningar mäts i en
     # andra, vidgad läsning av samma blad, och bara där VVS-läsningen inte redan äger linjerna.
-    if _disciplines.current().id == "alla" and not _disciplines.is_widened():
+    if _disciplines.current().reads_all and not _disciplines.is_widened():
         pa.wide_runs = widened_runs(pa, page, prep, known_families=known_families, known_legend=known_legend,
                                     known_scale=known_scale, known_scale_pages=known_scale_pages,
                                     given_scale=given_scale)

@@ -14,9 +14,13 @@ def test_every_discipline_is_described_and_vvs_and_alla_are_built():
     assert list(reg)[:4] == ["vvs", "sprinkler", "kyla", "ventilation"] and {"el", "bygg", "alla"} <= set(reg)
     for d in reg.values():
         assert d.status in D.STATUSES and d.kind in D.KINDS and set(d.measures) <= set(M.UNITS)
-    assert [d.id for d in reg.values() if d.status == D.ACTIVE] == ["vvs", "alla"]
-    assert D.selectable("vvs") and D.selectable("") and D.selectable("alla")
-    assert not D.selectable("ventilation") and not D.selectable("x")
+    # alla discipliner går att välja; de som läser mer än VVS-rören läser bladet vidgat och skriver registret
+    assert [d.id for d in reg.values() if d.status == D.ACTIVE] == ["vvs", "sprinkler", "kyla", "ventilation", "el", "bygg", "alla"]
+    assert D.selectable("vvs") and D.selectable("") and D.selectable("alla") and D.selectable("ventilation")
+    assert not D.selectable("x")
+    assert not reg["vvs"].reads_all and all(reg[k].reads_all for k in ("sprinkler", "kyla", "ventilation", "el", "bygg", "alla"))
+    assert {k: reg[k].engine.get("register.FOCUS") for k in ("ventilation", "el", "bygg")} == \
+        {"ventilation": "ledning", "el": "komponent", "bygg": "rum"}
 
 
 def test_alla_reads_the_pipes_as_vvs_does():

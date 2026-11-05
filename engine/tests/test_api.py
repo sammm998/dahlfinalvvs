@@ -1659,14 +1659,17 @@ def test_a_project_is_created_with_a_contract_form_and_a_discipline_and_changed_
     tok = client.post("/api/auth/register", json={"email": "lagen@example.com", "password": "hemligt1"}).json()["access_token"]
     H = {"Authorization": f"Bearer {tok}"}
     ds = client.get("/api/disciplines").json()
-    assert [d["id"] for d in ds if d["status"] == "active"] == ["vvs", "alla"] and len(ds) == 7
+    assert [d["id"] for d in ds if d["status"] == "active"] == ["vvs", "sprinkler", "kyla", "ventilation", "el", "bygg", "alla"] \
+        and len(ds) == 7
     alla = client.post("/api/projects", json={"name": "Allt", "description": "", "discipline": "alla"}, headers=H).json()
     assert alla["discipline"] == "alla"
     plain = client.post("/api/projects", json={"name": "Vanligt", "description": ""}, headers=H).json()
     assert (plain["contract_form"], plain["discipline"]) == ("AB04", "vvs")
     abt = client.post("/api/projects", json={"name": "Total", "description": "", "contract_form": "ABT06"}, headers=H).json()
     assert abt["contract_form"] == "ABT06"
-    assert client.post("/api/projects", json={"name": "V", "description": "", "discipline": "ventilation"}, headers=H).status_code == 422
+    vent = client.post("/api/projects", json={"name": "V", "description": "", "discipline": "ventilation"}, headers=H)
+    assert vent.status_code == 200 and vent.json()["discipline"] == "ventilation"
+    assert client.post("/api/projects", json={"name": "Y", "description": "", "discipline": "rymd"}, headers=H).status_code == 422
     assert client.post("/api/projects", json={"name": "X", "description": "", "contract_form": "ABT18"}, headers=H).status_code == 422
     r = client.patch(f"/api/projects/{plain['id']}/form", json={"contract_form": "ABT06"}, headers=H)
     assert r.status_code == 409                                     # not without a confirmation
@@ -1743,8 +1746,8 @@ def test_a_reading_records_the_discipline_it_was_made_in(client, source_api_pdf)
     with SessionLocal() as db:
         assert db.get(AnalysisJob, j["id"]).discipline == "vvs"
     with open(source_api_pdf, "rb") as fh:
-        r = client.post(f"/api/projects/{p['id']}/drawings?discipline=kyla", files={"file": ("k.pdf", fh, "application/pdf")}, headers=H)
-    assert r.status_code == 422                                     # a discipline that is not built is refused at upload
+        r = client.post(f"/api/projects/{p['id']}/drawings?discipline=rymd", files={"file": ("k.pdf", fh, "application/pdf")}, headers=H)
+    assert r.status_code == 422                                     # a discipline nobody knows is refused at upload
 
 
 def test_an_image_of_a_drawing_is_uploaded_as_a_pdf_and_read_as_one_to_be_reviewed(client, synthetic_pdf):

@@ -44,6 +44,13 @@ class Discipline:
     notes: str = ""
     wide: dict = field(default_factory=dict)     # the second, widened reading's own values (see widened())
 
+    @property
+    def reads_all(self) -> bool:
+        """A discipline that reads more than the VVS pipes: the sheet is read as VVS and then once more, widened,
+        and every designation is put in the register. "Alla" keeps all of it; the others say which kind of entry
+        they are about (`register.FOCUS`): ducts for ventilation, symbols for electrical, rooms for building."""
+        return self.id == "alla" or bool(self.wide)
+
     def out(self) -> dict:
         return {"id": self.id, "name": self.name, "status": self.status, "kind": self.kind,
                 "measures": list(self.measures), "notes": self.notes}

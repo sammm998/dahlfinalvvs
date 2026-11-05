@@ -1,5 +1,20 @@
 {
- "id": "bygg", "name": "Bygg", "status": "later", "kind": "area", "measures": ["AREA", "VOLUME"], "order": 6,
- "engine": {},
- "notes": "Areor och volymer (A-K). Inte påbörjad."
+ "id": "bygg",
+ "name": "Bygg",
+ "status": "active",
+ "kind": "area",
+ "measures": [
+  "AREA",
+  "COUNT"
+ ],
+ "order": 6,
+ "engine": {
+  "register.FOCUS": "rum"
+ },
+ "notes": "Rum och ytor med area ur rumsetiketterna (m²); dörrar, fönster och andra beteckningar räknas i styck.",
+ "wide": {
+  "pipeline.OTHER_RUNS_NAME_RUNS": true,
+  "pipeline.DUCT_SIZES_ARE_SIZES": true,
+  "measure.DOUBLE_LINE_BY_SIZE_ONLY": true
+ }
 }
