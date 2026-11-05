@@ -930,21 +930,46 @@ _MATERIAL: dict | None = None
 
 
 def _material() -> dict:
-    """Materialboken, läst en gång.
+    """Materialet, läst en gång: Dahls produktkatalog när den finns, annars materialboken.
 
-    Femtiofemtusen artiklar är för många att skicka till en webbläsare och för få att förtjäna en databas. Den
-    ligger som en komprimerad fil bredvid koden, läses in vid första frågan och stannar - sökningen sker här,
-    och bara det som frågades efter går över tråden.
+    Femtiofemtusen artiklar är för många att skicka till en webbläsare och för få att förtjäna en databas. Filen
+    ligger komprimerad bredvid koden, läses in vid första frågan och stannar - sökningen sker här, och bara det
+    som frågades efter går över tråden.
+
+    Dahls katalog (data/dahl_catalog.json.gz, tools/import_dahl_catalog.py) är källan när den finns. Skriver
+    katalogen inget pris för en artikel tas priset ur materialboken på samma RSK-nummer och märks så (p_src): en
+    kalkyl ska inte tappa ett pris för att katalogen saknar det, och den som läser ska se var priset kommer ifrån.
     """
     global _MATERIAL
     if _MATERIAL is None:
         import gzip
-        path = os.path.join(os.path.dirname(__file__), "data", "material.json.gz")
-        if not os.path.exists(path):
-            _MATERIAL = {"n": 0, "rows": [], "source": None}
-        else:
+        here = os.environ.get("VVS_MATERIAL_DIR") or os.path.join(os.path.dirname(__file__), "data")
+
+        def load(name):
+            path = os.path.join(here, name)
+            if not os.path.exists(path):
+                return None
             with gzip.open(path, "rt", encoding="utf-8") as fh:
-                _MATERIAL = json.load(fh)
+                return json.load(fh)
+
+        book = load("material.json.gz")
+        dahl = load("dahl_catalog.json.gz")
+        if dahl and dahl.get("rows"):
+            prices = {r.get("a"): r for r in (book or {}).get("rows", []) if r.get("a")}
+            for r in dahl["rows"]:
+                r.setdefault("p_src", "katalog" if r.get("p") is not None else None)
+                other = prices.get(r.get("rsk") or r.get("a"))
+                if r.get("p") is None and other is not None and other.get("p") is not None:
+                    r["p"], r["r"] = other.get("p"), other.get("r")
+                    r["w"], r["co2"] = r.get("w") or other.get("w"), r.get("co2") or other.get("co2")
+                    r["p_src"] = "materialsortering"
+            dahl["kind"] = "dahl"
+            _MATERIAL = dahl
+        elif book:
+            book["kind"] = "materialbok"
+            _MATERIAL = book
+        else:
+            _MATERIAL = {"n": 0, "rows": [], "source": None, "kind": None}
     return _MATERIAL
 
 
@@ -964,11 +989,12 @@ def materials(q: str = "", group: str = "", unit: str = "", limit: int = 60, off
     if unit:
         rows = [r for r in rows if (r.get("e") or "").lower() == unit.lower()]
     if words:
-        rows = [r for r in rows if all(w in f'{r["n"]} {r["a"]}'.lower() for w in words)]
+        rows = [r for r in rows if all(w in f'{r["n"]} {r["a"]} {r.get("dahl") or ""} {r.get("rsk") or ""}'.lower()
+                                       for w in words)]
     limit = max(1, min(int(limit), 300))
     return {"total": len(rows), "offset": offset, "limit": limit,
             "rows": rows[offset:offset + limit],
-            "book": {"n": book["n"], "source": book.get("source")},
+            "book": {"n": book["n"], "source": book.get("source"), "kind": book.get("kind"), "origin": book.get("origin")},
             "units": sorted({(r.get("e") or "") for r in book["rows"] if r.get("e")})[:24],
             "groups": sorted({(r.get("gr") or "") for r in book["rows"] if r.get("gr")})[:60]}
 

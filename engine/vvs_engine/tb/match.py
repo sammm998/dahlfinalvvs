@@ -99,17 +99,19 @@ class MaterialIndex:
         for r in refs:
             self.by_ref[r].append(i)
 
-    def add_material_book(self, rows: list[dict[str, Any]], label: str = "Materialboken"):
+    def add_material_book(self, rows: list[dict[str, Any]], label: str = "Materialboken", source: str = "materialbok"):
         """Materialbokens rader: a är artikelnumret (oftast RSK), n benämningen, p priset, e enheten."""
         n = 0
         for r in rows:
             a, name = str(r.get("a") or ""), str(r.get("n") or "")
             if not name or name.lower().startswith("disponibel artikel"):
                 continue
-            self._add(_Doc("materialbok", a, name, compact_tokens(name + " " + a), price=r.get("p"), unit=r.get("e") or ""),
-                      refs=[a] if a else [])
+            extra = " ".join(x for x in (r.get("dahl"), r.get("rsk")) if x)
+            refs = {x for x in (a, r.get("rsk"), r.get("dahl")) if x}
+            self._add(_Doc(source, a, name, compact_tokens(name + " " + a + " " + extra), price=r.get("p"),
+                           unit=r.get("e") or "", page=r.get("page")), refs=refs)
             n += 1
-        self.sources["materialbok"] = {"label": label, "n": n}
+        self.sources[source] = {"label": label, "n": n}
 
     def add_catalog(self, index: dict[str, Any], label: str = "Dahls produktkatalog"):
         """Katalogens rader, sida för sida (catalog.index_pdf). Varje rad är ett dokument; RSK-nummer och
@@ -321,7 +323,7 @@ def _rsk_of(status: str, ranked: list[Hit], sizes: set, models: set = frozenset(
     beskrivningen inte säger vilken, föreslås inget nummer: storlekarna listas, och den som beställer väljer."""
     if status != "möjlig":
         return None
-    book = [h for h in ranked if h.source == "materialbok" and re.fullmatch(r"\d{7}", h.ref or "")]
+    book = [h for h in ranked if h.source in ("materialbok", "katalog") and re.fullmatch(r"\d{7}", h.ref or "")]
     if not book:
         return None
     top = book[0]

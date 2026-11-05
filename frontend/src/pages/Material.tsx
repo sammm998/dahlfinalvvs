@@ -15,6 +15,7 @@ import { api } from "../api";
 type Row = {
   a: string; n: string; e: string; p: number | null; r: number | null;
   w: number | null; co2: number | null; gr: string; y: string; k: string; pre: string;
+  dahl?: string; rsk?: string; page?: number | null; p_src?: string | null;   // Dahls katalog
 };
 
 const kr = (v: number | null) =>
@@ -48,6 +49,7 @@ export default function MaterialPage() {
   useEffect(() => { setPage(0); }, [q, unit, group]);
 
   const rows: Row[] = data?.rows ?? [];
+  const dahl = data?.book?.kind === "dahl";
   const pages = Math.ceil((data?.total ?? 0) / LIMIT);
   const price = (r: Row) => (r.p == null ? null : net && r.r ? r.p * (1 - r.r) : r.p);
   const sum = useMemo(() => rows.reduce((t, r) => t + (price(r) ?? 0), 0), [rows, net]);
@@ -59,7 +61,7 @@ export default function MaterialPage() {
         <div>
           <h1>Material</h1>
           <p className="lead">
-            {data ? <>{data.book.n.toLocaleString(locale())} artiklar ur {data.book.source ?? "materialboken"}</>
+            {data ? <>{data.book.n.toLocaleString(locale())} {tr("artiklar ur")} {data.book.source ?? tr("materialboken")}</>
               : "Laddar…"} · sök på några ord i valfri ordning, till exempel <code>{tr("110 pp mark")}</code>.
           </p>
         </div>
@@ -94,34 +96,39 @@ export default function MaterialPage() {
           <table className="qty">
             <thead>
               <tr>
-                <th>Artikel</th><th>{tr("Benämning")}</th><th>Enh</th>
+                {dahl ? <><th>{tr("Dahl art.nr")}</th><th>{tr("RSK")}</th></> : <th>Artikel</th>}
+                <th>{tr("Benämning")}</th><th>Enh</th>
                 <th className="num">Pris</th><th className="num">Rabatt</th>
                 <th className="num">Vikt</th><th className="num">{tr("kg CO₂e")}</th><th>Grupp</th>
+                {dahl && <th className="num">{tr("Sida")}</th>}
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.a}>
-                  <td className="lf-mono">{r.a}</td>
+                <tr key={`${r.a}-${r.dahl ?? ""}-${r.page ?? ""}`}>
+                  {dahl ? <><td className="lf-mono">{r.dahl || "–"}</td><td className="lf-mono">{r.rsk || "–"}</td></>
+                    : <td className="lf-mono">{r.a}</td>}
                   <td>{r.n}</td>
                   <td className="muted">{r.e || "–"}</td>
-                  <td className="num">{kr(price(r))}</td>
+                  <td className="num" title={r.p_src === "materialsortering" ? tr("Priset kommer ur materialboken på samma RSK-nummer; katalogen skriver inget pris.") : undefined}>
+                    {kr(price(r))}{r.p_src === "materialsortering" && <sup className="muted"> *</sup>}</td>
                   <td className="num muted">{r.r ? `${Math.round(r.r * 100)} %` : "–"}</td>
                   <td className="num muted">{num(r.w)}</td>
                   <td className="num muted">{num(r.co2)}</td>
                   <td className="muted">{r.gr || "–"}</td>
+                  {dahl && <td className="num muted">{r.page ?? "–"}</td>}
                 </tr>
               ))}
               {!rows.length && !busy && (
-                <tr><td colSpan={8} className="empty">{tr("Inga artiklar matchar sökningen.")}</td></tr>
+                <tr><td colSpan={dahl ? 10 : 8} className="empty">{tr("Inga artiklar matchar sökningen.")}</td></tr>
               )}
             </tbody>
             {rows.length > 0 && (
               <tfoot>
                 <tr>
-                  <th colSpan={3}>{tr("Summa på sidan")}</th>
+                  <th colSpan={dahl ? 4 : 3}>{tr("Summa på sidan")}</th>
                   <th className="num">{kr(sum)}</th>
-                  <th colSpan={4}></th>
+                  <th colSpan={dahl ? 5 : 4}></th>
                 </tr>
               </tfoot>
             )}
