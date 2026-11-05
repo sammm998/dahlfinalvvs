@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { t as tr, num } from "../i18n";
 import { Link } from "react-router-dom";
 import gsap from "gsap";
-import Nav, { Logo } from "./Nav";
+import Nav from "./Nav";
 import Preloader from "./Preloader";
 import Demos from "./Demos";
 import Blueprint, { RUNS, SYS } from "./Blueprint";
