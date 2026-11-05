@@ -38,6 +38,13 @@ async def _lifespan(_app: FastAPI):
     init_db()
     from . import api_budget
     api_budget.install_meter()      # the engine's own transports ask and pay through the service's ledger
+    try:                            # den gemensamma budgeten: 10 000 kr och en ny räkning, en gång
+        from .db import SessionLocal
+        with SessionLocal() as _db:
+            api_budget.shared_start(_db)
+    except Exception:               # noqa: BLE001 - tjänsten startar ändå; taket gäller som det står
+        import logging
+        logging.getLogger("vvs").warning("Den gemensamma budgeten kunde inte startas", exc_info=True)
     if os.environ.get("PYTEST_CURRENT_TEST") is None:
         from .reset_once import run as _reset_once
         _reset_once(storage.path(""))
@@ -609,6 +616,44 @@ def live_text(job_id: str, body: dict, language: Literal["sv", "en"] = "sv", use
         import logging; logging.getLogger("vvs.live").exception("Samtalsagentens textsvar misslyckades")
         raise HTTPException(502, "Agenten kunde inte svara. Försök igen.") from None
     return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+class LiveUsageIn(BaseModel):
+    kind: Literal["response", "transcription"] = "response"
+    usage: dict = Field(default_factory=dict)
+
+
+def _tokens(d, *path) -> int:
+    for k in path:
+        d = d.get(k) if isinstance(d, dict) else None
+    try:
+        return max(0, min(int(d or 0), 2_000_000))         # ett orimligt tal från webbläsaren tas inte emot
+    except (TypeError, ValueError):
+        return 0
+
+
+@app.post("/api/jobs/{job_id}/live/usage")
+def live_usage(job_id: str, body: LiveUsageIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Vad röstsamtalet kostade, rapporterat av webbläsaren efter varje svar och varje transkribering.
+
+    Samtalet går direkt mellan webbläsaren och OpenAI, så tjänsten ser bara vad OpenAI skickar tillbaka i
+    samtalet: förbrukningen per svar. Den bokförs på den gemensamma budgeten med vem som pratade. Svaret säger
+    om budgeten är slut, så att samtalet kan avslutas."""
+    _job(db, user, job_id)
+    u = body.usage or {}
+    if body.kind == "transcription":
+        model, source = "gpt-4o-mini-transcribe", "röst_transkribering"
+        tin, tout = _tokens(u, "input_tokens"), _tokens(u, "output_tokens")
+        ain = _tokens(u, "input_token_details", "audio_tokens") or tin
+        aout, cached = 0, 0
+    else:
+        model, source = os.environ.get("VVS_REALTIME_MODEL", "gpt-realtime-2.1"), "röst"
+        tin, tout = _tokens(u, "input_tokens"), _tokens(u, "output_tokens")
+        ain = _tokens(u, "input_token_details", "audio_tokens")
+        aout = _tokens(u, "output_token_details", "audio_tokens")
+        cached = _tokens(u, "input_token_details", "cached_tokens")
+    kr = api_budget.charge(model, tin, tout, cached, 0, source, audio_in=ain, audio_out=aout)
+    return {"kr": kr, "exhausted": api_budget.blocked() is not None}
 
 
 @app.get("/api/analysis-options")

@@ -95,7 +95,7 @@ export function ApiBudget() {
           </table>
         )}
         <p className="muted small" style={{ marginBottom: 0 }}>
-          {tr("Röstassistentens samtal går direkt mellan webbläsaren och OpenAI och syns inte här; taket avgör bara om ett samtal får starta.")}
+          {tr("Röstsamtalet går direkt mellan webbläsaren och OpenAI. Webbläsaren rapporterar förbrukningen efter varje svar och transkribering, och den bokförs här med vem som pratade; när taket nås avslutas samtalet.")}
         </p>
       </section>
     </>

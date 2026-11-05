@@ -22,8 +22,8 @@ export default function PricingPage() {
         <div className="lp-kicker">{tr("Så fungerar det")}</div>
         <h2>{tr("Det som kostar pengar dras från budgeten – allt annat ingår")}</h2>
         <div className="pub-grid pub-three">
-          <div className="pub-card flat"><h3>{tr("Ingår")}</h3><p>{tr("Analys av ritningar, projektanalysen, kalkylen och anbudet, mängdningsverktyget, CAD-rummet, materialet, exporter och akademin.")}</p></div>
-          <div className="pub-card flat"><h3>{tr("Ur budgeten")}</h3><p>{tr("Anropen till AI-modellerna: agenten, andra blicken och läsningen av tekniska beskrivningar.")}</p></div>
+          <div className="pub-card flat"><h3>{tr("Ingår")}</h3><p>{tr("Läsningen av ritningar och tekniska beskrivningar, projektanalysen, kalkylen och anbudet, mängdningsverktyget, CAD-rummet, materialet, exporter och akademin.")}</p></div>
+          <div className="pub-card flat"><h3>{tr("Ur budgeten")}</h3><p>{tr("Anropen till AI-modellerna: agenten, röstsamtalet, andra blicken och AI-tilldelningen i analysen.")}</p></div>
           <div className="pub-card flat"><h3>{tr("Synligt för alla")}</h3><p>{tr("Under Credits ser alla som loggar in vad som är kvar, vad som använts, till vad och av vem.")}</p></div>
         </div>
         <p className="pub-cta">

@@ -322,25 +322,48 @@ def _entry_out(e: CreditEntry) -> dict:
             "status": e.status, "kr": e.amount_ore / 100.0 if e.amount_ore else None, "created_at": e.created_at}
 
 
-def _public_prices(pl: dict) -> dict:
-    return {"sheet": pl.get("sheet"), "ink_step_paths": pl.get("ink_step_paths"), "ink_step_credits": pl.get("ink_step_credits"),
-            "ink_cap_credits": pl.get("ink_cap_credits"), "vision_page": pl.get("vision_page"),
-            "trial_credits": pl.get("trial_credits"), "refund_when_unmeasured": pl.get("refund_when_unmeasured", True),
-            "packages": pl.get("packages") or []}
-
-
-@router.get("/api/public/pricing")
-def public_pricing(db: Session = Depends(get_db)):
-    return _public_prices(price_list(db))
+def _when(v: str | None, end: bool = False):
+    """Ett datum (2026-11-05) eller en tidpunkt ur frågan; ett slutdatum gäller hela dagen."""
+    import datetime as dt
+    if not v:
+        return None
+    try:
+        t = dt.datetime.fromisoformat(v)
+    except ValueError:
+        raise HTTPException(422, f"Okänt datum: {v}") from None
+    if len(v) <= 10 and end:
+        t = t + dt.timedelta(days=1)
+    return t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
 
 
 @router.get("/api/credits")
-def my_credits(user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """Den gemensamma budgeten: samma svar för alla inloggade, oavsett konto."""
+def my_credits(since: str | None = None, until: str | None = None, who: str | None = None, source: str | None = None,
+               user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Den gemensamma budgeten: samma svar för alla inloggade, oavsett konto. Filtren (period, person, del)
+    gäller tabellerna; taket, det använda och det som är kvar gäller alltid hela budgetperioden."""
     from . import api_budget
-    b = api_budget.shared(db)
+    b = api_budget.shared(db, since=_when(since), until=_when(until, end=True), who=who, source=source)
     return {"shared": True, "budget": b, "balance": b["remaining_kr"], "exempt": True,
             "local_installation": settings.local_installation, "me": user.email}
+
+
+@router.get("/api/credits.csv")
+def credits_csv(since: str | None = None, until: str | None = None, who: str | None = None, source: str | None = None,
+                user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Varje rad i den gemensamma budgeten som CSV (semikolon och decimalkomma, så att Excel på svenska läser den)."""
+    import csv
+    import io
+    from fastapi.responses import Response
+    from . import api_budget
+    rows = api_budget.rows(db, since=_when(since), until=_when(until, end=True), who=who, source=source)
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(["Tid", "Vem", "Till vad", "Källa", "Modell", "Tokens in", "Tokens ut", "Kostnad (kr)"])
+    for r in rows:
+        w.writerow([r["at"].isoformat() if r["at"] else "", r["user"] or "Tjänsten själv", r["label"], r["source"],
+                    r["model"], r["tokens_in"], r["tokens_out"], f"{r['kr']:.4f}".replace(".", ",")])
+    return Response("\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="ai-budget.csv"'})
 
 
 @router.get("/api/drawings/{drawing_id}/price")
@@ -351,26 +374,6 @@ def drawing_price(drawing_id: str, user: User = Depends(current_user), db: Sessi
     q = quote_drawing(db, d)
     have = balance(db, user)
     return {**q, "balance": have, "exempt": is_exempt(user), "enough": is_exempt(user) or have + 1e-9 >= q["credits"]}
-
-
-class PurchaseIn(BaseModel):
-    package_id: str
-
-
-@router.post("/api/credits/purchase")
-def purchase(body: PurchaseIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """Köp ett paket. Credits finns på kontot direkt; kronorna faktureras, och köpet står som fakturerat tills
-    en administratör markerar det betalt. Ingen kortbetalning i den här vägen - den är byggd för firmor."""
-    raise HTTPException(410, "Credits köps inte längre. Alla delar en gemensam budget på 10 000 kr, som syns under Credits.")
-    pl = price_list(db)
-    p = next((x for x in (pl.get("packages") or []) if x.get("id") == body.package_id), None)
-    if p is None:
-        raise HTTPException(404, "Paketet finns inte")
-    key = owner_key(user)
-    e = post(db, user, key, float(p["credits"]), "kop", ref=p["id"], status="fakturerad",
-             amount_ore=int(round(float(p["kr"]) * 100)), note=f"Paketet {p['name']}: {p['credits']} credits för {p['kr']} kr exkl. moms")
-    db.commit()
-    return {"balance": balance_cc(db, key) / 100.0, "entry": _entry_out(e)}
 
 
 class ContactIn(BaseModel):
@@ -393,123 +396,6 @@ def contact(body: ContactIn, db: Session = Depends(get_db)):
 
 
 # --- administration -------------------------------------------------------------------------------------------
-
-@router.get("/api/admin/pricing")
-def admin_pricing(admin: User = Depends(current_admin), db: Session = Depends(get_db)):
-    pl, cm = price_list(db), cost_model(db)
-    return {"prices": pl, "costs": cm, "defaults": {"prices": PRICE_DEFAULTS, "costs": COST_DEFAULTS},
-            "margin": margin_table(pl, cm)}
-
-
-class PricingIn(BaseModel):
-    prices: dict | None = None
-    costs: dict | None = None
-    note: str = ""
-
-
-@router.put("/api/admin/pricing")
-def admin_set_pricing(body: PricingIn, admin: User = Depends(current_admin), db: Session = Depends(get_db)):
-    for key, val, defaults in (("price:list", body.prices, PRICE_DEFAULTS), ("cost:model", body.costs, COST_DEFAULTS)):
-        if val is None:
-            continue
-        clean = {k: v for k, v in val.items() if k in defaults}
-        if "packages" in clean:
-            pk = []
-            for p in clean["packages"] or []:
-                try:
-                    pk.append({"id": str(p["id"])[:32], "name": str(p.get("name") or p["id"])[:64],
-                               "credits": max(1, int(p["credits"])), "kr": max(0.0, float(p["kr"])),
-                               "lead": str(p.get("lead") or "")[:200]})
-                except (KeyError, TypeError, ValueError):
-                    raise HTTPException(422, "Ett paket behöver id, credits och kr.")
-            clean["packages"] = pk
-        for k, v in list(clean.items()):
-            if k in ("sheet",) and isinstance(v, dict):
-                clean[k] = {sc: max(0.0, float(v.get(sc, defaults[k][sc]))) for sc in defaults[k]}
-            elif isinstance(defaults[k], bool):
-                clean[k] = bool(v)
-            elif isinstance(defaults[k], (int, float)):
-                try:
-                    clean[k] = max(0.0, float(v))
-                except (TypeError, ValueError):
-                    raise HTTPException(422, f"{k} ska vara ett tal.")
-        row = db.get(ServiceSetting, key)
-        if row is None:
-            row = ServiceSetting(key=key, value={"v": clean}, note=body.note, updated_by=admin.id)
-            db.add(row)
-        else:
-            row.value = {"v": {**((row.value or {}).get("v") or {}), **clean}}
-            row.note = body.note or row.note
-            row.updated_by = admin.id
-    db.commit()
-    return admin_pricing(admin, db)
-
-
-@router.get("/api/admin/credits")
-def admin_credits(admin: User = Depends(current_admin), db: Session = Depends(get_db)):
-    """Reskontran över alla konton: saldo, köp att fakturera, och vad läsningarna dragit."""
-    by_owner = (db.query(CreditEntry.owner_key, func.sum(CreditEntry.delta_cc))
-                .group_by(CreditEntry.owner_key).all())
-    accounts = {a.id: a for a in db.query(Account).all()}
-    users = {u.id: u for u in db.query(User).all()}
-    owners = []
-    for key, s in by_owner:
-        kind, _, ident = key.partition(":")
-        name = (accounts[ident].name if kind == "account" and ident in accounts else
-                users[ident].email if kind == "user" and ident in users else key)
-        owners.append({"owner": key, "name": name, "balance": (s or 0) / 100.0})
-    owners.sort(key=lambda o: -o["balance"])
-    purchases = (db.query(CreditEntry).filter(CreditEntry.kind == "kop")
-                 .order_by(CreditEntry.created_at.desc()).limit(200).all())
-    month = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m")
-    used = db.query(func.coalesce(func.sum(CreditEntry.delta_cc), 0)).filter(CreditEntry.kind.in_(("lasning", "syn"))).scalar() or 0
-    refunded = db.query(func.coalesce(func.sum(CreditEntry.delta_cc), 0)).filter(CreditEntry.kind == "aterbetalning").scalar() or 0
-    sold_ore = db.query(func.coalesce(func.sum(CreditEntry.amount_ore), 0)).filter(CreditEntry.kind == "kop", CreditEntry.status != "makulerad").scalar() or 0
-    return {"owners": owners, "purchases": [_entry_out(e) for e in purchases],
-            "totals": {"credits_used": -used / 100.0, "credits_refunded": refunded / 100.0, "sold_kr": sold_ore / 100.0, "month": month}}
-
-
-class GrantIn(BaseModel):
-    owner: str            # "account:<id>" | "user:<id>" | en e-postadress
-    credits: float
-    note: str = ""
-
-
-@router.post("/api/admin/credits/grant")
-def admin_grant(body: GrantIn, admin: User = Depends(current_admin), db: Session = Depends(get_db)):
-    key = body.owner.strip()
-    if "@" in key:
-        u = db.query(User).filter(User.email == key.lower()).first()
-        if u is None:
-            raise HTTPException(404, "Ingen användare med den adressen")
-        key = owner_key(u)
-    if not key.startswith(("account:", "user:")):
-        raise HTTPException(422, "Ägaren skrivs som account:<id>, user:<id> eller en e-postadress")
-    if abs(body.credits) < 0.01:
-        raise HTTPException(422, "Ange ett antal credits skilt från noll")
-    e = post(db, admin, key, float(body.credits), "tilldelning", note=body.note or f"Tilldelat av {admin.email}")
-    db.commit()
-    return {"entry": _entry_out(e), "balance": balance_cc(db, key) / 100.0}
-
-
-class PurchaseStatusIn(BaseModel):
-    status: str
-
-
-@router.put("/api/admin/credits/purchases/{entry_id}")
-def admin_purchase_status(entry_id: str, body: PurchaseStatusIn, admin: User = Depends(current_admin), db: Session = Depends(get_db)):
-    e = db.get(CreditEntry, entry_id)
-    if e is None or e.kind != "kop":
-        raise HTTPException(404, "Köpet finns inte")
-    if body.status not in ("fakturerad", "betald", "makulerad"):
-        raise HTTPException(422, "Status är fakturerad, betald eller makulerad")
-    if body.status == "makulerad" and e.status != "makulerad":
-        # ett makulerat köp tar tillbaka sina credits - som en egen rad, så att historien står kvar
-        post(db, admin, e.owner_key, -e.delta_cc / 100.0, "tilldelning", ref=e.id, note=f"Köpet {e.ref} makulerat")
-    e.status = body.status
-    db.commit()
-    return _entry_out(e)
-
 
 @router.get("/api/admin/contact")
 def admin_contact(admin: User = Depends(current_admin), db: Session = Depends(get_db)):

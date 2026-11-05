@@ -75,8 +75,9 @@ def test_ai_use_is_drawn_from_the_shared_budget_with_who_used_it(client):
 
 def test_credits_cannot_be_bought_and_a_reading_draws_nothing(client, source_api_pdf):
     Hk, _ = _user(client, "kopare@example.com")
-    r = client.post("/api/credits/purchase", json={"package_id": "start"}, headers=Hk)
-    assert r.status_code == 410
+    # köpet, paketen och prislistan finns inte längre
+    assert client.post("/api/credits/purchase", json={"package_id": "start"}, headers=Hk).status_code in (404, 405)
+    assert client.get("/api/public/pricing").status_code in (404, 405) or "packages" not in client.get("/api/public/pricing").text
     d = _upload(client, Hk, source_api_pdf)
     price = client.get(f"/api/drawings/{d['id']}/price", headers=Hk).json()
     assert price["exempt"] and price["enough"]
@@ -171,3 +172,121 @@ def test_when_the_budget_is_spent_the_ai_stops_for_everyone_and_everyone_sees_it
 def test_a_bad_login_is_refused_and_never_breaks_the_request(client):
     assert client.get("/api/credits", headers={"Authorization": "Bearer inte-en-token"}).status_code == 401
     assert client.get("/api/credits").status_code == 401
+
+
+def _admin(client):
+    r = client.post("/api/auth/login", data={"username": "drift@example.com", "password": "hemligt1"}).json()
+    return {"Authorization": f"Bearer {r['access_token']}"}
+
+
+def test_the_shared_budget_started_once_at_10000_kr(client):
+    from app import api_budget
+    from app.db import SessionLocal
+    with SessionLocal() as db:
+        cfg = api_budget.settings_of(db)
+        assert cfg["limit_kr"] == 10000.0 and cfg["reset_at"]          # en ny räkning när budgeten startade
+        assert api_budget.shared_start(db) is False                      # och bara en gång
+    Ha = _admin(client)
+    for path in ("/api/admin/pricing", "/api/admin/credits"):
+        assert client.get(path, headers=Ha).status_code in (404, 405)
+
+
+def test_filters_and_csv_show_the_same_rows(client):
+    Hk, _ = _user(client, "filter@example.com")
+    b = client.get("/api/credits", params={"who": "fragare@example.com"}, headers=Hk).json()["budget"]
+    assert b["recent"] and all(r["user"] == "fragare@example.com" for r in b["recent"])
+    assert [u["key"] for u in b["by_user"]] == ["fragare@example.com"]
+    assert "fragare@example.com" in b["people"] and any(s["key"] == "vision" for s in b["sources"])
+    whole = client.get("/api/credits", headers=Hk).json()["budget"]
+    assert b["spent_kr"] == whole["spent_kr"]                           # taket och det använda gäller hela perioden
+    assert b["filtered"]["kr"] <= whole["filtered"]["kr"]
+    v = client.get("/api/credits", params={"source": "agent"}, headers=Hk).json()["budget"]
+    assert v["recent"] and all(r["source"] == "agent" and r["label"] == "Agenten" for r in v["recent"])
+    future = client.get("/api/credits", params={"since": "2999-01-01"}, headers=Hk).json()["budget"]
+    assert future["recent"] == [] and future["filtered"]["requests"] == 0
+    assert client.get("/api/credits", params={"since": "igår"}, headers=Hk).status_code == 422
+    csv = client.get("/api/credits.csv", params={"who": "fragare@example.com"}, headers=Hk)
+    assert csv.status_code == 200 and csv.headers["content-type"].startswith("text/csv")
+    lines = csv.text.lstrip("\ufeff").strip().splitlines()
+    assert lines[0].startswith("Tid;Vem;Till vad") and len(lines) - 1 == b["filtered"]["requests"]
+    assert all(";fragare@example.com;" in ln for ln in lines[1:])
+
+
+def test_the_voice_call_is_counted_with_its_audio_price_and_who_spoke(client, source_api_pdf):
+    Hb, _ = _user(client, "pratare@example.com")
+    d = _upload(client, Hb, source_api_pdf)
+    j = _wait(client, Hb, client.post(f"/api/drawings/{d['id']}/analyze", headers=Hb).json()["id"])
+    usage = {"input_tokens": 3000, "output_tokens": 1200,
+             "input_token_details": {"audio_tokens": 2500, "text_tokens": 500, "cached_tokens": 0},
+             "output_token_details": {"audio_tokens": 1000, "text_tokens": 200}}
+    r = client.post(f"/api/jobs/{j['id']}/live/usage", json={"kind": "response", "usage": usage}, headers=Hb).json()
+    # 500 text in à 4 + 2500 ljud in à 32 + 200 text ut à 16 + 1000 ljud ut à 64 USD per miljon, gånger kursen
+    from app import api_budget
+    assert abs(r["kr"] - (500 * 4 + 2500 * 32 + 200 * 16 + 1000 * 64) / 1e6 * api_budget.USD_SEK_DEFAULT) < 0.01
+    assert r["exhausted"] is False
+    t = client.post(f"/api/jobs/{j['id']}/live/usage",
+                    json={"kind": "transcription", "usage": {"input_tokens": 800, "output_tokens": 40}}, headers=Hb).json()
+    assert t["kr"] > 0
+    b = client.get("/api/credits", params={"who": "pratare@example.com"}, headers=Hb).json()["budget"]
+    assert {s["key"] for s in b["by_source"]} == {"röst", "röst_transkribering"}
+    assert {s["label"] for s in b["by_source"]} == {"Röstsamtal", "Röstsamtal – transkribering"}
+    # någon annans samtal går inte att bokföra på
+    Hx, _ = _user(client, "utomstaende@example.com")
+    assert client.post(f"/api/jobs/{j['id']}/live/usage", json={"usage": usage}, headers=Hx).status_code == 404
+    # ett orimligt tal från webbläsaren tas inte emot som det är
+    big = client.post(f"/api/jobs/{j['id']}/live/usage", json={"usage": {"input_tokens": 10**12}}, headers=Hb).json()
+    assert big["kr"] < 100
+
+
+def test_everyone_is_warned_from_80_percent_and_the_admins_are_told_once_per_level(client):
+    Ha = _admin(client)
+    Hk, _ = _user(client, "varnad@example.com")
+    spent = client.get("/api/credits", headers=Hk).json()["budget"]["spent_kr"]
+    from app import api_budget
+    try:
+        client.put("/api/admin/api-budget", json={"limit_kr": round(spent / 0.82, 4)}, headers=Ha)
+        b = client.get("/api/credits", headers=Hk).json()["budget"]
+        assert b["warning"] == 80 and not b["exhausted"]
+        api_budget.charge("gpt-6.1-sol", tokens_in=10, tokens_out=1, source="agent")
+        api_budget.charge("gpt-6.1-sol", tokens_in=10, tokens_out=1, source="agent")
+        msgs = [m for m in client.get("/api/admin/contact", headers=Ha).json()["rows"] if "AI-budget" in m["subject"]]
+        assert [m["subject"] for m in msgs] == ["AI-budgeten: 80 % använd"]       # en gång, inte per anrop
+        client.put("/api/admin/api-budget", json={"limit_kr": round(spent / 0.97, 4)}, headers=Ha)
+        assert client.get("/api/credits", headers=Hk).json()["budget"]["warning"] == 95
+        api_budget.charge("gpt-6.1-sol", tokens_in=10, tokens_out=1, source="agent")
+        subjects = [m["subject"] for m in client.get("/api/admin/contact", headers=Ha).json()["rows"]]
+        assert "AI-budgeten: 95 % använd" in subjects
+    finally:
+        client.put("/api/admin/api-budget", json={"limit_kr": 10000}, headers=Ha)
+    assert client.get("/api/credits", headers=Hk).json()["budget"]["warning"] == 0
+
+
+def test_the_warning_is_mailed_to_the_admins_when_smtp_is_set(client, monkeypatch):
+    sent = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=None):
+            sent.append(("connect", host, port))
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def starttls(self):
+            sent.append(("tls",))
+        def login(self, u, p):
+            sent.append(("login", u))
+        def send_message(self, msg):
+            sent.append(("msg", msg["To"], msg["Subject"]))
+    import smtplib
+    monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setenv("VVS_SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("VVS_SMTP_USER", "larm")
+    from app import api_budget
+    from app.db import SessionLocal
+    with SessionLocal() as db:
+        n = api_budget._mail_admins(db, "AI-budgeten: 80 % använd", "text")
+    assert n >= 1 and ("connect", "smtp.example.com", 587) in sent and ("login", "larm") in sent
+    assert any(x[0] == "msg" and "drift@example.com" in x[1] for x in sent)
+    monkeypatch.delenv("VVS_SMTP_HOST")
+    with SessionLocal() as db:
+        assert api_budget._mail_admins(db, "x", "y") == 0          # utan SMTP: bara meddelandet i Administration
