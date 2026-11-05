@@ -17,8 +17,11 @@ type Item = {
   total_quantity: number | null; manufacturer: string; type: string; rsk: string[]; art_nr: string[]; or_equal: boolean;
   spec: Record<string, string>; text: string; category: string; subcategory: string; ama_code: string; page: number;
   parent: string; supplied_by: string; inferred: string;
-  match: { status: "hittad" | "möjlig" | "saknas" | "allmänt" | "annan"; hits: Hit[]; in_catalog: boolean; note: string };
+  match: { status: "hittad" | "möjlig" | "saknas" | "allmänt" | "annan"; hits: Hit[]; in_catalog: boolean; note: string;
+           rsk?: { value: string | null; kind: "förslag" | "storlek"; name: string; variants?: { rsk: string; name: string; size: string | null }[] } | null };
 };
+type Draft = { maker: string; subject: string; text: string; html: string; mailto: string; eml: string; n: number;
+               rows: { pos: string; code: string; name: string; qty: string; maker: string; spec: string; numbers: string }[] };
 
 const KIND: Record<string, string> = {
   post: "Post", tillbehor: "Tillbehör", omnamnd: "Omnämnd produkt", krav: "Allmänt material", arbete: "Arbete",
@@ -48,7 +51,9 @@ export default function TechSpecPanel({ project }: { project: any }) {
   const [hideOthers, setHideOthers] = useState(false);
   const [open, setOpen] = useState<string>("");
   const [chosen, setChosen] = useState<Set<string>>(new Set());
-  const [mail, setMail] = useState<any>(null);
+  const [mail, setMail] = useState<{ drafts: Draft[]; n: number; ids?: string[] } | null>(null);
+  const [tab, setTab] = useState(0);
+  const [copied, setCopied] = useState("");
   const [to, setTo] = useState("");
   const [catalog, setCatalog] = useState<any>(null);
   const [catUrl, setCatUrl] = useState("");
@@ -93,9 +98,26 @@ export default function TechSpecPanel({ project }: { project: any }) {
   }, [shown]);
   const counts = data?.facets?.status?.reduce((o: any, s: any) => ({ ...o, [s.value]: s.n }), {}) ?? {};
 
-  const draft = async (ids?: string[]) => {
+  const draft = async (ids?: string[], keepTab = false) => {
     setErr("");
-    try { setMail(await api.techSpecMail(active, { ids, to })); } catch (e: any) { setErr(e.message); }
+    try { const m = await api.techSpecMail(active, { ids, to }); setMail({ ...m, ids }); if (!keepTab) setTab(0); setCopied(""); }
+    catch (e: any) { setErr(e.message); }
+  };
+  const d: Draft | undefined = mail?.drafts?.[Math.min(tab, (mail?.drafts?.length ?? 1) - 1)];
+  const saveEml = (x: Draft) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([x.eml], { type: "message/rfc822" }));
+    a.download = `${x.subject.replace(/[\\/:*?"<>|]+/g, "").slice(0, 80)}.eml`; a.click();
+  };
+  const copyTable = async (x: Draft) => {
+    try {
+      const W = window as any;
+      if (W.ClipboardItem && navigator.clipboard?.write) {
+        await navigator.clipboard.write([new W.ClipboardItem({ "text/html": new Blob([x.html], { type: "text/html" }),
+          "text/plain": new Blob([x.text], { type: "text/plain" }) })]);
+      } else await navigator.clipboard?.writeText(x.text);
+      setCopied(x.maker);
+    } catch { setCopied(""); }
   };
   const csv = async () => {
     const b: Blob = await (api as any).fetchBlob(`/api/tech-specs/${active}/items.csv`);
@@ -232,7 +254,12 @@ export default function TechSpecPanel({ project }: { project: any }) {
                           <td className="num">{qty(it)}</td>
                           <td>{it.manufacturer || "–"}</td>
                           <td>{it.type || "–"}{it.or_equal && <span className="muted small"> {tr("el. likv.")}</span>}</td>
-                          <td className="lf-mono">{it.rsk.join(", ") || "–"}</td>
+                          <td className="lf-mono tspec-rsk">
+                            {it.rsk.length ? it.rsk.join(", ")
+                              : it.match.rsk?.value ? <span title={it.match.rsk.name}><i>{it.match.rsk.value}</i> <span className="badge small">{tr("förslag")}</span></span>
+                              : it.match.rsk?.kind === "storlek" ? <span className="badge small warn">{trf("välj storlek ({0})", it.match.rsk.variants?.length ?? 0)}</span>
+                              : "–"}
+                          </td>
                           <td><span className={`badge ${st.cls}`}>{tr(st.label)}</span></td>
                           <td className="tspec-hit">{h ? <>{h.ref} · {h.name}{h.source === "katalog" && <span className="muted small"> ({tr("katalogen")})</span>}</> : <span className="muted small">{it.match.note ? tr(it.match.note.startsWith("Levereras av") ? "Ingår ej i VS" : it.match.note) : "–"}</span>}</td>
                           <td className="muted">{it.page}</td>
@@ -242,6 +269,11 @@ export default function TechSpecPanel({ project }: { project: any }) {
                             <p className="small" style={{ whiteSpace: "normal" }}>{it.text || "–"}</p>
                             {Object.keys(it.spec).length > 0 && <p className="small"><b>{tr("Specifikation")}:</b> {Object.entries(it.spec).map(([k, v]) => `${k} ${v}`).join(" · ")}</p>}
                             <p className="small muted">{it.ama_code} {it.subcategory} · {tr("sida")} {it.page}{it.inferred && <> · {it.inferred}</>}</p>
+                            {it.match.rsk?.kind === "storlek" && (
+                              <div className="small tspec-sizes"><b>{tr("Beskrivningen anger ingen storlek – välj:")}</b>
+                                <ul>{it.match.rsk.variants?.map((v) => <li key={v.rsk}><b className="lf-mono">{v.rsk}</b> {v.name}</li>)}</ul>
+                              </div>
+                            )}
                             {it.match.hits.length > 0 && (
                               <ul className="small tspec-hits">
                                 {it.match.hits.map((x, i) => <li key={i}><b>{x.ref}</b> {x.name} <span className="muted">– {x.source === "katalog" ? tr("Dahls katalog") : tr("materialboken")}, {x.why}{x.price != null && <>, {x.price.toLocaleString(locale(), { maximumFractionDigits: 2 })} kr/{x.unit || "st"}</>}</span></li>)}
@@ -260,19 +292,31 @@ export default function TechSpecPanel({ project }: { project: any }) {
         </>
       )}
 
-      {mail && (
-        <div className="card tspec-mail" role="dialog" aria-label={tr("Mejlutkast")}>
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <h3 style={{ margin: 0 }}>{tr("Mejlutkast")}</h3>
-            <button className="ghost small" onClick={() => setMail(null)}>{tr("Stäng")}</button>
-          </div>
-          <div className="field"><label>{tr("Till")}</label>
-            <input value={to} placeholder={tr("leverantör eller inköp")} onChange={(e) => setTo(e.target.value)} onBlur={() => draft(mail.n && chosen.size ? [...chosen] : undefined)} /></div>
-          <div className="field"><label>{tr("Ämne")}</label><input value={mail.subject} readOnly /></div>
-          <textarea readOnly value={mail.body} rows={16} style={{ width: "100%", fontFamily: "var(--mono)", fontSize: 12 }} />
-          <div className="row" style={{ gap: 8, marginTop: 8 }}>
-            <a href={`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(mail.subject)}&body=${encodeURIComponent(mail.body)}`}><button>{tr("Öppna i e-posten")}</button></a>
-            <button className="secondary" onClick={() => navigator.clipboard?.writeText(`${mail.subject}\n\n${mail.body}`)}>{tr("Kopiera texten")}</button>
+      {mail && d && (
+        <div className="tspec-mailwrap" role="dialog" aria-label={tr("Prisförfrågningar")} onClick={() => setMail(null)}>
+          <div className="card tspec-mail" onClick={(e) => e.stopPropagation()}>
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0 }}>{trf("Prisförfrågningar · {0} artiklar till {1} fabrikat", mail.n, mail.drafts.length)}</h3>
+              <button className="ghost small" onClick={() => setMail(null)}>{tr("Stäng")}</button>
+            </div>
+            <p className="muted small" style={{ margin: "6px 0 10px" }}>{tr("En förfrågan per fabrikat. Öppna den i e-posten, ladda ner den som utkast eller kopiera tabellen.")}</p>
+            <div className="chips tspec-makers">
+              {mail.drafts.map((x, i) => (
+                <button key={x.maker} className={`chip${i === tab ? " on" : ""}`} onClick={() => setTab(i)}>{x.maker} <i>{x.n}</i></button>
+              ))}
+            </div>
+            <div className="tspec-mailhead">
+              <label>{tr("Till")}<input value={to} placeholder={tr("leverantörens e-post")} onChange={(e) => setTo(e.target.value)}
+                onBlur={() => draft(mail.ids, true)} /></label>
+              <label>{tr("Ämne")}<input value={d.subject} readOnly /></label>
+            </div>
+            <div className="tspec-preview" dangerouslySetInnerHTML={{ __html: d.html }} />
+            <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <a href={d.mailto}><button>{tr("Öppna i e-posten")}</button></a>
+              <button className="secondary" onClick={() => saveEml(d)}>{tr("Ladda ner som e-postutkast")}</button>
+              <button className="secondary" onClick={() => copyTable(d)}>{copied === d.maker ? tr("Kopierad ✓") : tr("Kopiera med tabell")}</button>
+            </div>
+            <p className="muted small" style={{ marginBottom: 0 }}>{tr("Utkastet (.eml) öppnas i Outlook eller Apple Mail med tabellen på plats. Länken till e-posten bär bara texten.")}</p>
           </div>
         </div>
       )}
