@@ -35,6 +35,41 @@ export function ContractFormChoice({ value, onChange, name = "contract" }: { val
   );
 }
 
+/* ABT 06 med teknisk beskrivning: projektet läser en beskrivning utan ritningar och tar ut allt material den
+ * föreskriver. Valet finns bara för ABT 06 - där entreprenören själv projekterar ur beskrivningen. */
+export function TechSpecChoice({ value, onChange, name = "tech-spec" }: { value: boolean; onChange: (v: boolean) => void; name?: string }) {
+  return (
+    <label className={`choice-card${value ? " on" : ""}`} style={{ marginBottom: 14 }}>
+      <input type="checkbox" name={name} checked={value} onChange={(e) => onChange(e.target.checked)} />
+      <span><b>{tr("Teknisk beskrivning")}</b>
+        <span className="muted small">{tr("Analysera en teknisk beskrivning utan ritningar: allt material med kod, antal, fabrikat, typ och RSK, sökt i Dahls katalog.")}</span></span>
+    </label>
+  );
+}
+
+/* ABT 06 i två varianter. Med ritningar läses handlingens alla blad - rum, enheter, symboler och de ritade
+ * installationerna - och en teknisk beskrivning kan läggas till. Med bara beskrivningen finns inga ritningar: allt
+ * material tas ur den tekniska beskrivningen. */
+export function AbtVariantChoice({ variant, techSpec, onChange, name = "abt-variant" }:
+  { variant: string; techSpec: boolean; onChange: (variant: string, techSpec: boolean) => void; name?: string }) {
+  return (
+    <fieldset className="choice">
+      <legend>{tr("ABT 06 – underlag")}</legend>
+      <label className={`choice-card${variant !== "beskrivning" ? " on" : ""}`}>
+        <input type="radio" name={name} checked={variant !== "beskrivning"} onChange={() => onChange("ritningar", techSpec)} />
+        <span><b>{tr("Ritningar")}</b>
+          <span className="muted small">{tr("Handlingens alla blad läses: rum, ytor, enheter, symboler och ritade installationer. En teknisk beskrivning kan läggas till.")}</span></span>
+      </label>
+      {variant !== "beskrivning" && <TechSpecChoice value={techSpec} onChange={(v) => onChange("ritningar", v)} name={`${name}-ts`} />}
+      <label className={`choice-card${variant === "beskrivning" ? " on" : ""}`}>
+        <input type="radio" name={name} checked={variant === "beskrivning"} onChange={() => onChange("beskrivning", true)} />
+        <span><b>{tr("Endast teknisk beskrivning")}</b>
+          <span className="muted small">{tr("Inga ritningar. Allt material tas ur den tekniska beskrivningen och söks i Dahls katalog.")}</span></span>
+      </label>
+    </fieldset>
+  );
+}
+
 export function DisciplineChoice({ value, onChange, disciplines, name = "discipline" }:
   { value: string; onChange: (v: string) => void; disciplines: Discipline[]; name?: string }) {
   return (
@@ -67,6 +102,8 @@ export function ProjectBadges({ project, disciplines }: { project: any; discipli
     <span className="row" style={{ gap: 6 }}>
       <span className="badge" title={tr("Entreprenadform")}>{CONTRACT_LABEL[project.contract_form] ?? project.contract_form}</span>
       <span className="badge" title={tr("Disciplin")}>{tr(d?.name ?? project.discipline)}</span>
+      {project.abt_variant === "beskrivning" ? <span className="badge">{tr("Endast teknisk beskrivning")}</span>
+        : project.tech_spec && <span className="badge">{tr("Teknisk beskrivning")}</span>}
     </span>
   );
 }

@@ -108,15 +108,39 @@ def _placeholder_pattern(code: str):
     return re.compile(r"^%s\d{1,3}%s(?=$|[-/+.,:(\[ ])" % (re.escape(stem), re.escape(rest)))
 
 
+_CODE_END = "-/+.,:([ "
+
+
+def opens_as_twin(label: str, code: str) -> bool:
+    """Whether a label opens with this literal code of the list once letters and the digits they resemble are
+    folded together - and the code ends where a code ends.
+
+    The list writes `SS4 SPILLVATTENLEDNING PP-RÖR`; drawn in strokes, the labels on the sheet read `S54-75`
+    as often as not, S and 5 being one shape. Compared letter for letter no label opened with SS4, all fourteen
+    on one sheet were taken for something other than a pipe, and the waste pipes they name got no metres. The
+    folded head has to stop at a separator, so a twin can never stretch a short code over a longer word: `S3`
+    does not open `S35` just because both fold to digits. Placeholder codes are compared folded already
+    (_placeholder_pattern), and single-character codes are left to the letter-for-letter comparison."""
+    L, C = (label or "").upper().strip(), (code or "").upper()
+    if len(C) < 2 or len(L) < len(C) or _placeholder_pattern(C) is not None:
+        return False
+    if L[:len(C)].translate(_TWIN_FOLD) != C.translate(_TWIN_FOLD):
+        return False
+    return len(L) == len(C) or L[len(C)] in _CODE_END
+
+
 def opens_with(label: str, code: str) -> bool:
-    """Whether a label opens with this code of the list: letter for letter, or through the list's placeholder."""
+    """Whether a label opens with this code of the list: letter for letter, through the list's placeholder, or
+    letter for letter once twins are folded (opens_as_twin)."""
     L, C = (label or "").upper().strip(), (code or "").upper()
     if not L or not C:
         return False
     if L == C or L.startswith(C):
         return True
     pat = _placeholder_pattern(C)
-    return pat is not None and pat.match(L.translate(_TWIN_FOLD)) is not None
+    if pat is not None:
+        return pat.match(L.translate(_TWIN_FOLD)) is not None
+    return opens_as_twin(L, C)
 
 
 def number_as_listed(label: str, codes) -> str:
@@ -134,6 +158,10 @@ def number_as_listed(label: str, codes) -> str:
         done = part
         for c in codes:
             m = _PLACEHOLDER_CODE.match((c or "").upper())
+            if not m and opens_as_twin(P, c) and not P.startswith((c or "").upper()):
+                # a literal code read through its twins: written the way the list writes it (S54-75 -> SS4-75)
+                done = (c or "").upper() + part[len(c):]
+                break
             if not m or not opens_with(P, c):
                 continue
             stem = m.group(1)
@@ -192,7 +220,7 @@ class DrawingLegend:
             if not c:
                 continue
             if h == c or (h.startswith(c) and len(h) > len(c)) \
-                    or (_placeholder_pattern(c) is not None and opens_with(h, c)):
+                    or (_placeholder_pattern(c) is not None and opens_with(h, c)) or opens_as_twin(h, c):
                 if best is None or len(c) > len(best):
                     best = c
         return best

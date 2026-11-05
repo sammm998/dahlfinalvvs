@@ -90,8 +90,15 @@ def is_code_like(word: str) -> bool:
     The opening letter is what the rule has always said and is worth enforcing: a code names its system first,
     before any count prefix is stripped. Without it every word whose leading letter the recogniser read as its
     twin digit - a plain word, a date in the title block - counts as a code and teaches the drawing-local grammar
-    a pattern that then outvotes the real labels."""
-    if len(word) < 2 or len(word) > 24:
+    a pattern that then outvotes the real labels.
+
+    The length limit holds per code, not per word. A label that names the tap-water trio of one riser writes
+    three codes with slashes between them - `KV01-53-/VV01-53-32/VVC01-53-20`, 31 characters - and a limit on
+    the whole word took the label for prose: the three pipes it names got no metres at all, though each part
+    is as short as any single code. Each slash-separated part keeps the old limit of 24, and the word as a
+    whole may carry at most four of them."""
+    parts = word.split("/")
+    if len(word) < 2 or len(parts) > 4 or any(len(p) > 24 for p in parts) or (len(parts) == 1 and len(word) > 24):
         return False
     if not re.fullmatch(r"[A-Za-zÅÄÖØ0-9\-/+.,:()\[\]]+", word):
         return False

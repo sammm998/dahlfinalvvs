@@ -57,4 +57,8 @@ def purge_project(db: Session, p: Project) -> None:
     q(DocumentOverride).filter(DocumentOverride.project_id == p.id).delete(synchronize_session=False)
     q(ProjectAnalysis).filter(ProjectAnalysis.project_id == p.id).delete(synchronize_session=False)
     q(DisciplineOverride).filter(DisciplineOverride.project_id == p.id).delete(synchronize_session=False)
+    from .db import TechSpec
+    q(TechSpec).filter(TechSpec.project_id == p.id).delete(synchronize_session=False)
+    from .storage import storage
+    storage.delete_prefix(f"techspecs/{p.id}")
     db.flush()

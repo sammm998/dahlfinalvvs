@@ -2022,6 +2022,8 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
                 pp.flags.append(RASTER_FLAG)
     measures = measure_pipes(ownership, scale, elevations, hatched_pt, from_image=from_image)
     risers = _riser_symbols(page, ann_layers, glyph_pids, graphs, ownership, anchors, identities)
+    for key, lst in _shaft_risers(page, ann_layers, glyph_pids, anchors, designations, legend, risers).items():
+        risers.setdefault(key, []).extend(lst)
     label_risers = _risers_from_dn_rows(designations, anchors, leaders, identities)
     # En stigare inne i en skraffering hör till den del bladet inte redovisar, precis som röret där: mängdaren
     # räknar den inte (W-50-1-A-0013-bladet med pålbalken: ändpunkterna i skrafferingen räknades som stigare 75).
@@ -2110,6 +2112,67 @@ def widened_runs(pa: PageAnalysis, page: RawPage, prep: "PreparedPage", **known)
 
 
 SAME_RISER = 15.0        # pt: a label's leader ends at the riser symbol it names, not exactly on its centre
+
+
+SHAFT_MARK_MIN, SHAFT_MARK_MAX = 3.5, 14.0    # pt: the ring a riser in a shaft is drawn as
+SHAFT_DOUBLE_MIN = 2.2                        # pt: a smaller ring counts only drawn double (pipe and insulation)
+
+
+def _shaft_risers(page: RawPage, ann_layers, glyph_pids, anchors, designations, legend, risers) -> dict[str, list[dict]]:
+    """Risers in a shaft that no horizontal run reaches.
+
+    A shaft drawn in plan is a row of rings - one per riser passing the floor - and the labels beside it point at
+    them: KB01-6-80, VB01-2-125, VS01-2-65. Nothing is drawn running into the rings, because the pipes run
+    vertically through the plan. The attachment looked for pipe geometry at the end of each leader, found none
+    and left the label as "points at nothing", so the shaft's risers were not in the takeoff at all.
+
+    A label that names a pipe by the sheet's own list, carries a dimension, and whose leader ends on a ring of a
+    riser's size names that riser. One per ring - or as many as a count prefix says - and only for a ring no other
+    riser reading has already counted."""
+    from .geometry.core import dist as _dist
+    from .pipes.ownership import identity_from_text
+    gidx = GeometryIndex(page, set(ann_layers) if ann_layers else set(), glyph_pids)
+    round_ = []
+    for sym in gidx.symbols:
+        w, h = sym.bbox[2] - sym.bbox[0], sym.bbox[3] - sym.bbox[1]
+        if 1.0 <= max(w, h) <= SHAFT_MARK_MAX and min(w, h) >= 0.75 * max(w, h):
+            round_.append(((sym.bbox[0] + sym.bbox[2]) / 2, (sym.bbox[1] + sym.bbox[3]) / 2, max(w, h) / 2, sym.pid))
+    # A small ring alone is an end dot or a connection point; a small ring drawn double - the pipe and its
+    # insulation, one inside the other - is a riser, which is how a shaft of thin pipes is drawn. The outer ring
+    # stands for the riser; the inner one only says it is double.
+    rings = []
+    for cx, cy, r, pid in round_:
+        if 2 * r < SHAFT_DOUBLE_MIN:
+            continue
+        double = any(abs(x - cx) <= 0.6 and abs(y - cy) <= 0.6 and rr < r - 0.2 for x, y, rr, _ in round_)
+        if 2 * r >= SHAFT_MARK_MIN or double:
+            rings.append((cx, cy, r, pid))
+    if not rings:
+        return {}
+    taken = [tuple(r["point"]) for lst in risers.values() for r in lst]
+    des = {d.did: d for d in designations}
+    out: dict[str, list[dict]] = defaultdict(list)
+    for a in sorted(anchors, key=lambda x: x.anchor_id):
+        if a.state != "NO_PIPE_ATTACHMENT" or a.dn is None:
+            continue
+        d = des.get(a.designation_id)
+        if d is None or (legend is not None and not legend.names_a_pipe(d)):
+            continue
+        ex, ey = a.endpoint
+        # the nearest ring no other riser has: in a tight shaft two labels end between the same two rings
+        near = sorted((_dist((ex, ey), (cx, cy)), cx, cy, r, pid) for cx, cy, r, pid in rings
+                      if _dist((ex, ey), (cx, cy)) <= r + 2.0
+                      and not any(_dist((cx, cy), t) <= 1.0 for t in taken))
+        if not near:
+            continue
+        _, cx, cy, _, pid = near[0]
+        ident = identity_from_text(a.designation_display or a.designation, a.dn, a.system_token, None)
+        for _ in range(max(a.multiplier, 1)):
+            out[ident.key].append({"designation": ident.display, "dn": ident.dn, "point": [round(cx, 2), round(cy, 2)],
+                                   "symbol": pid, "source": "label_at_shaft_ring", "anchor_id": a.anchor_id,
+                                   "count_prefix": a.multiplier})
+        taken.append((cx, cy))
+    return out
 
 
 def _risers_from_dn_rows(designations, anchors, leaders, identities) -> dict[str, list[dict]]:
@@ -2751,6 +2814,22 @@ def _text_layer_pipe_names(pa: PageAnalysis) -> dict[str, list]:
     return out
 
 
+def _pair_key(name: str):
+    """A pair label as a pair, whatever order it is written in: KV02-3-/VV02-3-15 -> ((KV02-3, VV02-3), 15).
+    None for a single code. The codes are compared with letter and digit twins folded (KVO1 is KV01)."""
+    parts = [p for p in (name or "").upper().split("/") if p]
+    if len(parts) < 2:
+        return None
+    # the size is written once, after the last code, when the codes before it end in a dash: KV02-3-/VV02-3-15.
+    # A pair's identity key (KV01-3/VV01-3) carries no size at all.
+    m = re.match(r"^(.*?)-(\d{1,4})$", parts[-1]) if parts[0].endswith("-") else None
+    dn = m.group(2) if m else ""
+    if m:
+        parts[-1] = m.group(1)
+    fold = str.maketrans({"O": "0", "I": "1"})
+    return tuple(sorted(p.rstrip("-").translate(fold) for p in parts)), dn
+
+
 def reading_coverage(pa: PageAnalysis) -> dict[str, Any]:
     """How much of what the sheet names the reading actually carried through to a metre.
 
@@ -2777,7 +2856,8 @@ def reading_coverage(pa: PageAnalysis) -> dict[str, Any]:
         if _names_a_fitting(text, pa.legend):
             if not pa.legend.holds(d.bbox):          # the list's own row explains the code; it is no fitting
                 fittings[text].append([round(v, 1) for v in d.bbox])
-        elif pa.legend.names_a_pipe(d) and text not in pa.legend.components():
+        elif pa.legend.names_a_pipe(d) and text not in pa.legend.components() and not pa.legend.holds(d.bbox):
+            # the list's own rows (DS4, S3, VVCXX-3 ...) name codes, not runs: they are not pipes the reading missed
             named.add(text)
     # A sheet whose lettering is text says itself which pipes it names: every designation it writes, the split form
     # (code over a bare dimension) joined. That list, not the host's own parse of the lettering, is what the share
@@ -2787,10 +2867,18 @@ def reading_coverage(pa: PageAnalysis) -> dict[str, Any]:
         for name in [n for n in places if _names_a_fitting(n, pa.legend)]:
             places.pop(name)
         named = set(places)
-    measured = {q["designation"].upper() for q in pa.quantities if (q.get("confirmed_total_m") or 0) > 0}
+    # a riser is carried too: a shaft's stack has no horizontal metre, it has its count of storeys
+    measured = {q["designation"].upper() for q in pa.quantities
+                if (q.get("confirmed_total_m") or 0) > 0 or (q.get("riser_count") or 0) > 0}
+
+    measured_pairs = [k for k in (_pair_key(m) for m in measured) if k is not None]
 
     def carried(name: str) -> bool:
-        return name in measured or any(m.startswith(name + "-") or name.startswith(m + "-") for m in measured)
+        # a pair written the other way round is the same pair: KV02-3-/VV02-3-15 is VV02-3-/KV02-3-15; and a
+        # pair's riser row, named by its identity without a size, carries the label that gave it its size
+        k = _pair_key(name)
+        return name in measured or any(m.startswith(name + "-") or name.startswith(m + "-") for m in measured) \
+            or (k is not None and any(k[0] == m[0] and (k[1] == m[1] or not m[1]) for m in measured_pairs))
 
     got = {n for n in named if carried(n)}
     ink = {"drawn_pt": 0.0, "confirmed_pt": 0.0, "ambiguous_pt": 0.0, "unowned_pt": 0.0}

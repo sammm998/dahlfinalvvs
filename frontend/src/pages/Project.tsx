@@ -6,7 +6,8 @@ import { api, fileSize } from "../api";
 import { StatusBadge } from "../components/Status";
 import Tilted from "../components/Tilted";
 import { PriceTag } from "./Credits";
-import { ContractFormChoice, DisciplineChoice, Discipline, FALLBACK_DISCIPLINES, ProjectBadges } from "../components/ProjectForm";
+import { ContractFormChoice, DisciplineChoice, Discipline, FALLBACK_DISCIPLINES, ProjectBadges, AbtVariantChoice } from "../components/ProjectForm";
+import TechSpecPanel from "../components/TechSpecPanel";
 import { AbtPanel } from "../components/AbtRooms";
 
 const DATE = new Intl.DateTimeFormat(locale(), { day: "2-digit", month: "short", year: "numeric" });
@@ -23,12 +24,12 @@ export default function ProjectPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [disciplines, setDisciplines] = useState<Discipline[]>(FALLBACK_DISCIPLINES);
   // changing the contract form or the discipline afterwards: chosen here, said back, and only then sent
-  const [changing, setChanging] = useState<{ contract_form: string; discipline: string } | null>(null);
+  const [changing, setChanging] = useState<{ contract_form: string; discipline: string; tech_spec: boolean; abt_variant: string } | null>(null);
   useEffect(() => { api.disciplines().then((d) => d?.length && setDisciplines(d)).catch(() => { /* bara VVS */ }); }, []);
   const load = () => api.project(id!).then(setProject).catch((e) => setErr(e.message));
   const saveForm = async () => {
     if (!changing) return;
-    try { await api.setProjectForm(id!, { ...changing, confirm: true }); setChanging(null); await load(); }
+    try { await api.setProjectForm(id!, { ...changing, tech_spec: changing.contract_form === "ABT06" && changing.tech_spec, abt_variant: changing.contract_form === "ABT06" ? changing.abt_variant : undefined, confirm: true }); setChanging(null); await load(); }
     catch (ex: any) { setErr(ex.message); }
   };
   // the list only changes while a reading is running, or just after an upload; otherwise it can sit still
@@ -86,6 +87,8 @@ export default function ProjectPage() {
   };
   const canStart = (d: any) => !d.latest_job || ["COMPLETED", "FAILED"].includes(d.latest_job.status);
   if (!project) return <main>{err ? <p className="error">{err}</p> : "Laddar…"}</main>;
+  // ABT 06 med bara teknisk beskrivning: inga ritningar att ladda upp eller läsa, bara beskrivningen
+  const specOnly = project.abt_variant === "beskrivning";
   return (
     <main>
       <p className="crumb"><Link to="/projekt">Projekt</Link> / {project.name}</p>
@@ -95,10 +98,10 @@ export default function ProjectPage() {
           <p className="lead">{project.description || tr("Ritningar i projektet")}</p>
           <div className="row" style={{ gap: 8, marginTop: 8 }}>
             <ProjectBadges project={project} disciplines={disciplines} />
-            {!changing && <button className="ghost small" onClick={() => setChanging({ contract_form: project.contract_form, discipline: project.discipline })}>{tr("Ändra")}</button>}
+            {!changing && <button className="ghost small" onClick={() => setChanging({ contract_form: project.contract_form, discipline: project.discipline, tech_spec: !!project.tech_spec, abt_variant: project.abt_variant || "ritningar" })}>{tr("Ändra")}</button>}
           </div>
         </div>
-        <div className="row">
+        {!specOnly && <div className="row">
           <input type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/tiff,.png,.jpg,.jpeg,.tif,.tiff" multiple disabled={busy} ref={fileRef} id="pdf" className="file"
             title={tr("Vektor-PDF läses ur ritningens egna linjer. En skanning eller bild läses ur bildpunkterna och ska granskas.")}
             onChange={(e) => { const files = e.target.files; setPicked(files?.length === 1 ? files[0].name : files?.length ? trf("{0} filer valda", files.length) : ""); }} />
@@ -106,25 +109,27 @@ export default function ProjectPage() {
           <button onClick={upload} disabled={busy || !picked}>{busy ? tr("Laddar upp…") : tr("Ladda upp")}</button>
           {/* En ritning i taget svarar med meter. Hela handlingen svarar med vad den består av. */}
           <Link to={`/projects/${project.id}/analys`}><button className="secondary">{tr("Analysera projektet")}</button></Link>
-        </div>
+        </div>}
       </div>
       {changing && (
         <div className="card" style={{ marginTop: 18, maxWidth: 640 }}>
           <ContractFormChoice value={changing.contract_form} onChange={(v) => setChanging({ ...changing, contract_form: v })} name="contract-change" />
+          {changing.contract_form === "ABT06" && <AbtVariantChoice variant={changing.abt_variant} techSpec={changing.tech_spec} onChange={(v, t) => setChanging({ ...changing, abt_variant: v, tech_spec: t })} name="abt-variant-change" />}
           <DisciplineChoice value={changing.discipline} onChange={(v) => setChanging({ ...changing, discipline: v })} disciplines={disciplines} name="discipline-change" />
           <p className="muted small">{tr("Bytet gäller nya läsningar i projektet. Läsningar som redan är gjorda ändras inte.")}</p>
           <div className="row" style={{ gap: 8 }}>
-            <button onClick={saveForm} disabled={changing.contract_form === project.contract_form && changing.discipline === project.discipline}>{tr("Bekräfta ändringen")}</button>
+            <button onClick={saveForm} disabled={changing.contract_form === project.contract_form && changing.discipline === project.discipline && changing.tech_spec === !!project.tech_spec && changing.abt_variant === (project.abt_variant || "ritningar")}>{tr("Bekräfta ändringen")}</button>
             <button className="secondary" onClick={() => setChanging(null)}>{tr("Avbryt")}</button>
           </div>
         </div>
       )}
-      {project.contract_form === "ABT06" && <AbtPanel project={project} />}
+      {project.tech_spec && <TechSpecPanel project={project} />}
+      {project.contract_form === "ABT06" && !specOnly && <AbtPanel project={project} />}
       {progress && <p role="status" aria-live="polite">{progress}</p>}
       {notice && <p role="status">{notice}</p>}
       {err && <p className="error" style={{ marginTop: 18, whiteSpace: "pre-line" }}>{err}</p>}
 
-      {project.drawings.length > 0 && <div className="row" style={{ marginTop: 18 }}>
+      {!specOnly && <>{project.drawings.length > 0 && <div className="row" style={{ marginTop: 18 }}>
         <button className="secondary small" disabled={busy} onClick={() => setSelected(new Set(project.drawings.filter((d: any) => canStart(d) && d.latest_job?.status !== "COMPLETED").map((d: any) => d.id)))}>{tr("Välj oanalyserade")}</button>
         <button className="secondary small" disabled={busy || !selected.size} onClick={() => setSelected(new Set())}>{tr("Avmarkera")}</button>
         <button disabled={busy || !selected.size} onClick={startSelected}>{trf("Analysera valda ({0})", selected.size)}</button>
@@ -158,7 +163,7 @@ export default function ProjectPage() {
           </Tilted>
         ))}
         {project.drawings.length === 0 && <div className="empty">{tr("Inga ritningar ännu — ladda upp den första.")}</div>}
-      </div>
+      </div></>}
     </main>
   );
 }
