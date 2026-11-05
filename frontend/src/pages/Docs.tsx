@@ -367,7 +367,7 @@ const SECTIONS: Sec[] = [
         <p>
           Ingen köper credits och ingen läsning dras från ett eget saldo. Alla konton delar en <b>gemensam budget på
           10 000 kr</b> för det som faktiskt kostar pengar: anropen till AI-modellerna – agenten, röstsamtalet, andra
-          blicken och AI-tilldelningen i analysen. Läsningen av ritningar och tekniska beskrivningar, projektanalysen,
+          blicken, AI-tilldelningen i analysen och AI-kontrollen av tekniska beskrivningar. Läsningen av ritningar och tekniska beskrivningar, projektanalysen,
           kalkylen, anbudet, mängdningsverktyget, CAD-rummet och exporterna ingår.
         </p>
         <p className="pull">{tr("Alla som loggar in ser samma sak: vad som är kvar, vad som använts, till vad och av vem.")}</p>

@@ -151,6 +151,8 @@ class TechSpec(Base):
     title: Mapped[str] = mapped_column(String(255), default="")
     items: Mapped[list] = mapped_column(JSON, default=list)
     stats: Mapped[dict] = mapped_column(JSON, default=dict)
+    # AI-kontrollen (tb_ai.py): vad som kan ha missats och vilken katalograd en post är - förslag, aldrig mängder
+    ai: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
@@ -772,6 +774,7 @@ _ADDED_COLUMNS = (
     ("projects", "tech_spec", "BOOLEAN DEFAULT FALSE"),
     ("projects", "abt_variant", "VARCHAR(16) DEFAULT ''"),
     ("api_spend", "user_id", "VARCHAR(32) DEFAULT ''"),
+    ("tech_specs", "ai", "JSON"),
     ("api_spend", "user_email", "VARCHAR(255) DEFAULT ''"),
 )
 

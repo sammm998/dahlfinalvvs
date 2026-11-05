@@ -169,6 +169,10 @@ export const api = {
   uploadTechSpec: (projectId: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/tech-specs`, { method: "POST", body: fd }); },
   techSpec: (id: string) => req(`/api/tech-specs/${id}`),
   deleteTechSpec: (id: string) => req(`/api/tech-specs/${id}`, { method: "DELETE" }),
+  // AI-kontrollen: missat och val i katalogen, billigt och ur den gemensamma budgeten
+  techSpecAi: (id: string) => req(`/api/tech-specs/${id}/ai`, { method: "POST" }),
+  techSpecMissed: (id: string, key: string, accept: boolean) =>
+    req(`/api/tech-specs/${id}/ai/missed/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accept }) }),
   techSpecMail: (id: string, body: { ids?: string[]; to?: string }) =>
     req(`/api/tech-specs/${id}/mail`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   catalog: () => req("/api/catalog"),

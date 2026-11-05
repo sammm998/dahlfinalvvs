@@ -18,7 +18,9 @@ type Item = {
   spec: Record<string, string>; text: string; category: string; subcategory: string; ama_code: string; page: number;
   parent: string; supplied_by: string; inferred: string;
   match: { status: "hittad" | "möjlig" | "saknas" | "allmänt" | "annan"; hits: Hit[]; in_catalog: boolean; note: string;
-           rsk?: { value: string | null; kind: "förslag" | "storlek"; name: string; variants?: { rsk: string; name: string; size: string | null }[] } | null };
+           rsk?: { value: string | null; kind: "förslag" | "storlek" | "ai"; name: string; sure?: boolean; before?: string | null;
+                   variants?: { rsk: string; name: string; size: string | null }[] } | null;
+           ai?: { ref: string; name: string; sure: boolean } };
 };
 type Draft = { maker: string; subject: string; text: string; html: string; mailto: string; eml: string; n: number;
                rows: { pos: string; code: string; name: string; qty: string; maker: string; spec: string; numbers: string }[] };
@@ -59,6 +61,8 @@ export default function TechSpecPanel({ project }: { project: any }) {
   const [catUrl, setCatUrl] = useState("");
   const [catBusy, setCatBusy] = useState(false);
   const [catMsg, setCatMsg] = useState("");
+  const [aiOn, setAiOn] = useState<boolean>(() => { try { return localStorage.getItem("vvs.tb.ai") !== "0"; } catch { return true; } });
+  const [aiBusy, setAiBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const catFile = useRef<HTMLInputElement>(null);
 
@@ -79,9 +83,22 @@ export default function TechSpecPanel({ project }: { project: any }) {
     const f = file.current?.files?.[0];
     if (!f) return;
     setBusy(true); setErr("");
-    try { const s = await api.uploadTechSpec(project.id, f); await loadList(s.id); if (file.current) file.current.value = ""; }
+    try {
+      const s = await api.uploadTechSpec(project.id, f); await loadList(s.id); if (file.current) file.current.value = "";
+      if (aiOn && s.status === "COMPLETED" && !s.ai) await runAi(s.id);
+    }
     catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
+  const runAi = async (id = active) => {
+    setAiBusy(true); setErr("");
+    try { await api.techSpecAi(id); setData(await api.techSpec(id)); }
+    catch (e: any) { setErr(e.message); } finally { setAiBusy(false); }
+  };
+  const decide = async (key: string, accept: boolean) => {
+    try { await api.techSpecMissed(active, key, accept); setData(await api.techSpec(active)); }
+    catch (e: any) { setErr(e.message); }
+  };
+  const toggleAi = (v: boolean) => { setAiOn(v); try { localStorage.setItem("vvs.tb.ai", v ? "1" : "0"); } catch { /* bara den här gången */ } };
 
   const items: Item[] = data?.items ?? [];
   const shown = useMemo(() => {
@@ -147,7 +164,10 @@ export default function TechSpecPanel({ project }: { project: any }) {
         <div className="row">
           <input type="file" accept="application/pdf,.pdf" ref={file} id="tspec-file" className="file" onChange={() => setErr("")} />
           <label className="pick" htmlFor="tspec-file">{tr("Välj beskrivning (PDF)…")}</label>
-          <button onClick={upload} disabled={busy}>{busy ? tr("Läser…") : tr("Läs beskrivningen")}</button>
+          <label className="check small" title={tr("Letar efter det läsaren kan ha missat och väljer rätt artikel i katalogen där det finns flera. Bara text och bara det osäkra skickas, så det kostar några öre per beskrivning ur den gemensamma budgeten.")}>
+            <input type="checkbox" checked={aiOn} onChange={(e) => toggleAi(e.target.checked)} />{tr("AI-kontroll")}
+          </label>
+          <button onClick={upload} disabled={busy || aiBusy}>{aiBusy ? tr("AI-kontroll…") : busy ? tr("Läser…") : tr("Läs beskrivningen")}</button>
         </div>
       </div>
 
@@ -197,6 +217,45 @@ export default function TechSpecPanel({ project }: { project: any }) {
             <span style={{ flex: 1 }} />
             <button className="secondary small" onClick={csv}>{tr("Exportera CSV")}</button>
             <button className="secondary small" onClick={async () => { if (confirm(tr("Ta bort beskrivningen?"))) { await api.deleteTechSpec(active); setActive(""); await loadList(""); } }}>{tr("Ta bort")}</button>
+          </div>
+
+          <div className="tspec-ai" style={{ marginTop: 12, padding: "10px 12px", border: "1px solid var(--line, #e3e8ec)", borderRadius: 8 }}>
+            <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <b>{tr("AI-kontroll")}</b>
+              {data.ai ? (
+                <span className="muted small">
+                  {trf("{0} poster fick ett val i katalogen · {1} möjligen missade · {2} godkända", data.ai.picked, data.ai.missed.length, data.ai.accepted)}
+                  {" · "}
+                  {data.ai.calls === 0
+                    ? tr("ur cachen, utan kostnad")
+                    : trf("kostade {0} kr ({1} anrop)", Number(data.ai.kr).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }), data.ai.calls)}
+                </span>
+              ) : <span className="muted small">{tr("Inte körd. Letar efter det som kan ha missats och väljer artikel där katalogen har flera – för några öre.")}</span>}
+              <span style={{ flex: 1 }} />
+              <button className="secondary small" disabled={aiBusy} onClick={() => runAi()}>
+                {aiBusy ? tr("Kör…") : data.ai ? tr("Kör igen") : tr("Kör AI-kontroll")}
+              </button>
+            </div>
+            {data.ai?.missed?.length > 0 && (
+              <div className="tablewrap" style={{ marginTop: 8 }}>
+                <table className="qty">
+                  <thead><tr><th>{tr("Möjligen missat")}</th><th>{tr("Fabrikat")}</th><th>{tr("Typ")}</th><th>{tr("Sida")}</th><th>{tr("Står i beskrivningen")}</th><th></th></tr></thead>
+                  <tbody>
+                    {data.ai.missed.map((m: any) => (
+                      <tr key={m.key}>
+                        <td>{m.name}</td><td>{m.manufacturer_text || "–"}</td><td>{m.type || "–"}{m.rsk ? ` · RSK ${m.rsk}` : ""}</td>
+                        <td>{m.page}</td><td className="muted small">{m.line_text}</td>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <button className="small" onClick={() => decide(m.key, true)}>{tr("Lägg till")}</button>{" "}
+                          <button className="ghost small" onClick={() => decide(m.key, false)}>{tr("Avfärda")}</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="muted small">{tr("Förslag från AI:n, kontrollerade mot raden de står på. Det du lägger till blir en post utan antal – antalet tas ur ritning eller beskrivning.")}</p>
+              </div>
+            )}
           </div>
 
           <div className="matbar" style={{ marginTop: 12 }}>
@@ -256,6 +315,7 @@ export default function TechSpecPanel({ project }: { project: any }) {
                           <td>{it.type || "–"}{it.or_equal && <span className="muted small"> {tr("el. likv.")}</span>}</td>
                           <td className="lf-mono tspec-rsk">
                             {it.rsk.length ? it.rsk.join(", ")
+                              : it.match.rsk?.kind === "ai" ? <span title={it.match.rsk.name}><i>{it.match.rsk.value}</i> <span className={`badge small${it.match.rsk.sure ? "" : " warn"}`}>{it.match.rsk.sure ? tr("AI-val") : tr("AI-val, kontrollera")}</span></span>
                               : it.match.rsk?.value ? <span title={it.match.rsk.name}><i>{it.match.rsk.value}</i> <span className="badge small">{tr("förslag")}</span></span>
                               : it.match.rsk?.kind === "storlek" ? <span className="badge small warn">{trf("välj storlek ({0})", it.match.rsk.variants?.length ?? 0)}</span>
                               : "–"}

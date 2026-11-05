@@ -29,6 +29,7 @@ from vvs_engine.tb.catalog import find_pdf_link, index_pdf, unwrap_url
 from vvs_engine.tb.mail import drafts_by_maker
 from vvs_engine.tb.match import MaterialIndex
 
+from . import api_budget
 from .auth import current_admin, current_user
 from .db import Project, TechSpec, User, get_db
 from .storage import storage
@@ -182,10 +183,21 @@ def _spec(db: Session, user: User, sid: str) -> TechSpec:
     return s
 
 
+def _ai_out(s: TechSpec) -> dict[str, Any] | None:
+    a = s.ai
+    if not a:
+        return None
+    return {k: a.get(k) for k in ("status", "model", "ran_at", "by", "kr", "calls", "cached_calls", "tokens",
+                                  "lines_sent", "asked", "error")} | {
+        "picked": len(a.get("picks") or {}),
+        "missed": [m for m in (a.get("missed") or []) if m.get("state") == "förslag"],
+        "accepted": sum(1 for m in (a.get("missed") or []) if m.get("state") == "godkänd")}
+
+
 def _spec_out(s: TechSpec) -> dict[str, Any]:
     return {"id": s.id, "project_id": s.project_id, "filename": s.filename, "n_pages": s.n_pages,
             "size_bytes": s.size_bytes, "status": s.status, "error": s.error, "title": s.title,
-            "stats": s.stats or {}, "created_at": s.created_at}
+            "stats": s.stats or {}, "created_at": s.created_at, "ai": _ai_out(s)}
 
 
 async def _read_capped(file: UploadFile, cap: int) -> bytes:
@@ -254,9 +266,67 @@ def item_match(ix: MaterialIndex, it: dict[str, Any]) -> dict[str, Any]:
     return ix.match(it)
 
 
-def matched_items(s: TechSpec) -> list[dict[str, Any]]:
+def matched_items(s: TechSpec, with_ai: bool = True) -> list[dict[str, Any]]:
+    from .tb_ai import overlay
     ix = material_index()
-    return [{**it, "match": item_match(ix, it)} for it in (s.items or [])]
+    picks = ((s.ai or {}).get("picks") or {}) if with_ai else {}
+    return [{**it, "match": overlay(item_match(ix, it), picks.get(it.get("id")))} for it in (s.items or [])]
+
+
+# ---------------------------------------------------------------- AI-kontrollen
+
+@router.post("/api/tech-specs/{spec_id}/ai")
+def run_ai_check(spec_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Låt en språkmodell leta efter det läsaren kan ha missat och välja katalograd där det finns flera
+    kandidater. Billigt: bara text, bara det osäkra, korta svar och cache (tb_ai.py). Kostnaden dras från den
+    gemensamma budgeten. Samma beskrivning en gång till kostar ingenting."""
+    from . import tb_ai
+    s = _spec(db, user, spec_id)
+    if s.status != "COMPLETED":
+        raise HTTPException(409, "Beskrivningen är inte läst")
+    api_budget.require()
+    try:
+        s.ai = tb_ai.run(s, matched_items(s, with_ai=False), user.email)
+    except api_budget.BudgetExhausted as e:
+        raise HTTPException(402, str(e)) from None
+    except RuntimeError as e:
+        raise HTTPException(503, f"AI-kontrollen kunde inte köras: {e}") from None
+    except Exception:
+        import logging
+        logging.getLogger("vvs.tb_ai").exception("AI-kontrollen misslyckades")
+        raise HTTPException(502, "AI-kontrollen kunde inte köras just nu. Försök igen.") from None
+    db.commit()
+    return _ai_out(s)
+
+
+class MissedIn(BaseModel):
+    accept: bool
+
+
+@router.post("/api/tech-specs/{spec_id}/ai/missed/{key}")
+def decide_missed(spec_id: str, key: str, body: MissedIn, user: User = Depends(current_user),
+                  db: Session = Depends(get_db)):
+    """Godkänn ett AI-förslag (det blir en post, utan antal) eller avfärda det."""
+    from sqlalchemy.orm.attributes import flag_modified
+    from . import tb_ai
+    s = _spec(db, user, spec_id)
+    a = dict(s.ai or {})
+    missed = [dict(m) for m in a.get("missed") or []]
+    m = next((x for x in missed if x.get("key") == key), None)
+    if m is None:
+        raise HTTPException(404, "Förslaget finns inte")
+    if m.get("state") == "förslag":
+        m["state"] = "godkänd" if body.accept else "avfärdad"
+        if body.accept:
+            items = list(s.items or [])
+            items.append(tb_ai.as_item(m, items, user.email))
+            s.items = items
+            flag_modified(s, "items")
+    a["missed"] = missed
+    s.ai = a
+    flag_modified(s, "ai")
+    db.commit()
+    return _ai_out(s)
 
 
 def _facets(items: list[dict[str, Any]]) -> dict[str, Any]:
@@ -312,6 +382,8 @@ def mail_draft(spec_id: str, body: MailIn, user: User = Depends(current_user), d
 
 def _rsk_text(m: dict[str, Any]) -> str:
     r = m.get("rsk") or {}
+    if r.get("kind") == "ai":
+        return f"{r.get('value')} (AI-val{'' if r.get('sure') else ', kontrollera'})"
     if r.get("kind") == "storlek":
         return "välj storlek: " + ", ".join(f"{v.get('size') or ''} {v['rsk']}".strip() for v in r.get("variants") or [])
     return r.get("value") or ""
