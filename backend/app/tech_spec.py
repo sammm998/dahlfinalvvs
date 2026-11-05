@@ -26,7 +26,7 @@ from starlette.concurrency import run_in_threadpool
 
 from vvs_engine.tb import read_tech_spec_bytes
 from vvs_engine.tb.catalog import find_pdf_link, index_pdf, unwrap_url
-from vvs_engine.tb.mail import draft
+from vvs_engine.tb.mail import drafts_by_maker
 from vvs_engine.tb.match import MaterialIndex
 
 from .auth import current_admin, current_user
@@ -302,8 +302,16 @@ def mail_draft(spec_id: str, body: MailIn, user: User = Depends(current_user), d
     if not chosen:
         raise HTTPException(422, "Inga poster att fråga om: allt finns i materialboken eller katalogen.")
     p = db.get(Project, s.project_id)
-    return draft(chosen, project=p.name if p else "", document=s.title or s.filename, to=body.to,
-                 sender=body.sender or user.email)
+    drafts = drafts_by_maker(chosen, project=p.name if p else "", document=s.title or s.filename, to=body.to,
+                             sender=body.sender or user.email)
+    return {"drafts": drafts, "n": len(chosen)}
+
+
+def _rsk_text(m: dict[str, Any]) -> str:
+    r = m.get("rsk") or {}
+    if r.get("kind") == "storlek":
+        return "välj storlek: " + ", ".join(f"{v.get('size') or ''} {v['rsk']}".strip() for v in r.get("variants") or [])
+    return r.get("value") or ""
 
 
 @router.get("/api/tech-specs/{spec_id}/items.csv")
@@ -312,6 +320,7 @@ def tech_spec_csv(spec_id: str, user: User = Depends(current_user), db: Session 
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(["Kod", "Slag", "Benämning", "Antal", "Enhet", "Mängd som skrivet", "Fabrikat", "Typ", "RSK",
+                "RSK förslag",
                 "Art.nr", "Eller likvärdig", "Kategori", "Underkategori", "AMA", "Sida", "Status", "Träff", "Källa",
                 "Specifikation"])
     for it in matched_items(s):
@@ -319,7 +328,8 @@ def tech_spec_csv(spec_id: str, user: User = Depends(current_user), db: Session 
         h = m["hits"][0] if m["hits"] else {}
         q = it.get("total_quantity")
         w.writerow([it["code"], it["kind"], it["name"], "" if q is None else str(q).replace(".", ","), it["unit"],
-                    it["quantity_text"], it["manufacturer"], it["type"], " ".join(it["rsk"]), " ".join(it["art_nr"]),
+                    it["quantity_text"], it["manufacturer"], it["type"], " ".join(it["rsk"]), _rsk_text(m),
+                    " ".join(it["art_nr"]),
                     "ja" if it["or_equal"] else "", it["category"], it["subcategory"], it["ama_code"], it["page"],
                     m["status"], " ".join(x for x in (h.get("ref"), h.get("name")) if x), h.get("source", ""),
                     "; ".join(f"{k} {v}" for k, v in (it.get("spec") or {}).items())])

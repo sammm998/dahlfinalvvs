@@ -290,11 +290,24 @@ def test_what_is_nowhere_is_missing_and_gets_a_draft(index, spec):
     furo152 = {**_by(spec, code="B202B")[0], "type": "FURO 152", "code": "B201B", "rsk": []}
     m = index.match(furo152)
     assert m["status"] == "saknas" and not m["hits"]
-    d = draft([furo152], project="Tvätthall Årjäng", document="12.4 Teknisk beskrivning", to="inkop@example.com")
-    assert d["subject"].startswith("Förfrågan: Golvbrunn")
-    assert "B201B – Golvbrunn, 1 st" in d["body"] and "Fabrikat: Furhoff typ FURO 152" in d["body"]
-    assert "Storlek 273 x 273 x 250mm" in d["body"] and "sida 2" in d["body"]
+    d = draft([furo152], project="Tvätthall Årjäng", document="12.4 Teknisk beskrivning", to="inkop@example.com",
+              maker="Furhoff")
+    assert d["subject"] == "Prisförfrågan Furhoff: Golvbrunn – Tvätthall Årjäng"
+    assert "1. B201B – Golvbrunn, 1 st" in d["text"] and "Furhoff FURO 152 · Storlek 273 x 273 x 250mm" in d["text"]
+    assert "<table" in d["html"] and "<td" in d["html"] and "FURO 152" in d["html"]
     assert d["mailto"].startswith("mailto:inkop%40example.com?subject=")
+    assert "X-Unsent: 1" in d["eml"] and "Content-Type: text/html" in d["eml"]
+
+
+def test_a_request_goes_to_each_maker_with_its_own_items(spec):
+    from vvs_engine.tb.mail import drafts_by_maker
+    items = [it for it in spec["items"] if it["kind"] in ("post", "tillbehor")]
+    ds = drafts_by_maker(items, project="P")
+    makers = [d["maker"] for d in ds]
+    assert makers[-1] == "Övrigt" and "Furhoff" in makers and "Broen" in makers
+    assert sum(d["n"] for d in ds) == len(items)
+    furhoff = next(d for d in ds if d["maker"] == "Furhoff")
+    assert all(r["maker"].startswith("Furhoff") for r in furhoff["rows"])
 
 
 def test_a_catalog_link_from_a_mail_is_unwrapped_and_its_pdf_found():
@@ -314,3 +327,63 @@ def test_a_catalog_pdf_is_indexed_line_by_line_with_its_pages():
     idx = index_pdf(doc.tobytes(), origin="test")
     assert idx["pages"][0]["page"] == 1
     assert idx["pages"][0]["lines"] == ["Furo 142 golvbrunn 273x273 7115125"]   # numret hör till raden före
+
+
+# ---------------------------------------------------------------- att hitta numret när beskrivningen inte skriver det
+
+BOOK2 = [
+    {"a": "5060392", "n": "20 AT 4003A20 smutsfilter", "e": "st", "p": 900.0},
+    {"a": "5060393", "n": "25 AT 4003A25 smutsfilter", "e": "st", "p": 1000.0},
+    {"a": "4507415", "n": "15 AT 3700 kulventil inv gg", "e": "st", "p": 200.0},
+    {"a": "4507416", "n": "20 AT 3700 kulventil inv gg", "e": "st", "p": 240.0},
+    {"a": "7636402", "n": "Furhoffs 1200 rfri tvättränna, h", "e": "st", "p": 9000.0},
+    {"a": "2830236", "n": "75 Wafix PP lock f rensrör", "e": "st", "p": 50.0},
+    {"a": "2830520", "n": "75 Wafix PP rensrör m lock", "e": "st", "p": 300.0},
+    {"a": "2830521", "n": "110 Wafix PP rensrör m lock", "e": "st", "p": 400.0},
+    {"a": "1551066", "n": "18x15 Geberit Mapress radiatorfördelare", "e": "st", "p": 700.0},
+    {"a": "1450420", "n": "15x1,2 Mapress elförz rör 3 m", "e": "m", "p": 90.0},
+    {"a": "1450421", "n": "18x1,2 Mapress elförz rör 3 m", "e": "m", "p": 110.0},
+]
+
+
+@pytest.fixture(scope="module")
+def book2():
+    ix = MaterialIndex()
+    ix.add_material_book(BOOK2)
+    return ix
+
+
+def _it(**kw):
+    base = {"kind": "post", "code": "", "name": "", "manufacturer": "", "type": "", "rsk": [], "art_nr": [],
+            "text": "", "spec": {}, "category": "", "subcategory": ""}
+    return {**base, **kw}
+
+
+def test_armatec_is_found_by_its_at_number_and_the_size_the_post_writes(book2):
+    """Materialboken skriver inte Armatec: '25 AT 4003A25 smutsfilter'. Storleken står ihop med modellen."""
+    m = book2.match(_it(name="Smutsfilter", manufacturer="Armatec", type="AT 4003A", spec={"Ansl. nr.": "25"}))
+    assert m["status"] == "möjlig" and m["hits"][0]["ref"] == "5060393"
+    assert m["rsk"] == {"value": "5060393", "kind": "förslag", "name": "25 AT 4003A25 smutsfilter"}
+
+
+def test_without_a_size_the_sizes_are_listed_and_no_number_is_guessed(book2):
+    m = book2.match(_it(name="Kulventiler", manufacturer="Armatec", type="AT3700"))
+    assert m["status"] == "möjlig" and m["rsk"]["kind"] == "storlek" and m["rsk"]["value"] is None
+    assert [v["rsk"] for v in m["rsk"]["variants"]] == ["4507415", "4507416"]
+
+
+def test_a_plural_name_finds_the_singular_article(book2):
+    m = book2.match(_it(name="Tvättrännor", manufacturer="Furhoff", type="40512H", spec={"Storlek": "1200 x 451 mm"}))
+    assert m["status"] == "möjlig" and m["hits"][0]["ref"] == "7636402"
+
+
+def test_a_lid_for_the_article_is_not_the_article(book2):
+    m = book2.match(_it(name="Rensrör", manufacturer="Wafix", text="Rensrör Wafix grå PP med lock."))
+    assert m["hits"][0]["ref"] in ("2830520", "2830521") and m["rsk"]["kind"] == "storlek"
+    assert "2830236" not in [v["rsk"] for v in m["rsk"]["variants"]]
+
+
+def test_a_pipe_run_matches_straight_pipe_not_a_manifold(book2):
+    m = book2.match(_it(name="Tryckluft", manufacturer="Geberit", type="Mapress", subcategory="Ledningar av stålrör",
+                        spec={"Fabrikat": "Geberits typ Mapress elförzinkade"}))
+    assert m["status"] == "möjlig" and {h["ref"] for h in m["hits"]} <= {"1450420", "1450421"}

@@ -82,7 +82,9 @@ def test_the_whole_flow(client, pdf):
 
     mail = client.post(f"/api/tech-specs/{s['id']}/mail", json={"ids": [b202["id"]], "to": "inkop@example.com"},
                        headers=H).json()
-    assert "B202B" in mail["body"] and mail["subject"].startswith("Förfrågan") and mail["mailto"].startswith("mailto:")
+    d0 = mail["drafts"][0]
+    assert mail["n"] == 1 and d0["maker"] == "Furhoff" and "B202B" in d0["text"] and d0["subject"].startswith("Prisförfrågan")
+    assert d0["mailto"].startswith("mailto:") and "<table" in d0["html"] and "X-Unsent: 1" in d0["eml"]
 
     csv = client.get(f"/api/tech-specs/{s['id']}/items.csv", headers=H)
     assert csv.status_code == 200 and "B202B" in csv.text and "Golvbrunnar" in csv.text
