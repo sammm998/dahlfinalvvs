@@ -13,7 +13,9 @@ from .source_model import AssignmentTransport
 
 CLAUDE_MODEL = 'claude-opus-5-5'
 # USD per million tokens (Anthropic first-party API): input, output, cache read, cache write (5 minutes)
-PRICES = {'claude-opus-5-5': (4.00, 20.00, 0.20, 5.00)}
+PRICES = {'claude-opus-5-5': (4.00, 20.00, 0.20, 5.00),
+          # Anthropics mest kapabla modell: tänker alltid (ingen thinking-parameter skickas), samma output_config
+          'claude-fable-5-2': (8.00, 40.00, 0.20, 10.00)}
 
 
 def anthropic_key():

@@ -689,7 +689,7 @@ class AnalyzeIn(BaseModel):
     assignment_mode: Literal["combined", "dimension", "model", "compare"] = "combined"
     source_style: str = "auto"
     # vilken språkmodell som avgör rörens beteckningar - eller ingen, då ritningens egna belägg avgör
-    ai_model: Literal["none", "gpt-6-astra", "gpt-6.1-sol", "claude-opus-5-5", "gemini-pro"] | None = None
+    ai_model: Literal["none", "gpt-6-astra", "gpt-6.1-sol", "claude-opus-5-5", "claude-fable-5-2", "gemini-pro"] | None = None
     scale_ratio: float | None = Field(default=None, ge=1, le=20000, allow_inf_nan=False)
     page: int = Field(default=0, ge=0)
 

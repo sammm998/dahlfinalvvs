@@ -8,9 +8,10 @@ NONE = 'none'
 ASTRA = 'gpt-6-astra'
 SOL = 'gpt-6.1-sol'
 OPUS = 'claude-opus-5-5'
+FABLE = 'claude-fable-5-2'
 GEMINI = 'gemini-pro'
-CHOICES = (NONE, ASTRA, SOL, OPUS, GEMINI)
-LABELS = {NONE: 'Utan AI', ASTRA: 'GPT-6 Astra', SOL: 'GPT-6.1 Sol', OPUS: 'Claude Opus 5.5', GEMINI: 'Gemini Pro'}
+CHOICES = (NONE, ASTRA, SOL, OPUS, FABLE, GEMINI)
+LABELS = {NONE: 'Utan AI', ASTRA: 'GPT-6 Astra', SOL: 'GPT-6.1 Sol', OPUS: 'Claude Opus 5.5', FABLE: 'Claude Fable 5.2', GEMINI: 'Gemini Pro'}
 
 
 def model_id(choice):
@@ -41,7 +42,7 @@ def available():
     from .claude_model import configured as claude_ready
     from .gemini_model import configured as gemini_ready
     openai = openai_ready()
-    return {NONE: True, ASTRA: openai, SOL: openai, OPUS: claude_ready(), GEMINI: gemini_ready()}
+    return {NONE: True, ASTRA: openai, SOL: openai, OPUS: claude_ready(), FABLE: claude_ready(), GEMINI: gemini_ready()}
 
 
 def transport(choice):
@@ -49,9 +50,9 @@ def transport(choice):
     if choice in (ASTRA, SOL):
         from .source_model import transport as openai_transport
         return openai_transport(model_id(choice))
-    if choice == OPUS:
+    if choice in (OPUS, FABLE):
         from .claude_model import transport as claude_transport
-        return claude_transport(OPUS)
+        return claude_transport(choice)
     if choice == GEMINI:
         from .gemini_model import transport as gemini_transport
         return gemini_transport(model_id(choice))

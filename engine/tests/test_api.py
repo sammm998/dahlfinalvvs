@@ -1319,7 +1319,7 @@ def test_a_reading_without_ai_needs_no_model_connection(client, synthetic_pdf, m
     options=client.get('/api/analysis-options',headers=H).json()
     assert [(m['id'], m['available']) for m in options['ai_models']] == [
         ('none', True), ('gpt-6-astra', False), ('gpt-6.1-sol', False), ('claude-opus-5-5', False),
-        ('gemini-pro', False)]
+        ('claude-fable-5-2', False), ('gemini-pro', False)]
     assert options['ai_default']=='none'
 
 

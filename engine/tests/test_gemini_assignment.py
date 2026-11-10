@@ -53,7 +53,7 @@ def test_images_go_as_inline_bytes():
 def test_every_model_is_a_choice_and_unconnected_ones_have_no_transport(monkeypatch):
     for name in ('OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'VVS_OPENAI_CONFIG_FILE'):
         monkeypatch.delenv(name, raising=False)
-    assert ai_models.CHOICES == ('none', 'gpt-6-astra', 'gpt-6.1-sol', 'claude-opus-5-5', 'gemini-pro')
+    assert ai_models.CHOICES == ('none', 'gpt-6-astra', 'gpt-6.1-sol', 'claude-opus-5-5', 'claude-fable-5-2', 'gemini-pro')
     assert not any(v for k, v in ai_models.available().items() if k != 'none')
     assert all(ai_models.transport(c) is None for c in ai_models.CHOICES)
     monkeypatch.setenv('VVS_SOL_MODEL', 'gpt-6.1-sol-2026')
