@@ -104,16 +104,22 @@ def run(s, items_with_match: list[dict[str, Any]], user_email: str = "") -> dict
     stats = {"calls": 0, "cached_calls": 0, "tokens": 0, "kr": 0.0}
     ask = make_ask(stats)
     raw = [{k: v for k, v in it.items() if k != "match"} for it in items_with_match]
-    with storage.open(s.storage_key) as fh:
-        doc = pymupdf.open(stream=fh.read(), filetype="pdf")
+    doc = None
+    if (getattr(s, "source", "tb") or "tb") == "tb":
+        # en IFC-modell har inga rader att ha missat: antalet är antalet objekt. Bara valet i katalogen.
+        with storage.open(s.storage_key) as fh:
+            doc = pymupdf.open(stream=fh.read(), filetype="pdf")
     try:
         # de två delarna är oberoende: samtidigt, var och en med vem som körde (för den gemensamma budgeten)
         with ThreadPoolExecutor(max_workers=2) as pool:
-            fm = pool.submit(contextvars.copy_context().run, tb_ai.find_missed, doc, raw, ask)
+            fm = pool.submit(contextvars.copy_context().run, tb_ai.find_missed, doc, raw, ask) if doc is not None \
+                else None
             fp = pool.submit(contextvars.copy_context().run, tb_ai.find_picks, items_with_match, ask)
-            missed, picks = fm.result(), fp.result()
+            missed = fm.result() if fm else {"lines_sent": 0, "calls": 0, "missed": []}
+            picks = fp.result()
     finally:
-        doc.close()
+        if doc is not None:
+            doc.close()
     # det någon redan bestämt står kvar: ett godkänt förslag är en post nu och kommer inte tillbaka, ett avfärdat
     # föreslås inte igen
     decided = {m["key"]: m for m in ((s.ai or {}).get("missed") or []) if m.get("key") and m.get("state") != "förslag"}

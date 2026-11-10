@@ -153,6 +153,8 @@ class TechSpec(Base):
     stats: Mapped[dict] = mapped_column(JSON, default=dict)
     # AI-kontrollen (tb_ai.py): vad som kan ha missats och vilken katalograd en post är - förslag, aldrig mängder
     ai: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
+    # tb = teknisk beskrivning (PDF), ifc = IFC-modell: samma poster, samma matchning
+    source: Mapped[str] = mapped_column(String(8), default="tb")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
@@ -775,6 +777,7 @@ _ADDED_COLUMNS = (
     ("projects", "abt_variant", "VARCHAR(16) DEFAULT ''"),
     ("api_spend", "user_id", "VARCHAR(32) DEFAULT ''"),
     ("tech_specs", "ai", "JSON"),
+    ("tech_specs", "source", "VARCHAR(8) DEFAULT 'tb'"),
     ("api_spend", "user_email", "VARCHAR(255) DEFAULT ''"),
 )
 

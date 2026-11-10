@@ -197,7 +197,7 @@ def _ai_out(s: TechSpec) -> dict[str, Any] | None:
 def _spec_out(s: TechSpec) -> dict[str, Any]:
     return {"id": s.id, "project_id": s.project_id, "filename": s.filename, "n_pages": s.n_pages,
             "size_bytes": s.size_bytes, "status": s.status, "error": s.error, "title": s.title,
-            "stats": s.stats or {}, "created_at": s.created_at, "ai": _ai_out(s)}
+            "stats": s.stats or {}, "created_at": s.created_at, "ai": _ai_out(s), "source": s.source or "tb"}
 
 
 async def _read_capped(file: UploadFile, cap: int) -> bytes:
@@ -248,10 +248,54 @@ async def upload_tech_spec(project_id: str, file: UploadFile = File(...), user: 
 
 
 @router.get("/api/projects/{project_id}/tech-specs")
-def list_tech_specs(project_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def list_tech_specs(project_id: str, source: str = "tb", user: User = Depends(current_user),
+                    db: Session = Depends(get_db)):
     p = _project(db, user, project_id)
-    rows = db.query(TechSpec).filter(TechSpec.project_id == p.id).order_by(TechSpec.created_at.desc()).all()
-    return [_spec_out(s) for s in rows]
+    q = db.query(TechSpec).filter(TechSpec.project_id == p.id)
+    q = q.filter(TechSpec.source == "ifc") if source == "ifc" else q.filter((TechSpec.source == "tb") | (TechSpec.source.is_(None)))
+    return [_spec_out(s) for s in q.order_by(TechSpec.created_at.desc()).all()]
+
+
+MAX_IFC_BYTES = 500 * 1024 * 1024
+
+
+@router.post("/api/projects/{project_id}/ifc")
+async def upload_ifc(project_id: str, file: UploadFile = File(...), user: User = Depends(current_user),
+                     db: Session = Depends(get_db)):
+    """Ladda upp en IFC-modell (.ifc, eller .zip med en .ifc i) och läs den till VVS-material: varje produkttyp en
+    post med antal per våning, fabrikat och modell. Samma matchning mot Dahls katalog som en teknisk beskrivning."""
+    from vvs_engine.ifc import read_ifc_bytes
+    p = _project(db, user, project_id)
+    filename = os.path.basename(file.filename or "modell.ifc")
+    if not filename.lower().endswith((".ifc", ".zip", ".ifczip")):
+        raise HTTPException(400, "IFC-modellen ska vara en .ifc-fil eller en .zip med en .ifc i")
+    data = await _read_capped(file, MAX_IFC_BYTES)
+    sha = hashlib.sha256(data).hexdigest()
+    same = db.query(TechSpec).filter(TechSpec.project_id == p.id, TechSpec.sha256 == sha).first()
+    if same is not None:
+        return {**_spec_out(same), "duplicate": True}
+    try:
+        out = await run_in_threadpool(read_ifc_bytes, data)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    except Exception:
+        raise HTTPException(400, "IFC-filen kunde inte läsas")
+    if not out["items"]:
+        status, error = "FAILED", ("Modellen innehåller inga VVS-objekt (sanitet, armaturer, ventiler, rör, brunnar ...). "
+                                   "Är det arkitektens eller konstruktörens modell utan installationer?")
+    else:
+        status, error = "COMPLETED", ""
+    title = out["meta"].get("inner") or filename
+    s = TechSpec(project_id=p.id, filename=filename, storage_key="", sha256=sha, size_bytes=len(data), n_pages=0,
+                 status=status, error=error, title=os.path.splitext(title)[0][:255], items=out["items"],
+                 stats={**out["stats"], "schema": out["meta"].get("schema"), "storeys": out["meta"].get("storeys"),
+                        "classes": out["meta"].get("classes")}, source="ifc")
+    db.add(s)
+    db.flush()
+    ext = ".zip" if data[:2] == b"PK" else ".ifc"
+    s.storage_key = storage.put(f"ifc/{p.id}/{s.id}{ext}", io.BytesIO(data))
+    db.commit()
+    return {**_spec_out(s), "duplicate": False}
 
 
 def item_match(ix: MaterialIndex, it: dict[str, Any]) -> dict[str, Any]:
@@ -350,7 +394,7 @@ def get_tech_spec(spec_id: str, user: User = Depends(current_user), db: Session 
 @router.delete("/api/tech-specs/{spec_id}")
 def delete_tech_spec(spec_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     s = _spec(db, user, spec_id)
-    storage.delete_prefix(f"techspecs/{s.project_id}/{s.id}")
+    storage.delete_prefix(f"{'ifc' if s.source == 'ifc' else 'techspecs'}/{s.project_id}/{s.id}")
     db.delete(s)
     db.commit()
     return {"ok": True}
