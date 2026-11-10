@@ -39,6 +39,8 @@ PRICE_DEFAULTS: dict[str, dict[str, Any]] = {
     "gpt-4o-mini-transcribe": {"in": 1.25, "out": 5.0, "audio_in": 3.0,
                                "source": "OpenAI, listpris för gpt-4o-mini-transcribe (openai.com/api/pricing)",
                                "date": "2026-11-05"},
+    "claude-fable-5-2": {"in": 8.0, "cached": 0.20, "out": 40.0, "cache_write": 10.0,
+                         "source": "Anthropics prislista för Claude Fable 5.2 (claude_model.PRICES)", "date": "2026-11-10"},
     "gemini-pro-latest": {"in": 2.0, "cached": 0.20, "out": 12.0,
                           "source": "trevorfox.com/tools/calculators/llm-cost/google-gemini/gemini-3.1-pro "
                                     "(tredjepartskälla för Gemini 3.1 Pro - kontrollera mot ai.google.dev)",

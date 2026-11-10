@@ -143,13 +143,15 @@ def turns(choice: str, system: str, schemas: list[dict]):
             return None
         from openai import OpenAI
         return OpenAITurns(OpenAI(api_key=key, timeout=300, max_retries=1), ai_models.model_id(choice), system, schemas)
-    if choice == ai_models.OPUS:
-        from .claude_model import anthropic_key, CLAUDE_MODEL
+    if choice in (ai_models.OPUS, ai_models.FABLE):
+        from .claude_model import anthropic_key
         key = anthropic_key()
         if not key:
             return None
         import anthropic
-        return ClaudeTurns(anthropic.Anthropic(api_key=key, timeout=600, max_retries=1), CLAUDE_MODEL, system, schemas)
+        # Fable tänker längre per tur än Opus: mer tid innan anropet ges upp
+        timeout = 1200 if choice == ai_models.FABLE else 600
+        return ClaudeTurns(anthropic.Anthropic(api_key=key, timeout=timeout, max_retries=1), choice, system, schemas)
     if choice == ai_models.GEMINI:
         from .gemini_model import gemini_key
         key = gemini_key()

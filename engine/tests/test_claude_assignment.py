@@ -75,3 +75,21 @@ def test_the_choice_of_model_and_what_it_cost_are_read_back(tmp_path, monkeypatc
     assert (got['requests'], got['tokens_in'], got['tokens_out'], got['cached_tokens'], got['usd']) == (
         2, 5000, 300, 3000, 0.0144)
     assert got['label'] == 'Claude Opus 5.5' and not got['fell_back_to_rules']
+
+
+def test_fable_is_a_choice_asked_the_same_way_and_priced_as_fable():
+    """Claude Fable 5.2: samma fråga, ingen thinking-parameter (den tänker alltid), eget pris och egen rad."""
+    assert ai_models.FABLE == 'claude-fable-5-2' and ai_models.FABLE in ai_models.CHOICES
+    assert ai_models.LABELS[ai_models.FABLE] == 'Claude Fable 5.2'
+    answer = [{'stretch': 4, 'label': 2, 'designation_idx': 0, 'ambiguous': False}]
+    messages = FakeMessages(answer)
+    ask = ClaudeTransport(SimpleNamespace(beta=SimpleNamespace(messages=messages)), ai_models.FABLE)
+    assert ask([question()]) == answer
+    request, = messages.requests
+    assert request['model'] == 'claude-fable-5-2' and 'thinking' not in request and 'temperature' not in request
+    assert request['fallbacks'] == 'default'
+    used, = ask.usage
+    # 1000 nya in à 8 + 200 ut à 40 + 3000 ur cachen à 0,20 USD per miljon
+    assert used['usd'] == usd('claude-fable-5-2', 4000, 200, 3000, 0) == 0.0166
+    from app import api_budget
+    assert api_budget.price_for('claude-fable-5-2', api_budget.PRICE_DEFAULTS)['out'] == 40.0
