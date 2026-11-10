@@ -39,7 +39,8 @@ const qty = (it: Item) => {
   return `${q.toLocaleString(locale(), { maximumFractionDigits: 2 })} ${it.unit || "st"}`;
 };
 
-export default function TechSpecPanel({ project }: { project: any }) {
+export default function TechSpecPanel({ project, source = "tb" }: { project: any; source?: "tb" | "ifc" }) {
+  const ifc = source === "ifc";
   const [specs, setSpecs] = useState<any[]>([]);
   const [active, setActive] = useState<string>("");
   const [data, setData] = useState<any>(null);
@@ -67,7 +68,7 @@ export default function TechSpecPanel({ project }: { project: any }) {
   const catFile = useRef<HTMLInputElement>(null);
 
   const loadList = async (pick?: string) => {
-    const rows = await api.techSpecs(project.id);
+    const rows = await api.techSpecs(project.id, source);
     setSpecs(rows);
     const id = pick || active || rows[0]?.id || "";
     setActive(id);
@@ -84,7 +85,7 @@ export default function TechSpecPanel({ project }: { project: any }) {
     if (!f) return;
     setBusy(true); setErr("");
     try {
-      const s = await api.uploadTechSpec(project.id, f); await loadList(s.id); if (file.current) file.current.value = "";
+      const s = ifc ? await api.uploadIfc(project.id, f) : await api.uploadTechSpec(project.id, f); await loadList(s.id); if (file.current) file.current.value = "";
       if (aiOn && s.status === "COMPLETED" && !s.ai) await runAi(s.id);
     }
     catch (e: any) { setErr(e.message); } finally { setBusy(false); }
@@ -156,18 +157,20 @@ export default function TechSpecPanel({ project }: { project: any }) {
     <section className="card tspec" style={{ marginTop: 18 }}>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <h2 style={{ margin: 0 }}>{tr("Teknisk beskrivning")}</h2>
+          <h2 style={{ margin: 0 }}>{ifc ? tr("IFC-modell") : tr("Teknisk beskrivning")}</h2>
           <p className="muted small" style={{ maxWidth: 640 }}>
-            {tr("Beskrivningen läses utan ritningar: varje post med kod, antal, fabrikat, typ, RSK och specifikation, tillbehören under \"Härtill\", produkter som kravtexten nämner, allmänt material och arbete. Allt söks i materialboken och Dahls katalog.")}
+            {ifc
+              ? tr("Ladda upp en IFC-modell (.ifc eller .zip). Varje VVS-produkt i modellen – sanitet, armaturer, ventiler, rör, brunnar, pumpar, beredare – blir en post med antal per våning, fabrikat och modell. Antalet är antalet objekt i modellen; rörlängder är modellens egna längder. Allt söks i Dahls katalog.")
+              : tr("Beskrivningen läses utan ritningar: varje post med kod, antal, fabrikat, typ, RSK och specifikation, tillbehören under \"Härtill\", produkter som kravtexten nämner, allmänt material och arbete. Allt söks i materialboken och Dahls katalog.")}
           </p>
         </div>
         <div className="row">
-          <input type="file" accept="application/pdf,.pdf" ref={file} id="tspec-file" className="file" onChange={() => setErr("")} />
-          <label className="pick" htmlFor="tspec-file">{tr("Välj beskrivning (PDF)…")}</label>
+          <input type="file" accept={ifc ? ".ifc,.ifczip,.zip" : "application/pdf,.pdf"} ref={file} id={ifc ? "ifc-file" : "tspec-file"} className="file" onChange={() => setErr("")} />
+          <label className="pick" htmlFor={ifc ? "ifc-file" : "tspec-file"}>{ifc ? tr("Välj IFC-modell…") : tr("Välj beskrivning (PDF)…")}</label>
           <label className="check small" title={tr("Letar efter det läsaren kan ha missat och väljer rätt artikel i katalogen där det finns flera. Bara text och bara det osäkra skickas, så det kostar några öre per beskrivning ur den gemensamma budgeten.")}>
             <input type="checkbox" checked={aiOn} onChange={(e) => toggleAi(e.target.checked)} />{tr("AI-kontroll")}
           </label>
-          <button onClick={upload} disabled={busy || aiBusy}>{aiBusy ? tr("AI-kontroll…") : busy ? tr("Läser…") : tr("Läs beskrivningen")}</button>
+          <button onClick={upload} disabled={busy || aiBusy}>{aiBusy ? tr("AI-kontroll…") : busy ? tr("Läser…") : ifc ? tr("Läs modellen") : tr("Läs beskrivningen")}</button>
         </div>
       </div>
 
@@ -179,7 +182,7 @@ export default function TechSpecPanel({ project }: { project: any }) {
           ? <><b>{tr("Dahls produktkatalog")}</b> ({catalog.katalog.pages ? `${catalog.katalog.pages} ${tr("sidor")}` : `${(catalog.katalog.n ?? 0).toLocaleString(locale())} ${tr("artiklar")}`})</>
           : <span>{tr("Dahls produktkatalog är inte inläst än")}</span>}
       </p>
-      <details className="settings tspec-cat">
+      {!ifc && <details className="settings tspec-cat">
         <summary>{tr("Läs in Dahls katalog")}</summary>
         <div className="row" style={{ marginTop: 8 }}>
           <input className="grow" value={catUrl} placeholder={catalog?.catalog_url ?? "https://katalog.dahl.se/…"} onChange={(e) => setCatUrl(e.target.value)} />
@@ -189,7 +192,7 @@ export default function TechSpecPanel({ project }: { project: any }) {
         </div>
         <p className="muted small">{tr("Katalogen gäller för hela tjänsten och för beskrivningar som redan är lästa. Bara en administratör kan läsa in den.")}</p>
         {catMsg && <p className="small">{catMsg}</p>}
-      </details>
+      </details>}
 
       {err && <p className="error">{err}</p>}
 
@@ -202,13 +205,15 @@ export default function TechSpecPanel({ project }: { project: any }) {
           ))}
         </div>
       )}
-      {!specs.length && <p className="empty">{tr("Ingen beskrivning uppladdad än. Välj en PDF ovan.")}</p>}
+      {!specs.length && <p className="empty">{ifc ? tr("Ingen IFC-modell uppladdad än.") : tr("Ingen beskrivning uppladdad än. Välj en PDF ovan.")}</p>}
 
       {data && (
         <>
           <div className="row tspec-head" style={{ marginTop: 14, gap: 10, flexWrap: "wrap" }}>
             <b>{data.title || data.filename}</b>
-            <span className="badge">{trf("{0} sidor", data.n_pages)}</span>
+            {ifc
+              ? <><span className="badge">{data.stats?.schema}</span><span className="badge">{trf("{0} VVS-objekt", data.stats?.elements ?? 0)}</span><span className="badge">{trf("{0} våningar", data.stats?.storeys?.length ?? 0)}</span></>
+              : <span className="badge">{trf("{0} sidor", data.n_pages)}</span>}
             <span className="badge">{trf("{0} poster", items.length)}</span>
             <span className="badge ok">{trf("{0} hittade", counts["hittad"] ?? 0)}</span>
             <span className="badge warn">{trf("{0} möjliga", counts["möjlig"] ?? 0)}</span>
@@ -230,7 +235,7 @@ export default function TechSpecPanel({ project }: { project: any }) {
                     ? tr("ur cachen, utan kostnad")
                     : trf("kostade {0} kr ({1} anrop)", Number(data.ai.kr).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }), data.ai.calls)}
                 </span>
-              ) : <span className="muted small">{tr("Inte körd. Letar efter det som kan ha missats och väljer artikel där katalogen har flera – för några öre.")}</span>}
+              ) : <span className="muted small">{ifc ? tr("Inte körd. Väljer artikel i katalogen där det finns flera kandidater – för några öre.") : tr("Inte körd. Letar efter det som kan ha missats och väljer artikel där katalogen har flera – för några öre.")}</span>}
               <span style={{ flex: 1 }} />
               <button className="secondary small" disabled={aiBusy} onClick={() => runAi()}>
                 {aiBusy ? tr("Kör…") : data.ai ? tr("Kör igen") : tr("Kör AI-kontroll")}
@@ -292,7 +297,7 @@ export default function TechSpecPanel({ project }: { project: any }) {
                 <table className="qty tspec-table">
                   <thead><tr>
                     <th></th><th>{tr("Kod")}</th><th>{tr("Benämning")}</th><th className="num">{tr("Antal")}</th>
-                    <th>{tr("Fabrikat")}</th><th>{tr("Typ")}</th><th>{tr("RSK")}</th><th>{tr("Status")}</th><th>{tr("Träff")}</th><th>{tr("Sida")}</th>
+                    <th>{tr("Fabrikat")}</th><th>{tr("Typ")}</th><th>{tr("RSK")}</th><th>{tr("Status")}</th><th>{tr("Träff")}</th><th>{ifc ? tr("Per våning") : tr("Sida")}</th>
                   </tr></thead>
                   <tbody>
                     {rows.map((it) => {
@@ -322,13 +327,13 @@ export default function TechSpecPanel({ project }: { project: any }) {
                           </td>
                           <td><span className={`badge ${st.cls}`}>{tr(st.label)}</span></td>
                           <td className="tspec-hit">{h ? <>{h.ref} · {h.name}{h.source === "katalog" && <span className="muted small"> ({tr("katalogen")})</span>}</> : <span className="muted small">{it.match.note ? tr(it.match.note.startsWith("Levereras av") ? "Ingår ej i VS" : it.match.note) : "–"}</span>}</td>
-                          <td className="muted">{it.page}</td>
+                          <td className="muted small">{ifc ? it.spec?.["Per våning"] || "–" : it.page || "–"}</td>
                         </tr>,
                         open === it.id && (
                           <tr key={it.id + "-d"} className="tspec-detail"><td colSpan={10}>
                             <p className="small" style={{ whiteSpace: "normal" }}>{it.text || "–"}</p>
                             {Object.keys(it.spec).length > 0 && <p className="small"><b>{tr("Specifikation")}:</b> {Object.entries(it.spec).map(([k, v]) => `${k} ${v}`).join(" · ")}</p>}
-                            <p className="small muted">{it.ama_code} {it.subcategory} · {tr("sida")} {it.page}{it.inferred && <> · {it.inferred}</>}</p>
+                            <p className="small muted">{it.ama_code} {it.subcategory}{it.page ? <> · {tr("sida")} {it.page}</> : null}{it.inferred && <> · {it.inferred}</>}</p>
                             {it.match.rsk?.kind === "storlek" && (
                               <div className="small tspec-sizes"><b>{tr("Beskrivningen anger ingen storlek – välj:")}</b>
                                 <ul>{it.match.rsk.variants?.map((v) => <li key={v.rsk}><b className="lf-mono">{v.rsk}</b> {v.name}</li>)}</ul>

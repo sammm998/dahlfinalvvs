@@ -165,7 +165,9 @@ export const api = {
   setSettings: (body: any) => req("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   materials: (qs: string) => req(`/api/materials?${qs}`),
   // ---- teknisk beskrivning (backend/app/tech_spec.py) ----
-  techSpecs: (projectId: string) => req(`/api/projects/${projectId}/tech-specs`),
+  techSpecs: (projectId: string, source: "tb" | "ifc" = "tb") => req(`/api/projects/${projectId}/tech-specs?source=${source}`),
+  // en IFC-modell (.ifc eller .zip) läst till VVS-material: samma poster och matchning som en teknisk beskrivning
+  uploadIfc: (projectId: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/ifc`, { method: "POST", body: fd }); },
   uploadTechSpec: (projectId: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/tech-specs`, { method: "POST", body: fd }); },
   techSpec: (id: string) => req(`/api/tech-specs/${id}`),
   deleteTechSpec: (id: string) => req(`/api/tech-specs/${id}`, { method: "DELETE" }),

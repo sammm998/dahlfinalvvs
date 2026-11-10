@@ -22,6 +22,7 @@ export default function ProjectPage() {
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
+  const [ifcKey, setIfcKey] = useState(0);
   const [disciplines, setDisciplines] = useState<Discipline[]>(FALLBACK_DISCIPLINES);
   // changing the contract form or the discipline afterwards: chosen here, said back, and only then sent
   const [changing, setChanging] = useState<{ contract_form: string; discipline: string; tech_spec: boolean; abt_variant: string } | null>(null);
@@ -49,7 +50,9 @@ export default function ProjectPage() {
     try {
       for (const [i, f] of files.entries()) {
         setProgress(`${i + 1} / ${files.length} · ${f.name}`);
-        try { const result = await api.upload(id!, f); if (result.duplicate) duplicates++; else uploaded++; }
+        // en IFC-modell är ingen ritning: den läses till material i IFC-panelen nedanför
+        const ifc = /\.(ifc|ifczip|zip)$/i.test(f.name);
+        try { const result = ifc ? await api.uploadIfc(id!, f) : await api.upload(id!, f); if (result.duplicate) duplicates++; else uploaded++; if (ifc) setIfcKey((k) => k + 1); }
         catch (ex: any) { failed.push(f); errors.push(`${f.name}: ${ex.message}`); }
       }
       // clearing the field is tidying up after a finished upload, not part of it: if the input is gone by now
@@ -102,10 +105,10 @@ export default function ProjectPage() {
           </div>
         </div>
         {!specOnly && <div className="row">
-          <input type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/tiff,.png,.jpg,.jpeg,.tif,.tiff" multiple disabled={busy} ref={fileRef} id="pdf" className="file"
-            title={tr("Vektor-PDF läses ur ritningens egna linjer. En skanning eller bild läses ur bildpunkterna och ska granskas.")}
+          <input type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/tiff,.png,.jpg,.jpeg,.tif,.tiff,.ifc,.ifczip,.zip" multiple disabled={busy} ref={fileRef} id="pdf" className="file"
+            title={tr("Vektor-PDF läses ur ritningens egna linjer. En skanning eller bild läses ur bildpunkterna och ska granskas. En IFC-modell (.ifc eller .zip) läses till VVS-material.")}
             onChange={(e) => { const files = e.target.files; setPicked(files?.length === 1 ? files[0].name : files?.length ? trf("{0} filer valda", files.length) : ""); }} />
-          <label className="pick" htmlFor="pdf">{picked || tr("Välj PDF eller bild…")}</label>
+          <label className="pick" htmlFor="pdf">{picked || tr("Välj PDF, bild eller IFC…")}</label>
           <button onClick={upload} disabled={busy || !picked}>{busy ? tr("Laddar upp…") : tr("Ladda upp")}</button>
           {/* En ritning i taget svarar med meter. Hela handlingen svarar med vad den består av. */}
           <Link to={`/projects/${project.id}/analys`}><button className="secondary">{tr("Analysera projektet")}</button></Link>
@@ -124,6 +127,7 @@ export default function ProjectPage() {
         </div>
       )}
       {project.tech_spec && <TechSpecPanel project={project} />}
+      <TechSpecPanel key={`ifc-${ifcKey}`} project={project} source="ifc" />
       {project.contract_form === "ABT06" && !specOnly && <AbtPanel project={project} />}
       {progress && <p role="status" aria-live="polite">{progress}</p>}
       {notice && <p role="status">{notice}</p>}
