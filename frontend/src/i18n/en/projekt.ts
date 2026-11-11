@@ -598,4 +598,7 @@ export const projekt: Record<string, string> = {
   "Inte körd. Väljer artikel i katalogen där det finns flera kandidater – för några öre.": "Not run. Picks the catalogue article where there are several candidates – for a few öre.",
   "Välj PDF, bild eller IFC…": "Choose PDF, image or IFC…",
   "Vektor-PDF läses ur ritningens egna linjer. En skanning eller bild läses ur bildpunkterna och ska granskas. En IFC-modell (.ifc eller .zip) läses till VVS-material.": "A vector PDF is read from the drawing's own lines. A scan or image is read from its pixels and must be reviewed. An IFC model (.ifc or .zip) is read to plumbing material.",
+  "Eget förslag (granskas)": "Own suggestion (for review)",
+  "Eget förslag": "Own suggestion",
+  "Egna förslag – ingen exakt förskriven träff, för teknisk granskning:": "Own suggestions – no exact prescribed match, for technical review:",
 };

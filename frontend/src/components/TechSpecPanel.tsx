@@ -17,7 +17,8 @@ type Item = {
   total_quantity: number | null; manufacturer: string; type: string; rsk: string[]; art_nr: string[]; or_equal: boolean;
   spec: Record<string, string>; text: string; category: string; subcategory: string; ama_code: string; page: number;
   parent: string; supplied_by: string; inferred: string;
-  match: { status: "hittad" | "möjlig" | "saknas" | "allmänt" | "annan"; hits: Hit[]; in_catalog: boolean; note: string;
+  match: { status: "hittad" | "möjlig" | "förslag" | "saknas" | "allmänt" | "annan"; hits: Hit[]; in_catalog: boolean; note: string;
+           basis?: string; suggestions?: Hit[];
            rsk?: { value: string | null; kind: "förslag" | "storlek" | "ai"; name: string; sure?: boolean; before?: string | null;
                    variants?: { rsk: string; name: string; size: string | null }[] } | null;
            ai?: { ref: string; name: string; sure: boolean } };
@@ -29,7 +30,8 @@ const KIND: Record<string, string> = {
   post: "Post", tillbehor: "Tillbehör", omnamnd: "Omnämnd produkt", krav: "Allmänt material", arbete: "Arbete",
 };
 const STATUS: Record<string, { label: string; cls: string }> = {
-  hittad: { label: "Hittad", cls: "ok" }, "möjlig": { label: "Möjlig träff", cls: "warn" }, saknas: { label: "Saknas", cls: "bad" },
+  hittad: { label: "Hittad", cls: "ok" }, "möjlig": { label: "Möjlig träff", cls: "warn" },
+  "förslag": { label: "Eget förslag", cls: "warn" }, saknas: { label: "Saknas", cls: "bad" },
   "allmänt": { label: "Enligt ritning", cls: "" }, annan: { label: "Levereras av annan", cls: "" },
 };
 
@@ -297,7 +299,7 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                 <table className="qty tspec-table">
                   <thead><tr>
                     <th></th><th>{tr("Kod")}</th><th>{tr("Benämning")}</th><th className="num">{tr("Antal")}</th>
-                    <th>{tr("Fabrikat")}</th><th>{tr("Typ")}</th><th>{tr("RSK")}</th><th>{tr("Status")}</th><th>{tr("Träff")}</th><th>{ifc ? tr("Per våning") : tr("Sida")}</th>
+                    <th>{tr("Fabrikat")}</th><th>{tr("Typ")}</th><th>{tr("RSK")}</th><th>{tr("Status")}</th><th>{tr("Träff")}</th><th>{tr("Eget förslag (granskas)")}</th><th>{ifc ? tr("Per våning") : tr("Sida")}</th>
                   </tr></thead>
                   <tbody>
                     {rows.map((it) => {
@@ -319,18 +321,21 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                           <td>{it.manufacturer || "–"}</td>
                           <td>{it.type || "–"}{it.or_equal && <span className="muted small"> {tr("el. likv.")}</span>}</td>
                           <td className="lf-mono tspec-rsk">
-                            {it.rsk.length ? it.rsk.join(", ")
+                            {it.rsk.length ? it.rsk.map((r) => r.length === 7 ? `${r.slice(0, 3)} ${r.slice(3, 5)} ${r.slice(5)}` : r).join(", ")
                               : it.match.rsk?.kind === "ai" ? <span title={it.match.rsk.name}><i>{it.match.rsk.value}</i> <span className={`badge small${it.match.rsk.sure ? "" : " warn"}`}>{it.match.rsk.sure ? tr("AI-val") : tr("AI-val, kontrollera")}</span></span>
                               : it.match.rsk?.value ? <span title={it.match.rsk.name}><i>{it.match.rsk.value}</i> <span className="badge small">{tr("förslag")}</span></span>
                               : it.match.rsk?.kind === "storlek" ? <span className="badge small warn">{trf("välj storlek ({0})", it.match.rsk.variants?.length ?? 0)}</span>
                               : "–"}
                           </td>
                           <td><span className={`badge ${st.cls}`}>{tr(st.label)}</span></td>
-                          <td className="tspec-hit">{h ? <>{h.ref} · {h.name}{h.source === "katalog" && <span className="muted small"> ({tr("katalogen")})</span>}</> : <span className="muted small">{it.match.note ? tr(it.match.note.startsWith("Levereras av") ? "Ingår ej i VS" : it.match.note) : "–"}</span>}</td>
+                          <td className="tspec-hit">{h ? <>{h.ref} · {h.name}{h.source === "katalog" && <span className="muted small"> ({tr("katalogen")})</span>}</> : <span className="muted small">{it.match.note ? (it.match.note.startsWith("Levereras av") ? tr("Ingår ej i VS") : it.match.note) : "–"}</span>}</td>
+                          <td className="tspec-hit small">{it.match.suggestions?.[0]
+                            ? <>{it.match.suggestions[0].ref} · {it.match.suggestions[0].name} <span className="badge small warn">{tr("förslag")}</span></>
+                            : <span className="muted">–</span>}</td>
                           <td className="muted small">{ifc ? it.spec?.["Per våning"] || "–" : it.page || "–"}</td>
                         </tr>,
                         open === it.id && (
-                          <tr key={it.id + "-d"} className="tspec-detail"><td colSpan={10}>
+                          <tr key={it.id + "-d"} className="tspec-detail"><td colSpan={11}>
                             <p className="small" style={{ whiteSpace: "normal" }}>{it.text || "–"}</p>
                             {Object.keys(it.spec).length > 0 && <p className="small"><b>{tr("Specifikation")}:</b> {Object.entries(it.spec).map(([k, v]) => `${k} ${v}`).join(" · ")}</p>}
                             <p className="small muted">{it.ama_code} {it.subcategory}{it.page ? <> · {tr("sida")} {it.page}</> : null}{it.inferred && <> · {it.inferred}</>}</p>
@@ -344,7 +349,12 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                                 {it.match.hits.map((x, i) => <li key={i}><b>{x.ref}</b> {x.name} <span className="muted">– {x.source === "katalog" ? tr("Dahls katalog") : tr("materialboken")}, {x.why}{x.price != null && <>, {x.price.toLocaleString(locale(), { maximumFractionDigits: 2 })} kr/{x.unit || "st"}</>}</span></li>)}
                               </ul>
                             )}
-                            {(it.match.status === "saknas" || it.match.status === "möjlig") && <button className="secondary small" onClick={() => draft([it.id])}>{tr("Mejlutkast för den här")}</button>}
+                            {(it.match.suggestions?.length ?? 0) > 0 && (
+                              <div className="small"><b>{tr("Egna förslag – ingen exakt förskriven träff, för teknisk granskning:")}</b>
+                                <ul className="tspec-hits">{it.match.suggestions!.map((x, i) => <li key={i}><b>{x.ref}</b> {x.name} <span className="muted">– {x.why}</span></li>)}</ul>
+                              </div>
+                            )}
+                            {(it.match.status === "saknas" || it.match.status === "möjlig" || it.match.status === "förslag") && <button className="secondary small" onClick={() => draft([it.id])}>{tr("Mejlutkast för den här")}</button>}
                           </td></tr>
                         ),
                       ];

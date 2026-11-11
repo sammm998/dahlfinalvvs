@@ -28,6 +28,7 @@ from vvs_engine.tb import read_tech_spec_bytes
 from vvs_engine.tb.catalog import find_pdf_link, index_pdf, unwrap_url
 from vvs_engine.tb.mail import drafts_by_maker
 from vvs_engine.tb.match import MaterialIndex
+from vvs_engine.tb.rsk import pretty as rsk_pretty
 
 from . import api_budget
 from .auth import current_admin, current_user
@@ -379,7 +380,7 @@ def _facets(items: list[dict[str, Any]]) -> dict[str, Any]:
         return [{"value": k, "n": n} for k, n in sorted(c.items(), key=lambda kv: (kv[0] == "", kv[0].lower()))]
     status = Counter(it["match"]["status"] for it in items)
     return {"categories": count("category"), "manufacturers": count("manufacturer"), "kinds": count("kind"),
-            "status": [{"value": k, "n": status.get(k, 0)} for k in ("hittad", "möjlig", "saknas", "allmänt", "annan")
+            "status": [{"value": k, "n": status.get(k, 0)} for k in ("hittad", "möjlig", "förslag", "saknas", "allmänt", "annan")
                        if status.get(k, 0) or k in ("hittad", "möjlig", "saknas")]}
 
 
@@ -439,7 +440,7 @@ def tech_spec_csv(spec_id: str, user: User = Depends(current_user), db: Session 
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(["Kod", "Slag", "Benämning", "Antal", "Enhet", "Mängd som skrivet", "Fabrikat", "Typ", "RSK",
-                "RSK förslag",
+                "RSK förslag", "Grund", "Eget förslag (granskas)",
                 "Art.nr", "Eller likvärdig", "Kategori", "Underkategori", "AMA", "Sida", "Status", "Träff", "Källa",
                 "Specifikation"])
     for it in matched_items(s):
@@ -447,7 +448,9 @@ def tech_spec_csv(spec_id: str, user: User = Depends(current_user), db: Session 
         h = m["hits"][0] if m["hits"] else {}
         q = it.get("total_quantity")
         w.writerow([it["code"], it["kind"], it["name"], "" if q is None else str(q).replace(".", ","), it["unit"],
-                    it["quantity_text"], it["manufacturer"], it["type"], " ".join(it["rsk"]), _rsk_text(m),
+                    it["quantity_text"], it["manufacturer"], it["type"], " ".join(rsk_pretty(r) for r in it["rsk"]),
+                    _rsk_text(m), m.get("basis", ""),
+                    "; ".join(f"{x.get('ref')} {x.get('name')}" for x in (m.get("suggestions") or [])[:3]),
                     " ".join(it["art_nr"]),
                     "ja" if it["or_equal"] else "", it["category"], it["subcategory"], it["ama_code"], it["page"],
                     m["status"], " ".join(x for x in (h.get("ref"), h.get("name")) if x), h.get("source", ""),

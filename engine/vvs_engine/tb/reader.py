@@ -25,6 +25,8 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .rsk import find as rsk_find  # RSK i alla skrivsätt: 573 24 87, 573 2487, 5732487
+
 import pymupdf
 
 # ---------------------------------------------------------------- fabrikat
@@ -67,7 +69,6 @@ NOT_BRANDS = {"kv", "vv", "vvc", "s", "d", "av", "för", "med", "och", "en", "et
 AMA_CODE = re.compile(r"^(?:[A-ZÅÄÖ]{1,4}(?:\.\d+)*|\d{1,2})$")
 CODE_TOKEN = re.compile(r"^(?=.*[A-ZÅÄÖ])(?=.*\d)[A-ZÅÄÖ0-9][A-ZÅÄÖ0-9\-/.]{1,15}$")
 QTY = re.compile(r"^(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*([A-Za-zåäöÅÄÖ²³.]{1,8})?\.?$")
-RSK = re.compile(r"RSK[\s\-]*(?:nr\.?:?\s*)?(\d{7})\b", re.I)
 ART_NR = re.compile(r"Art\.?\s*nr\.?:?\s*([A-Za-z0-9][A-Za-z0-9\-/]*[A-Za-z0-9])", re.I)
 LEAD_QTY = re.compile(r"^(\d+)\s*st\.?\s+", re.I)
 OR_EQUAL = re.compile(r"eller\s+likvärdig", re.I)
@@ -506,7 +507,7 @@ class _Builder:
         self.n += 1
         it = Item(id=f"p{self.n}", kind="post", code=c["code"], name=_title(name), quantity=qty, unit=unit,
                   quantity_text=c["qty_text"], manufacturer=brand, manufacturer_text=raw, type=typ,
-                  rsk=sorted(set(RSK.findall(all_text))), art_nr=sorted(set(ART_NR.findall(all_text))),
+                  rsk=rsk_find(all_text), art_nr=sorted(set(ART_NR.findall(all_text))),
                   or_equal=bool(OR_EQUAL.search(all_text)), spec=dict(c["spec"]), text=text, category=cat,
                   subcategory=sub, ama_code=ama, ama_path=[{"code": h.code, "title": _title(h.title)} for h in c["path"]],
                   section=c["section"], page=c["page"] + 1, total_quantity=qty,
@@ -566,7 +567,7 @@ class _Builder:
         self.items.append(Item(
             id=f"p{self.n}", kind="tillbehor", code=parent.code, name=_title(name[:1].upper() + name[1:]),
             quantity=qty, unit="st" if qty is not None else "", quantity_text=(m.group(0).strip() if m else ""),
-            manufacturer=brand, manufacturer_text=raw, type=typ, rsk=sorted(set(RSK.findall(body))),
+            manufacturer=brand, manufacturer_text=raw, type=typ, rsk=rsk_find(body),
             art_nr=sorted(set(ART_NR.findall(body))), or_equal=bool(OR_EQUAL.search(body)), spec={}, text=body,
             category=parent.category, subcategory=parent.subcategory, ama_code=parent.ama_code,
             ama_path=parent.ama_path, section=parent.section, page=page + 1, parent=parent.id, total_quantity=total,
@@ -702,7 +703,7 @@ class _Builder:
                     self.items.append(Item(
                         id=f"p{self.n}", kind=kind, code="", name=_title(name[:1].upper() + name[1:]), quantity=qty,
                         unit=unit, quantity_text=qtext, manufacturer=brand, manufacturer_text=raw, type=typ,
-                        rsk=sorted(set(RSK.findall(sent))), art_nr=sorted(set(ART_NR.findall(sent))),
+                        rsk=rsk_find(sent), art_nr=sorted(set(ART_NR.findall(sent))),
                         or_equal=bool(OR_EQUAL.search(sent)), spec={}, text=sent, category=cat, subcategory=sub,
                         ama_code=ama, ama_path=ama_path, section="", page=page + 1, total_quantity=qty,
                         supplied_by=who, inferred=inferred))
