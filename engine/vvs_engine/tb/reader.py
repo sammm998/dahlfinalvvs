@@ -58,6 +58,51 @@ BRANDS: dict[str, str] = {
     "ta": "TA", "esbe": "ESBE", "esbes": "ESBE", "watts": "Watts", "honeywell": "Honeywell",
     "vaillant": "Vaillant", "bosch": "Bosch", "ctc": "CTC", "thermia": "Thermia", "duka": "Duka",
     "daikin": "Daikin", "panasonic": "Panasonic", "toshiba": "Toshiba", "samsung": "Samsung",
+    "wilo": "Wilo",
+    "xylem": "Xylem",
+    "lowara": "Lowara",
+    "ivt": "IVT",
+    "kamstrup": "Kamstrup",
+    "diehl": "Diehl",
+    "oventrop": "Oventrop",
+    "imi": "IMI",
+    "belimo": "Belimo",
+    "siemens": "Siemens",
+    "regin": "Regin",
+    "svedbergs": "Svedbergs",
+    "franke": "Franke",
+    "intra": "Intra",
+    "lindab": "Lindab",
+    "villeroy": "Villeroy & Boch",
+    "duravit": "Duravit",
+    "ksb": "KSB",
+    "flygt": "Flygt",
+    "kessel": "Kessel",
+    "purmo": "Purmo",
+    "rettig": "Rettig",
+    "calpeda": "Calpeda",
+    "dab": "DAB",
+    "ebara": "Ebara",
+    "viessmann": "Viessmann",
+    "stiebel": "Stiebel Eltron",
+    "eltron": "Stiebel Eltron",
+    "metro": "Metro Therm",
+    "bastec": "Bastec",
+    "grundfoss": "Grundfos",
+    "grundfos'": "Grundfos",
+    "thermias": "Thermia",
+    "wilos": "Wilo",
+    "zehnder": "Zehnder",
+    "lyngson": "Lyngson",
+    "sanipex": "Sanipex",
+    "ballofix": "Broen",
+    "nordic": "Nordic Tec",
+    "tour": "TA",
+    "cupori": "Cupori",
+    "mapress": "Geberit",
+    "sanha": "Sanha",
+    "conex": "Conex",
+    "bänninger": "Conex Bänninger"
 }
 
 # Ord som står före "typ" utan att vara ett fabrikat: ett system (KV typ EA), ett don, ett ord i texten.
@@ -69,7 +114,7 @@ NOT_BRANDS = {"kv", "vv", "vvc", "s", "d", "av", "för", "med", "och", "en", "et
 AMA_CODE = re.compile(r"^(?:[A-ZÅÄÖ]{1,4}(?:\.\d+)*|\d{1,2})$")
 CODE_TOKEN = re.compile(r"^(?=.*[A-ZÅÄÖ])(?=.*\d)[A-ZÅÄÖ0-9][A-ZÅÄÖ0-9\-/.]{1,15}$")
 QTY = re.compile(r"^(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*([A-Za-zåäöÅÄÖ²³.]{1,8})?\.?$")
-ART_NR = re.compile(r"Art\.?\s*nr\.?:?\s*([A-Za-z0-9][A-Za-z0-9\-/]*[A-Za-z0-9])", re.I)
+ART_NR = re.compile(r"Art\.?\s*nr\.?:?\s*((?:[A-Za-z]{1,4}\s)?[A-Za-z0-9][A-Za-z0-9\-/]*[A-Za-z0-9])", re.I)
 LEAD_QTY = re.compile(r"^(\d+)\s*st\.?\s+", re.I)
 OR_EQUAL = re.compile(r"eller\s+likvärdig", re.I)
 DOTS = re.compile(r"\.{6,}")
@@ -384,6 +429,17 @@ def _brand_in(text: str) -> tuple[str, str, str]:  # noqa: C901
     return "", "", ""
 
 
+def _brand_in_body(text: str) -> tuple[str, str, str]:
+    """Fabrikatet längre ner i positionens text: "Värmepump mark/vatten. Thermia Atlas 12 kW, RSK 621 73 05."
+    Bara i en mening som också har en modell eller ett RSK-nummer - ett fabrikat i förbigående
+    ("enligt Grundfos anvisningar") är ingen förskrivning."""
+    for sent in re.split(r"(?<=[.;])\s+|\n", text or ""):
+        b, raw, typ = _brand_in(sent)
+        if b and (rsk_find(sent) or re.search(r"\d", typ or "")) and not re.search(r"anvisning|instruktion|rekommend", sent, re.I):
+            return b, raw, typ
+    return "", "", ""
+
+
 def _lead_name(text: str) -> str:
     """Postens benämning ur textens början: "Golvbrunn av fabrikat ..." -> Golvbrunn."""
     first = re.split(r"(?<=[a-zåäö0-9])\.\s|\.$", text.strip())[0]
@@ -480,6 +536,8 @@ class _Builder:
         if not brand:
             in_title = _brand_in(c["title"])
             brand, raw, typ = in_title if in_title[0] else _brand_in(_first_sentence(text))
+            if not brand:
+                brand, raw, typ = _brand_in_body(text)
             if in_title[0]:
                 # "Mitsubishi Electric RAC" och i texten "Utomhusdel typ MUZ-FT25VGHZ(-SC)": serien ur rubriken,
                 # modellen ur texten

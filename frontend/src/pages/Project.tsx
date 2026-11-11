@@ -52,7 +52,8 @@ export default function ProjectPage() {
         setProgress(`${i + 1} / ${files.length} · ${f.name}`);
         // en IFC-modell är ingen ritning: den läses till material i IFC-panelen nedanför
         const ifc = /\.(ifc|ifczip|zip)$/i.test(f.name);
-        try { const result = ifc ? await api.uploadIfc(id!, f) : await api.upload(id!, f); if (result.duplicate) duplicates++; else uploaded++; if (ifc) setIfcKey((k) => k + 1); }
+        const list = /\.(eml|txt|docx|xlsx|xlsm|csv)$/i.test(f.name);
+        try { const result = ifc ? await api.uploadIfc(id!, f) : list ? await api.uploadMaterialList(id!, f) : await api.upload(id!, f); if (result.duplicate) duplicates++; else uploaded++; if (ifc || list) setIfcKey((k) => k + 1); }
         catch (ex: any) { failed.push(f); errors.push(`${f.name}: ${ex.message}`); }
       }
       // clearing the field is tidying up after a finished upload, not part of it: if the input is gone by now
@@ -105,7 +106,7 @@ export default function ProjectPage() {
           </div>
         </div>
         {!specOnly && <div className="row">
-          <input type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/tiff,.png,.jpg,.jpeg,.tif,.tiff,.ifc,.ifczip,.zip" multiple disabled={busy} ref={fileRef} id="pdf" className="file"
+          <input type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/tiff,.png,.jpg,.jpeg,.tif,.tiff,.ifc,.ifczip,.zip,.eml,.txt,.docx,.xlsx,.xlsm,.csv" multiple disabled={busy} ref={fileRef} id="pdf" className="file"
             title={tr("Vektor-PDF läses ur ritningens egna linjer. En skanning eller bild läses ur bildpunkterna och ska granskas. En IFC-modell (.ifc eller .zip) läses till VVS-material.")}
             onChange={(e) => { const files = e.target.files; setPicked(files?.length === 1 ? files[0].name : files?.length ? trf("{0} filer valda", files.length) : ""); }} />
           <label className="pick" htmlFor="pdf">{picked || tr("Välj PDF, bild eller IFC…")}</label>

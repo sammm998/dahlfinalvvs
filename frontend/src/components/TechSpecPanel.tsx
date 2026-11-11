@@ -17,6 +17,9 @@ type Item = {
   total_quantity: number | null; manufacturer: string; type: string; rsk: string[]; art_nr: string[]; or_equal: boolean;
   spec: Record<string, string>; text: string; category: string; subcategory: string; ama_code: string; page: number;
   parent: string; supplied_by: string; inferred: string;
+  quantity_from?: string; description_quantity?: number | null;
+  from_drawing?: { kind: "antal" | "meter"; quantity: number; unit: string; tag?: string; system?: string;
+                   sheets?: Record<string, number>; by_dn?: Record<string, number>; review_m?: number; no_scale?: boolean };
   match: { status: "hittad" | "möjlig" | "förslag" | "saknas" | "allmänt" | "annan"; hits: Hit[]; in_catalog: boolean; note: string;
            basis?: string; suggestions?: Hit[];
            rsk?: { value: string | null; kind: "förslag" | "storlek" | "ai"; name: string; sure?: boolean; before?: string | null;
@@ -87,9 +90,19 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
     if (!f) return;
     setBusy(true); setErr("");
     try {
-      const s = ifc ? await api.uploadIfc(project.id, f) : await api.uploadTechSpec(project.id, f); await loadList(s.id); if (file.current) file.current.value = "";
+      const isIfc = /\.(ifc|ifczip|zip)$/i.test(f.name), isPdf = /\.pdf$/i.test(f.name);
+      const s = ifc ? (isIfc ? await api.uploadIfc(project.id, f) : await api.uploadMaterialList(project.id, f))
+        : isPdf ? await api.uploadTechSpec(project.id, f) : await api.uploadMaterialList(project.id, f);
+      await loadList(s.id); if (file.current) file.current.value = "";
       if (aiOn && s.status === "COMPLETED" && !s.ai) await runAi(s.id);
     }
+    catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+  };
+  const [paste, setPaste] = useState("");
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const sendPaste = async () => {
+    setBusy(true); setErr("");
+    try { const s = await api.materialListText(project.id, paste, ""); setPaste(""); setPasteOpen(false); await loadList(s.id); }
     catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
   const runAi = async (id = active) => {
@@ -159,16 +172,24 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
     <section className="card tspec" style={{ marginTop: 18 }}>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <h2 style={{ margin: 0 }}>{ifc ? tr("IFC-modell") : tr("Teknisk beskrivning")}</h2>
+          <h2 style={{ margin: 0 }}>{ifc ? tr("Materiallista, BOM eller IFC-modell") : tr("Teknisk beskrivning")}</h2>
           <p className="muted small" style={{ maxWidth: 640 }}>
             {ifc
-              ? tr("Ladda upp en IFC-modell (.ifc eller .zip). Varje VVS-produkt i modellen – sanitet, armaturer, ventiler, rör, brunnar, pumpar, beredare – blir en post med antal per våning, fabrikat och modell. Antalet är antalet objekt i modellen; rörlängder är modellens egna längder. Allt söks i Dahls katalog.")
+              ? tr("Ladda upp en materiallista – ett mejl (.eml), text, Word, Excel eller CSV/BOM – eller en IFC-modell (.ifc/.zip), eller klistra in texten ur ett mejl. Varje position läses med all text som hör till den: fabrikat och RSK på raderna under räknas till positionen. Allt söks i Dahls katalog, och mängden hämtas från projektets ritningar när den står där.")
               : tr("Beskrivningen läses utan ritningar: varje post med kod, antal, fabrikat, typ, RSK och specifikation, tillbehören under \"Härtill\", produkter som kravtexten nämner, allmänt material och arbete. Allt söks i materialboken och Dahls katalog.")}
           </p>
         </div>
+        {pasteOpen && (
+          <div style={{ width: "100%", marginTop: 8 }}>
+            <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={8} style={{ width: "100%" }}
+              placeholder={tr("Klistra in materialet ur mejlet, t.ex.\n3 st cirkulationspump\nGrundfos Magna3 25-60, RSK 573 24 87")} />
+            <button className="small" disabled={busy || paste.trim().length < 5} onClick={sendPaste}>{tr("Läs texten")}</button>
+          </div>
+        )}
         <div className="row">
-          <input type="file" accept={ifc ? ".ifc,.ifczip,.zip" : "application/pdf,.pdf"} ref={file} id={ifc ? "ifc-file" : "tspec-file"} className="file" onChange={() => setErr("")} />
-          <label className="pick" htmlFor={ifc ? "ifc-file" : "tspec-file"}>{ifc ? tr("Välj IFC-modell…") : tr("Välj beskrivning (PDF)…")}</label>
+          <input type="file" accept={ifc ? ".ifc,.ifczip,.zip,.eml,.txt,.docx,.xlsx,.xlsm,.csv" : "application/pdf,.pdf,.eml,.txt,.docx,.xlsx,.csv"} ref={file} id={ifc ? "ifc-file" : "tspec-file"} className="file" onChange={() => setErr("")} />
+          <label className="pick" htmlFor={ifc ? "ifc-file" : "tspec-file"}>{ifc ? tr("Välj lista eller modell…") : tr("Välj beskrivning (PDF)…")}</label>
+          {ifc && <button className="secondary small" onClick={() => setPasteOpen(!pasteOpen)}>{tr("Klistra in mejltext")}</button>}
           <label className="check small" title={tr("Letar efter det läsaren kan ha missat och väljer rätt artikel i katalogen där det finns flera. Bara text och bara det osäkra skickas, så det kostar några öre per beskrivning ur den gemensamma budgeten.")}>
             <input type="checkbox" checked={aiOn} onChange={(e) => toggleAi(e.target.checked)} />{tr("AI-kontroll")}
           </label>
@@ -317,7 +338,9 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                             {it.kind !== "post" && <span className="badge small" style={{ marginLeft: 6 }}>{tr(KIND[it.kind])}</span>}
                             {it.supplied_by && <span className="badge small warn" style={{ marginLeft: 6 }}>{it.supplied_by.startsWith("Ingår") ? it.supplied_by : trf("Levereras av {0}", it.supplied_by)}</span>}
                           </td>
-                          <td className="num">{qty(it)}</td>
+                          <td className="num">{qty(it)}{it.quantity_from === "ritning" && (
+                            <span className="badge small ok" style={{ marginLeft: 4 }}
+                              title={it.description_quantity != null ? trf("Underlaget: {0}", it.description_quantity) : tr("Underlaget anger ingen mängd")}>{tr("ritning")}</span>)}</td>
                           <td>{it.manufacturer || "–"}</td>
                           <td>{it.type || "–"}{it.or_equal && <span className="muted small"> {tr("el. likv.")}</span>}</td>
                           <td className="lf-mono tspec-rsk">
@@ -337,6 +360,17 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                         open === it.id && (
                           <tr key={it.id + "-d"} className="tspec-detail"><td colSpan={11}>
                             <p className="small" style={{ whiteSpace: "normal" }}>{it.text || "–"}</p>
+                            {it.from_drawing && (
+                              <p className="small"><b>{tr("Mängd från ritning")}:</b>{" "}
+                                {it.from_drawing.kind === "antal"
+                                  ? <>{trf("{0} st {1}", it.from_drawing.quantity, it.from_drawing.tag ?? "")} – {Object.entries(it.from_drawing.sheets ?? {}).map(([k, n]) => `${k} (${n})`).join(", ")}</>
+                                  : <>{trf("{0} m i system {1}", it.from_drawing.quantity.toLocaleString(locale(), { maximumFractionDigits: 1 }), it.from_drawing.system ?? "")}
+                                    {Object.keys(it.from_drawing.by_dn ?? {}).length > 0 && <> · {Object.entries(it.from_drawing.by_dn!).map(([dn, m]) => `DN${dn} ${m.toLocaleString(locale(), { maximumFractionDigits: 1 })} m`).join(" · ")}</>}
+                                    {(it.from_drawing.review_m ?? 0) > 0 && <> · {trf("{0} m att granska", it.from_drawing.review_m!.toLocaleString(locale(), { maximumFractionDigits: 1 }))}</>}
+                                    {it.from_drawing.no_scale && <> · <span className="error">{tr("ett blad saknar skala")}</span></>}</>}
+                                {it.description_quantity != null && <span className="muted"> · {trf("underlaget anger {0}", it.description_quantity)}</span>}
+                              </p>
+                            )}
                             {Object.keys(it.spec).length > 0 && <p className="small"><b>{tr("Specifikation")}:</b> {Object.entries(it.spec).map(([k, v]) => `${k} ${v}`).join(" · ")}</p>}
                             <p className="small muted">{it.ama_code} {it.subcategory}{it.page ? <> · {tr("sida")} {it.page}</> : null}{it.inferred && <> · {it.inferred}</>}</p>
                             {it.match.rsk?.kind === "storlek" && (

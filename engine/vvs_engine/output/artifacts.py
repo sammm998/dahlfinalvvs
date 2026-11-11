@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import platform
 import subprocess
 import time
@@ -487,7 +488,9 @@ def document_quantities(sheets: list[dict]) -> dict[str, Any]:
 
 # The names of what one sheet's reading is written down as. Every one of them is about a single sheet, so on a
 # set each sheet gets its own copy under sheets/<page>/ and the reader is served the sheet they are looking at.
-SHEET_FILES = ("vector-designations.json", "leader-forensics.json", "leader-family-report.json",
+_TAG_LIKE = re.compile(r"(?<![A-Za-z0-9])[A-ZÅÄÖ]{1,5}\d{2,4}[A-Z]?(?![A-Za-z])")
+
+SHEET_FILES = ("vector-designations.json", "component-tags.json", "leader-forensics.json", "leader-family-report.json",
                "pipe-code-anchors.json", "pipe-representation-families.json", "pipe-geometry-inventory.json",
                "drawn-system-families.json", "declined-geometry.json", "pipe-topology.json",
                "physical-pipes.json", "review-pipes.json", "pipe-extent-frontiers.json", "quantities.json",
@@ -535,6 +538,10 @@ def sheet_reading(pa, doc, doc_legend=None, profile: dict | None = None,
     # profile report is about, and the per-sheet copies carry the labels alone.
     out["vector-designations.json"] = {"designations": des_out,
                                        **({"text_rows": [r.as_dict() for r in pa.lines]} if forensics else {})}
+    # Komponentkoderna på bladet (RB201, SIL501, VVB01, RV602-20): textraderna som bär en kod, med var de står.
+    # Litet nog för varje blad, och det som "mängder från ritning" räknar komponenter på (vvs_engine.tb.drawing_link).
+    out["component-tags.json"] = {"rows": [{"text": r.text, "bbox": [round(float(x), 1) for x in r.bbox],
+                                            "page": r.page} for r in pa.lines if _TAG_LIKE.search(r.text or "")]}
     # The set's list, but told from this sheet: whether the sheet in front of the reader is the one that wrote
     # the list is a fact about this sheet, and the set-wide copy is marked borrowed for everybody by construction.
     _lg = doc_legend if doc_legend is not None and doc_legend.entries else pa.legend
