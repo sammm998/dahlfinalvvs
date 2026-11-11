@@ -394,7 +394,9 @@ def _item(k: int, g: dict[str, Any]) -> dict[str, Any]:
     series = [w for w in re.findall(r"[A-Za-zÅÄÖåäö][\w\-]+", g["label"]) if w[:1].isupper() and len(w) >= 4
               and w.lower() not in {x.lower() for x in re.findall(r"\w+", g["model"])}][:2]
     model = " ".join(series + ([g["model"]] if g["model"] else [])).strip()
-    rsk = re.findall(r"\b\d{7}\b", g["info"].get("RSK", ""))
+    from ..tb.rsk import find as rsk_find, normalize as rsk_norm
+    raw_rsk = g["info"].get("RSK", "")
+    rsk = rsk_find("RSK " + raw_rsk) or ([rsk_norm(raw_rsk)] if rsk_norm(raw_rsk) else [])
     art = [g["info"]["Art.nr"]] if g["info"].get("Art.nr") else []
     return {"id": f"ifc{k}", "kind": "post", "code": "", "name": name[:160], "quantity": qty, "unit": unit,
             "quantity_text": f"{qty:g} {unit}", "manufacturer": g["brand"], "manufacturer_text": g["brand"],

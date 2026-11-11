@@ -314,7 +314,7 @@ def run_job(job_id: str) -> None:
             summary = analyze_isolated(pdf_path, out_dir, name=os.path.splitext(drawing.filename)[0],
                                 rule_values=moved,
                                 label_audit=settings.label_audit,
-                                deadline_s=settings.analysis_deadline_s, determinism=settings.run_determinism,
+                                deadline_s=deadline_for(drawing.n_pages), determinism=settings.run_determinism,
                                 contamination=True, progress=_progress_cb(job_id),
                                 review=settings.run_review, review_ocr=run_ocr["review_ocr"],
                                 ocr_assist=run_ocr["ocr_assist"], film_sink=_film_sink(out_dir),
@@ -420,6 +420,13 @@ def _settle_credits(job_id: str) -> None:
                 db.commit()
     except Exception:  # noqa: BLE001
         log.exception("Kunde inte avräkna credits för jobb %s", job_id)
+
+
+def deadline_for(n_pages: int | None) -> int:
+    """Tidsgränsen för en läsning: minst grundgränsen, mer för en handling med många blad, aldrig över taket."""
+    base = int(settings.analysis_deadline_s)
+    per_page = int(settings.analysis_deadline_per_page_s) * max(0, int(n_pages or 0))
+    return min(int(settings.analysis_deadline_max_s), max(base, per_page))
 
 
 def submit(job_id: str) -> None:

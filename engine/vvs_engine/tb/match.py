@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 from .reader import BRANDS
+from .rsk import normalize as rsk_norm, pretty as rsk_pretty
 
 WORD = re.compile(r"[0-9A-Za-zÅÄÖåäöÜü]+")
 RSK7 = re.compile(r"(?<!\d)(\d{7})(?!\d)")
@@ -92,16 +93,21 @@ class MaterialIndex:
         self.by_group: dict[str, list[int]] = defaultdict(list)
         self.sources: dict[str, dict[str, Any]] = {}
         self._sorted: list[str] | None = None
+        self._by_key: dict[tuple, _Doc] = {}
 
     def _add(self, d: _Doc, refs: Iterable[str] = ()):
         i = len(self.docs)
         self.docs.append(d)
+        self._by_key.setdefault((d.source, d.ref, d.name), d)
         for t in d.tokens:
             self.by_token[t].append(i)
         for t in d.group - d.tokens:
             self.by_group[t].append(i)
         for r in refs:
             self.by_ref[r].append(i)
+            n = rsk_norm(r)
+            if n and n != r:
+                self.by_ref[n].append(i)                 # "573 24 87" i boken slås upp som 5732487
 
     def add_material_book(self, rows: list[dict[str, Any]], label: str = "Materialboken", source: str = "materialbok"):
         """Materialbokens rader: a är artikelnumret (oftast RSK), n benämningen, p priset, e enheten."""
@@ -134,17 +140,64 @@ class MaterialIndex:
 
     # ------------------------------------------------------------ frågan
     def match(self, item: dict[str, Any], limit: int = 3) -> dict[str, Any]:
+        """Förskrivet går före egna förslag.
+
+        1. Ett förskrivet RSK- eller artikelnummer matchas exakt (i alla skrivsätt). Finns det inte i katalogen är
+           raden "saknas" - inte en annan vara som liknar den - och det som liknar står som förslag.
+        2. Ett förskrivet fabrikat: bara samma fabrikat är en träff. Andra fabrikat är förslag.
+        3. Ingenting förskrivet: det som hittas är ett eget förslag, märkt så, för teknisk granskning.
+        """
         hits: list[Hit] = []
-        exact_refs = [("RSK", r) for r in item.get("rsk") or []] + [("art.nr", a) for a in item.get("art_nr") or []]
+        rsk = [n for n in (rsk_norm(r) for r in item.get("rsk") or []) if n]
+        exact_refs = [("RSK", r) for r in rsk] + [("art.nr", a) for a in item.get("art_nr") or []]
         for kind, ref in exact_refs:
-            keys = {ref, re.sub(r"[^0-9A-Za-z]", "", ref).lower(), ref.lower()}
+            keys = {ref, re.sub(r"[^0-9A-Za-z]", "", ref).lower(), ref.lower(), rsk_norm(ref) or ref}
             for k in keys:
                 for i in self.by_ref.get(k, []):
                     d = self.docs[i]
-                    hits.append(self._hit(d, f"{kind} {ref}", 10.0))
+                    hits.append(self._hit(d, f"{kind} {rsk_pretty(ref) if kind == 'RSK' else ref}", 10.0))
         if hits:
-            return self._result("hittad", hits, limit)
+            return {**self._result("hittad", hits, limit), "basis": "förskrivet nummer", "suggestions": []}
+        found = self._search(item, limit=max(limit, 6))
+        brand = item.get("manufacturer") or ""
+        if rsk:
+            # det förskrivna numret finns inte: raden saknas, och det som liknar är bara förslag
+            return {"status": "saknas", "hits": [], "in_catalog": False, "rsk": None, "basis": "förskrivet nummer",
+                    "note": f"Förskrivet RSK {', '.join(rsk_pretty(r) for r in rsk)} finns inte i katalogen",
+                    "suggestions": found["hits"][:limit]}
+        if brand:
+            # det förskrivna är fabrikatet, eller dess modell eller serie: katalogen skriver ofta "AT 4003A25" eller
+            # "Pressrör Mapress" utan fabrikatnamnet
+            aliases = brand_aliases(brand) | self._prescribed_model(item)
+            own = [h for h in found["hits"] if self._has_brand(h, aliases)]
+            other = [h for h in found["hits"] if not self._has_brand(h, aliases)]
+            if own:
+                return {**found, "hits": own[:limit], "basis": "förskrivet fabrikat", "suggestions": other[:limit]}
+            return {"status": "saknas", "hits": [], "in_catalog": False, "rsk": None, "basis": "förskrivet fabrikat",
+                    "note": found.get("note") or f"Förskrivet fabrikat {brand} hittades inte i katalogen",
+                    "suggestions": other[:limit]}
+        if found["status"] == "möjlig":
+            return {"status": "förslag", "hits": [], "in_catalog": False, "rsk": None, "basis": "eget förslag",
+                    "note": "Ingen förskrivning - eget förslag för teknisk granskning",
+                    "suggestions": found["hits"][:limit], "suggested_rsk": found.get("rsk")}
+        return {**found, "basis": "", "suggestions": []}
 
+    @staticmethod
+    def _prescribed_model(item: dict[str, Any]) -> set[str]:
+        typ = " ".join([item.get("type") or ""] + list(item.get("art_nr") or []))
+        out = {t for t in compact_tokens(typ) if len(t) >= 4 and re.search(r"\d", t) and re.search(r"[a-zåäö]", t)}
+        out |= {w for w in words(typ) if len(w) >= 5 and not re.search(r"\d", w) and w not in {"eller", "typ", "likvärdig"}}
+        return out
+
+    def _has_brand(self, hit: dict[str, Any], aliases: set[str]) -> bool:
+        toks = set(words(hit.get("name") or "")) | set(compact_tokens(hit.get("name") or ""))
+        d = self._by_key.get((hit.get("source"), hit.get("ref"), hit.get("name")))
+        if d is not None:
+            toks |= d.tokens | d.group
+        return bool(aliases & toks) or any(a for a in aliases if len(a) >= 5 and any(t.startswith(a) for t in toks))
+
+    def _search(self, item: dict[str, Any], limit: int = 3) -> dict[str, Any]:
+        """Sökningen på fabrikat, modell, serie och varunamn (utan förskrivna nummer)."""
         brand = item.get("manufacturer") or ""
         aliases = brand_aliases(brand)
         model = item.get("type") or ""

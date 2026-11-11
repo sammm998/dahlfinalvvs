@@ -18,8 +18,14 @@ class Settings(BaseSettings):
     access_token_minutes: int = 60 * 24
     worker_threads: int = 1
     run_determinism: bool = False
-    # a wall-clock budget for one analysis; without it a single dense page holds the worker forever
-    analysis_deadline_s: int = 1800
+    # a wall-clock budget for one analysis; without it a single dense page holds the worker forever.
+    # Stora handlingar (många blad, täta A0) behöver mer än en halvtimme: gränsen är minst analysis_deadline_s,
+    # växer med antalet sidor (analysis_deadline_per_page_s per sida) och stannar vid analysis_deadline_max_s.
+    # Alla tre går att sätta i Railway: VVS_ANALYSIS_DEADLINE_S, VVS_ANALYSIS_DEADLINE_PER_PAGE_S,
+    # VVS_ANALYSIS_DEADLINE_MAX_S.
+    analysis_deadline_s: int = 7200
+    analysis_deadline_per_page_s: int = 900
+    analysis_deadline_max_s: int = 6 * 3600
     run_review: bool = True       # review agents check the finished result
     # De två OCR-passen är avstängda som standard, för de är mätta och de kostade mer än de gav.
     #
