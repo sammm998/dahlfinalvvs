@@ -253,11 +253,67 @@ def list_tech_specs(project_id: str, source: str = "tb", user: User = Depends(cu
                     db: Session = Depends(get_db)):
     p = _project(db, user, project_id)
     q = db.query(TechSpec).filter(TechSpec.project_id == p.id)
-    q = q.filter(TechSpec.source == "ifc") if source == "ifc" else q.filter((TechSpec.source == "tb") | (TechSpec.source.is_(None)))
+    q = q.filter(TechSpec.source.in_(("ifc", "lista"))) if source == "ifc" \
+        else q.filter((TechSpec.source == "tb") | (TechSpec.source.is_(None)))
     return [_spec_out(s) for s in q.order_by(TechSpec.created_at.desc()).all()]
 
 
 MAX_IFC_BYTES = 500 * 1024 * 1024
+LIST_TYPES = (".eml", ".txt", ".docx", ".xlsx", ".xlsm", ".csv", ".msg")
+
+
+def _store_list(db: Session, p: Project, filename: str, data: bytes) -> dict[str, Any]:
+    from vvs_engine.tb.listing import read_material_list
+    sha = hashlib.sha256(data).hexdigest()
+    same = db.query(TechSpec).filter(TechSpec.project_id == p.id, TechSpec.sha256 == sha).first()
+    if same is not None:
+        return {**_spec_out(same), "duplicate": True}
+    try:
+        out = read_material_list(filename, data)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    except Exception:
+        raise HTTPException(400, "Materiallistan kunde inte läsas")
+    status, error = ("COMPLETED", "") if out["items"] else (
+        "FAILED", "Inga materialrader hittades. En rad behöver ett antal (3 st, 12 m) eller en kod (PB101), och "
+                  "gärna fabrikat eller RSK på samma rad eller raderna under.")
+    s = TechSpec(project_id=p.id, filename=filename, storage_key="", sha256=sha, size_bytes=len(data), n_pages=0,
+                 status=status, error=error, title=(out["meta"].get("title") or filename)[:255], items=out["items"],
+                 stats=out["stats"], source="lista")
+    db.add(s)
+    db.flush()
+    s.storage_key = storage.put(f"lists/{p.id}/{s.id}{os.path.splitext(filename)[1] or '.txt'}", io.BytesIO(data))
+    db.commit()
+    return {**_spec_out(s), "duplicate": False}
+
+
+@router.post("/api/projects/{project_id}/material-list")
+async def upload_material_list(project_id: str, file: UploadFile = File(...), user: User = Depends(current_user),
+                               db: Session = Depends(get_db)):
+    """En materiallista som inte är en AMA-beskrivning: ett mejl (.eml), text, Word, Excel eller CSV/BOM. Varje
+    position med all text som hör till den - fabrikat och RSK på raderna under - blir en post."""
+    p = _project(db, user, project_id)
+    filename = os.path.basename(file.filename or "lista.txt")
+    if not filename.lower().endswith(LIST_TYPES):
+        raise HTTPException(400, "Materiallistan ska vara .eml, .txt, .docx, .xlsx eller .csv")
+    data = await _read_capped(file, 50 * 1024 * 1024)
+    return await run_in_threadpool(_store_list, db, p, filename, data)
+
+
+class ListTextIn(BaseModel):
+    text: str
+    title: str = ""
+
+
+@router.post("/api/projects/{project_id}/material-list/text")
+def material_list_text(project_id: str, body: ListTextIn, user: User = Depends(current_user),
+                       db: Session = Depends(get_db)):
+    """Text inklistrad ur ett mejl: samma läsning som en uppladdad lista."""
+    p = _project(db, user, project_id)
+    if len(body.text.strip()) < 5:
+        raise HTTPException(422, "Klistra in texten med materialet")
+    name = (body.title.strip() or "Inklistrad text")[:200]
+    return _store_list(db, p, name if name.lower().endswith(".txt") else f"{name}.txt", body.text.encode("utf-8"))
 
 
 @router.post("/api/projects/{project_id}/ifc")
@@ -311,11 +367,48 @@ def item_match(ix: MaterialIndex, it: dict[str, Any]) -> dict[str, Any]:
     return ix.match(it)
 
 
+_DQ: dict[str, tuple[tuple, dict]] = {}
+
+
+def drawing_quantities(project_id: str) -> dict[str, Any]:
+    """Komponentkoder och rörmeter ur projektets analyserade ritningar (den senaste färdiga läsningen per ritning).
+    Sparas så länge samma läsningar gäller."""
+    from vvs_engine.tb.drawing_link import collect
+    from .db import AnalysisJob, Drawing, SessionLocal
+    with SessionLocal() as db:
+        rows = (db.query(AnalysisJob, Drawing).join(Drawing, AnalysisJob.drawing_id == Drawing.id)
+                .filter(Drawing.project_id == project_id, AnalysisJob.status == "COMPLETED")
+                .order_by(AnalysisJob.created_at.desc()).all())
+        latest: dict[str, tuple] = {}
+        for j, d in rows:
+            if d.id not in latest and j.result_key:
+                latest[d.id] = (j.id, storage.path(j.result_key), d.filename)
+    key = tuple(sorted(v[0] for v in latest.values()))
+    hit = _DQ.get(project_id)
+    if hit and hit[0] == key:
+        return hit[1]
+    found = collect([{"dir": v[1], "drawing": v[2]} for v in latest.values() if os.path.isdir(v[1])])
+    _DQ[project_id] = (key, found)
+    return found
+
+
 def matched_items(s: TechSpec, with_ai: bool = True) -> list[dict[str, Any]]:
+    """Posterna med var de finns i katalogen - och med mängden ur projektets ritningar när den finns där."""
+    from vvs_engine.tb.drawing_link import apply, link
     from .tb_ai import overlay
     ix = material_index()
     picks = ((s.ai or {}).get("picks") or {}) if with_ai else {}
-    return [{**it, "match": overlay(item_match(ix, it), picks.get(it.get("id")))} for it in (s.items or [])]
+    try:
+        found = drawing_quantities(s.project_id)
+    except Exception:                                    # noqa: BLE001 - mängden ur beskrivningen står kvar
+        import logging
+        logging.getLogger("vvs.tb").warning("Ritningarnas mängder kunde inte läsas", exc_info=True)
+        found = {}
+    out = []
+    for it in s.items or []:
+        it = apply(it, link(it, found))
+        out.append({**it, "match": overlay(item_match(ix, it), picks.get(it.get("id")))})
+    return out
 
 
 # ---------------------------------------------------------------- AI-kontrollen
@@ -395,7 +488,8 @@ def get_tech_spec(spec_id: str, user: User = Depends(current_user), db: Session 
 @router.delete("/api/tech-specs/{spec_id}")
 def delete_tech_spec(spec_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     s = _spec(db, user, spec_id)
-    storage.delete_prefix(f"{'ifc' if s.source == 'ifc' else 'techspecs'}/{s.project_id}/{s.id}")
+    folder = {"ifc": "ifc", "lista": "lists"}.get(s.source or "", "techspecs")
+    storage.delete_prefix(f"{folder}/{s.project_id}/{s.id}")
     db.delete(s)
     db.commit()
     return {"ok": True}
@@ -425,6 +519,28 @@ def mail_draft(spec_id: str, body: MailIn, user: User = Depends(current_user), d
     return {"drafts": drafts, "n": len(chosen)}
 
 
+def _disposition(filename: str) -> str:
+    """Ett filnamn med å, ä och ö: en ASCII-version för gamla klienter och det riktiga namnet enligt RFC 5987."""
+    from urllib.parse import quote
+    import unicodedata
+    ascii_name = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode() or "material.csv"
+    ascii_name = ascii_name.replace('"', "")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
+
+
+def _num(v) -> str:
+    return "" if v is None else (f"{v:g}" if isinstance(v, float) else str(v)).replace(".", ",")
+
+
+def _drawing_text(fd: dict[str, Any] | None) -> str:
+    if not fd:
+        return ""
+    if fd["kind"] == "antal":
+        return f"{fd['tag']}: " + ", ".join(f"{k} ({n})" for k, n in fd["sheets"].items())
+    dn = ", ".join(f"DN{k} {_num(v)} m" for k, v in fd.get("by_dn", {}).items())
+    return f"{fd['system']}: {dn}" + (f"; att granska {_num(fd['review_m'])} m" if fd.get("review_m") else "")
+
+
 def _rsk_text(m: dict[str, Any]) -> str:
     r = m.get("rsk") or {}
     if r.get("kind") == "ai":
@@ -441,6 +557,7 @@ def tech_spec_csv(spec_id: str, user: User = Depends(current_user), db: Session 
     w = csv.writer(buf, delimiter=";")
     w.writerow(["Kod", "Slag", "Benämning", "Antal", "Enhet", "Mängd som skrivet", "Fabrikat", "Typ", "RSK",
                 "RSK förslag", "Grund", "Eget förslag (granskas)",
+                "Antal ur ritning", "Antal i underlaget", "Ritning",
                 "Art.nr", "Eller likvärdig", "Kategori", "Underkategori", "AMA", "Sida", "Status", "Träff", "Källa",
                 "Specifikation"])
     for it in matched_items(s):
@@ -451,10 +568,13 @@ def tech_spec_csv(spec_id: str, user: User = Depends(current_user), db: Session 
                     it["quantity_text"], it["manufacturer"], it["type"], " ".join(rsk_pretty(r) for r in it["rsk"]),
                     _rsk_text(m), m.get("basis", ""),
                     "; ".join(f"{x.get('ref')} {x.get('name')}" for x in (m.get("suggestions") or [])[:3]),
+                    _num(it.get("total_quantity")) if it.get("quantity_from") == "ritning" else "",
+                    _num(it.get("description_quantity")) if it.get("quantity_from") == "ritning" else "",
+                    _drawing_text(it.get("from_drawing")),
                     " ".join(it["art_nr"]),
                     "ja" if it["or_equal"] else "", it["category"], it["subcategory"], it["ama_code"], it["page"],
                     m["status"], " ".join(x for x in (h.get("ref"), h.get("name")) if x), h.get("source", ""),
                     "; ".join(f"{k} {v}" for k, v in (it.get("spec") or {}).items())])
     name = os.path.splitext(s.filename)[0]
     return Response(("﻿" + buf.getvalue()).encode("utf-8"), media_type="text/csv; charset=utf-8",
-                    headers={"Content-Disposition": f'attachment; filename="material-{name}.csv"'})
+                    headers={"Content-Disposition": _disposition(f"material-{name}.csv")})

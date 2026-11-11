@@ -167,6 +167,10 @@ export const api = {
   // ---- teknisk beskrivning (backend/app/tech_spec.py) ----
   techSpecs: (projectId: string, source: "tb" | "ifc" = "tb") => req(`/api/projects/${projectId}/tech-specs?source=${source}`),
   // en IFC-modell (.ifc eller .zip) läst till VVS-material: samma poster och matchning som en teknisk beskrivning
+  // en materiallista: mejl (.eml), text, Word, Excel, CSV/BOM - eller text inklistrad ur ett mejl
+  uploadMaterialList: (projectId: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/material-list`, { method: "POST", body: fd }); },
+  materialListText: (projectId: string, text: string, title = "") =>
+    req(`/api/projects/${projectId}/material-list/text`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, title }) }),
   uploadIfc: (projectId: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/ifc`, { method: "POST", body: fd }); },
   uploadTechSpec: (projectId: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/tech-specs`, { method: "POST", body: fd }); },
   techSpec: (id: string) => req(`/api/tech-specs/${id}`),
