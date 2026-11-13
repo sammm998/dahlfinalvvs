@@ -7,6 +7,7 @@ Sortimentet kommer från:
   - en uppladdad fil (Excel eller CSV) med en rad per produkt; rubrikraden säger vilken kolumn som är vad
   - webbplatsen (VVS_HOUSE_BRAND_URL, standard https://alternabadrum.se/): produktsidorna läses på servern
     (sitemap -> produktsidor -> strukturerad produktdata och specifikationstabeller)
+  - data/alterna_catalog.json, när den finns (skapas med tools/alterna_import.py)
   - annars ett litet startsortiment: de produkter som står i det manuella facit för Ryttargården
 
 Kolumner i en uppladdad fil (rubriker, valfri ordning): RSK, Benämning, Serie, Kategori, Bredd, Höjd, Djup,
@@ -37,6 +38,8 @@ KEY = "brands/house.json"
 BRAND = os.environ.get("VVS_HOUSE_BRAND", "Alterna")
 URL = os.environ.get("VVS_HOUSE_BRAND_URL", "https://alternabadrum.se/")
 SEED = os.path.join(os.path.dirname(__file__), "data", "alterna_seed.json")
+# Hela sortimentet inläst med tools/alterna_import.py; används före startsortimentet när filen finns.
+WEB_CATALOG = os.path.join(os.path.dirname(__file__), "data", "alterna_catalog.json")
 
 _CACHE: dict[str, Any] = {}
 _JOB: dict[str, Any] = {"state": "idle"}
@@ -48,7 +51,8 @@ def catalog() -> dict[str, Any]:
             with storage.open(KEY) as fh:
                 _CACHE["c"] = json.load(fh)
         else:
-            with open(SEED, encoding="utf-8") as fh:
+            path = WEB_CATALOG if os.path.exists(WEB_CATALOG) else SEED
+            with open(path, encoding="utf-8") as fh:
                 _CACHE["c"] = json.load(fh)
     return _CACHE["c"]
 
