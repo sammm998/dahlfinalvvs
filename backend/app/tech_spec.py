@@ -220,19 +220,19 @@ async def upload_tech_spec(project_id: str, file: UploadFile = File(...), user: 
     """Ladda upp en teknisk beskrivning och läs den. Samma fil två gånger i samma projekt blir en beskrivning."""
     p = _project(db, user, project_id)
     filename = os.path.basename(file.filename or "beskrivning.pdf")
-    if not filename.lower().endswith(".pdf"):
-        raise HTTPException(400, "Den tekniska beskrivningen ska vara en PDF")
-    data = await _read_capped(file, MAX_SPEC_BYTES)
-    if not data.startswith(b"%PDF"):
-        raise HTTPException(400, "Filen är inte en giltig PDF")
+    if not filename.lower().endswith((".pdf", ".zip")):
+        raise HTTPException(400, "Beskrivningen ska vara en PDF, eller en zip med förfrågans handlingar")
+    data = await _read_capped(file, MAX_SPEC_BYTES * 5 if filename.lower().endswith(".zip") else MAX_SPEC_BYTES)
+    if not (data.startswith(b"%PDF") or data[:2] == b"PK"):
+        raise HTTPException(400, "Filen är inte en giltig PDF eller zip")
     sha = hashlib.sha256(data).hexdigest()
     same = db.query(TechSpec).filter(TechSpec.project_id == p.id, TechSpec.sha256 == sha).first()
     if same is not None:
         return {**_spec_out(same), "duplicate": True}
     try:
-        out = await run_in_threadpool(read_tech_spec_bytes, data)
+        out = await run_in_threadpool(read_any_description, filename, data)
     except Exception:
-        raise HTTPException(400, "PDF-filen kunde inte läsas")
+        raise HTTPException(400, "Filen kunde inte läsas")
     if not out["items"]:
         status, error = "FAILED", ("Inga materialposter hittades. Beskrivningen är kanske skannad som bilder, "
                                    "eller inte uppställd med koder och mängder.")
@@ -243,9 +243,41 @@ async def upload_tech_spec(project_id: str, file: UploadFile = File(...), user: 
                  title=(out["meta"].get("title") or "")[:255], items=out["items"], stats=out["stats"])
     db.add(s)
     db.flush()
-    s.storage_key = storage.put(f"techspecs/{p.id}/{s.id}.pdf", io.BytesIO(data))
+    if out["meta"].get("documents"):
+        s.stats = {**(s.stats or {}), "documents": out["meta"]["documents"], "groups": out["meta"].get("groups")}
+    ext = ".zip" if data[:2] == b"PK" else ".pdf"
+    s.storage_key = storage.put(f"techspecs/{p.id}/{s.id}{ext}", io.BytesIO(data))
     db.commit()
     return {**_spec_out(s), "duplicate": False}
+
+
+def _zip_has_ifc(data: bytes) -> bool:
+    import zipfile
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            return any(n.lower().endswith(".ifc") for n in z.namelist())
+    except zipfile.BadZipFile:
+        return False
+
+
+def read_any_description(filename: str, data: bytes) -> dict[str, Any]:
+    """En AMA-beskrivning, en typrumsbeskrivning, en ritning med förteckning - eller en zip med flera."""
+    if data[:2] == b"PK" or filename.lower().endswith(".zip"):
+        from vvs_engine.tb.inquiry import read_inquiry
+        return read_inquiry(filename, data)
+    import pymupdf
+    from vvs_engine.tb.legend import has_legend
+    from vvs_engine.tb.rooms import is_room_description
+    doc = pymupdf.open(stream=data, filetype="pdf")
+    try:
+        head = "".join(doc[i].get_text() for i in range(min(3, len(doc))))
+        special = has_legend(doc) or is_room_description(head)
+    finally:
+        doc.close()
+    if special:
+        from vvs_engine.tb.inquiry import read_inquiry
+        return read_inquiry(filename, data)
+    return read_tech_spec_bytes(data)
 
 
 @router.get("/api/projects/{project_id}/tech-specs")
@@ -331,6 +363,20 @@ async def upload_ifc(project_id: str, file: UploadFile = File(...), user: User =
     same = db.query(TechSpec).filter(TechSpec.project_id == p.id, TechSpec.sha256 == sha).first()
     if same is not None:
         return {**_spec_out(same), "duplicate": True}
+    if data[:2] == b"PK" and not _zip_has_ifc(data):
+        # en zip med förfrågans handlingar (PDF), inte en IFC-modell: läses som en förfrågan
+        out = await run_in_threadpool(read_any_description, filename, data)
+        st = "COMPLETED" if out["items"] else "FAILED"
+        s = TechSpec(project_id=p.id, filename=filename, storage_key="", sha256=sha, size_bytes=len(data), n_pages=out["meta"].get("n_pages", 0),
+                     status=st, error="" if out["items"] else "Inga poster hittades i handlingarna",
+                     title=(out["meta"].get("title") or filename)[:255], items=out["items"],
+                     stats={**out["stats"], "documents": out["meta"].get("documents"), "groups": out["meta"].get("groups")},
+                     source="lista")
+        db.add(s)
+        db.flush()
+        s.storage_key = storage.put(f"lists/{p.id}/{s.id}.zip", io.BytesIO(data))
+        db.commit()
+        return {**_spec_out(s), "duplicate": False}
     try:
         out = await run_in_threadpool(read_ifc_bytes, data)
     except ValueError as e:
@@ -404,11 +450,80 @@ def matched_items(s: TechSpec, with_ai: bool = True) -> list[dict[str, Any]]:
         import logging
         logging.getLogger("vvs.tb").warning("Ritningarnas mängder kunde inte läsas", exc_info=True)
         found = {}
+    from vvs_engine.tb.equivalent import suggest
+    from .brand_catalog import products
+    house = products()
     out = []
     for it in s.items or []:
         it = apply(it, link(it, found))
-        out.append({**it, "match": overlay(item_match(ix, it), picks.get(it.get("id")))})
+        if it.get("quantity_override") is not None:
+            it = {**it, "total_quantity": it["quantity_override"], "quantity_from": "manuellt"}
+        m = overlay(item_match(ix, it), picks.get(it.get("id")))
+        eq = suggest(it, house) if house and it.get("kind") not in ("krav", "arbete") else None
+        if eq:
+            m = {**m, "equivalent": eq}
+        out.append({**it, "match": m})
     return out
+
+
+class QuantityIn(BaseModel):
+    quantity: float | None = None
+
+
+@router.post("/api/tech-specs/{spec_id}/items/{item_id}/quantity")
+def set_quantity(spec_id: str, item_id: str, body: QuantityIn, user: User = Depends(current_user),
+                 db: Session = Depends(get_db)):
+    """Ange antalet för hand (null tar bort det): för rader där handlingarna inte räcker för att räkna."""
+    from sqlalchemy.orm.attributes import flag_modified
+    s = _spec(db, user, spec_id)
+    items = [dict(x) for x in s.items or []]
+    hit = next((x for x in items if x.get("id") == item_id), None)
+    if hit is None:
+        raise HTTPException(404, "Raden finns inte")
+    if body.quantity is not None and body.quantity < 0:
+        raise HTTPException(422, "Antalet kan inte vara negativt")
+    hit["quantity_override"] = body.quantity
+    hit["quantity_override_by"] = user.email if body.quantity is not None else ""
+    s.items = items
+    flag_modified(s, "items")
+    db.commit()
+    return {"ok": True, "id": item_id, "quantity": body.quantity}
+
+
+@router.get("/api/tech-specs/{spec_id}/equivalents.csv")
+def equivalents_csv(spec_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Likvärdighetsförslag ur det egna varumärket, en rad per position: sakvara, föreskrift, alternativ, RSK,
+    antal, pris per styck och summa - som ett manuellt facit - med kraven och flaggorna bredvid."""
+    from .brand_catalog import catalog
+    s = _spec(db, user, spec_id)
+    brand = catalog().get("brand") or "Eget varumärke"
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(["Pos", "Sakvara", "Föreskrift", f"{brand} alternativ", "RSK", "Antal", "Pris per styck", "Summa",
+                "Bedömning", "Krav som avviker eller ska verifieras", "Flagga", "Antal enligt"])
+    total = 0.0
+    for it in matched_items(s):
+        eq = (it["match"].get("equivalent") or {})
+        c = (eq.get("candidates") or [None])[0]
+        if not c:
+            continue
+        q = it.get("total_quantity")
+        price = c.get("price")
+        line = (q or 0) * (price or 0)
+        total += line
+        pres = " ".join(x for x in (it.get("manufacturer"), it.get("type")) if x) or "Okänd"
+        issues = "; ".join(f"{x['krav']}: {x['detalj']}" for x in c["checks"] if x["status"] != "uppfyllt")
+        w.writerow([it.get("code") or "", it.get("name"), pres, c["name"], c.get("rsk") or "",
+                    _num(q) if q is not None else "", _num(price) if price is not None else "",
+                    _num(round(line, 2)) if q is not None and price is not None else "", c["state"], issues,
+                    (it.get("spec") or {}).get("Flagga", ""), it.get("inferred") or it.get("quantity_text") or ""])
+    w.writerow([])
+    w.writerow(["", "", "", "", "", "", "Total offertsumma:", _num(round(total, 2))])
+    w.writerow(["", "Förslag - likvärdighet är inte automatiskt fastställd. Kontrollera mot samtliga tekniska, "
+                    "estetiska och miljömässiga krav."])
+    name = os.path.splitext(s.filename)[0]
+    return Response(("\ufeff" + buf.getvalue()).encode("utf-8"), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": _disposition(f"likvardighet-{name}.csv")})
 
 
 # ---------------------------------------------------------------- AI-kontrollen

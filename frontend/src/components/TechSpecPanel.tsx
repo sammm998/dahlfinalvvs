@@ -24,7 +24,11 @@ type Item = {
            basis?: string; suggestions?: Hit[];
            rsk?: { value: string | null; kind: "förslag" | "storlek" | "ai"; name: string; sure?: boolean; before?: string | null;
                    variants?: { rsk: string; name: string; size: string | null }[] } | null;
-           ai?: { ref: string; name: string; sure: boolean } };
+           ai?: { ref: string; name: string; sure: boolean };
+           equivalent?: { requirements: any; note?: string; disclaimer: string;
+                          candidates: { rsk: string; name: string; price: number | null; url: string; score: number; state: string;
+                                        checks: { krav: string; status: string; detalj: string }[] }[] } };
+  quantity_override?: number | null;
 };
 type Draft = { maker: string; subject: string; text: string; html: string; mailto: string; eml: string; n: number;
                rows: { pos: string; code: string; name: string; qty: string; maker: string; spec: string; numbers: string }[] };
@@ -67,6 +71,9 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
   const [catUrl, setCatUrl] = useState("");
   const [catBusy, setCatBusy] = useState(false);
   const [catMsg, setCatMsg] = useState("");
+  const [brand, setBrand] = useState<any>(null);
+  const [qEdit, setQEdit] = useState<string>("");
+  const brandFile = useRef<HTMLInputElement>(null);
   const [aiOn, setAiOn] = useState<boolean>(() => { try { return localStorage.getItem("vvs.tb.ai") !== "0"; } catch { return true; } });
   const [aiBusy, setAiBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
@@ -78,7 +85,8 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
     const id = pick || active || rows[0]?.id || "";
     setActive(id);
   };
-  useEffect(() => { loadList().catch((e) => setErr(e.message)); api.catalog().then(setCatalog).catch(() => { /* bara materialboken */ }); }, [project.id]);
+  useEffect(() => { loadList().catch((e) => setErr(e.message)); api.catalog().then(setCatalog).catch(() => { /* bara materialboken */ });
+    api.brandCatalog().then(setBrand).catch(() => { /* inget eget varumärke */ }); }, [project.id]);
   useEffect(() => {
     if (!active) { setData(null); return; }
     setBusy(true);
@@ -157,6 +165,30 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
     const a = document.createElement("a"); a.href = URL.createObjectURL(b);
     a.download = `material-${(data?.filename || "beskrivning").replace(/\.pdf$/i, "")}.csv`; a.click();
   };
+  const eqCsv = async () => {
+    const b: Blob = await (api as any).fetchBlob(`/api/tech-specs/${active}/equivalents.csv`);
+    const a = document.createElement("a"); a.href = URL.createObjectURL(b);
+    a.download = `likvardighet-${(data?.filename || "beskrivning").replace(/\.(pdf|zip)$/i, "")}.csv`; a.click();
+  };
+  const saveQty = async (itemId: string, v: string) => {
+    try {
+      await api.setItemQuantity(active, itemId, v.trim() === "" ? null : Number(v.replace(",", ".")));
+      setData(await api.techSpec(active)); setQEdit("");
+    } catch (e: any) { setErr(e.message); }
+  };
+  const brandRefresh = async (how: "web" | "file") => {
+    setErr("");
+    try {
+      setBrand(how === "web" ? await api.brandImport() : await api.brandUpload(brandFile.current!.files![0]));
+      if (how === "web") {
+        const poll = setInterval(async () => {
+          const b = await api.brandCatalog().catch(() => null);
+          if (b) setBrand(b);
+          if (!b || b.import?.state !== "running") { clearInterval(poll); if (active) setData(await api.techSpec(active)); }
+        }, 4000);
+      } else if (active) setData(await api.techSpec(active));
+    } catch (e: any) { setErr(e.message); }
+  };
   const importCatalog = async (how: "url" | "file") => {
     setCatBusy(true); setCatMsg("");
     try {
@@ -187,7 +219,7 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
           </div>
         )}
         <div className="row">
-          <input type="file" accept={ifc ? ".ifc,.ifczip,.zip,.eml,.txt,.docx,.xlsx,.xlsm,.csv" : "application/pdf,.pdf,.eml,.txt,.docx,.xlsx,.csv"} ref={file} id={ifc ? "ifc-file" : "tspec-file"} className="file" onChange={() => setErr("")} />
+          <input type="file" accept={ifc ? ".ifc,.ifczip,.zip,.eml,.txt,.docx,.xlsx,.xlsm,.csv" : "application/pdf,.pdf,.zip,.eml,.txt,.docx,.xlsx,.csv"} ref={file} id={ifc ? "ifc-file" : "tspec-file"} className="file" onChange={() => setErr("")} />
           <label className="pick" htmlFor={ifc ? "ifc-file" : "tspec-file"}>{ifc ? tr("Välj lista eller modell…") : tr("Välj beskrivning (PDF)…")}</label>
           {ifc && <button className="secondary small" onClick={() => setPasteOpen(!pasteOpen)}>{tr("Klistra in mejltext")}</button>}
           <label className="check small" title={tr("Letar efter det läsaren kan ha missat och väljer rätt artikel i katalogen där det finns flera. Bara text och bara det osäkra skickas, så det kostar några öre per beskrivning ur den gemensamma budgeten.")}>
@@ -205,6 +237,20 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
           ? <><b>{tr("Dahls produktkatalog")}</b> ({catalog.katalog.pages ? `${catalog.katalog.pages} ${tr("sidor")}` : `${(catalog.katalog.n ?? 0).toLocaleString(locale())} ${tr("artiklar")}`})</>
           : <span>{tr("Dahls produktkatalog är inte inläst än")}</span>}
       </p>
+      {brand && (
+        <details className="settings tspec-cat">
+          <summary>{trf("Likvärdiga alternativ ur {0}: {1} produkter", brand.brand, brand.n)}{brand.source ? ` · ${brand.source}` : ""}</summary>
+          <p className="muted small">{tr("Varje post jämförs med sortimentet på sort, mått, material och miljökrav. Förslaget visar kraven ett och ett – uppfyllt, ej uppfyllt eller okänt – och likvärdighet fastställs aldrig automatiskt.")}</p>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="secondary small" disabled={brand.import?.state === "running"} onClick={() => brandRefresh("web")}>
+              {brand.import?.state === "running" ? trf("Läser webbplatsen… {0} av {1}", brand.import.done ?? 0, brand.import.total ?? "?") : trf("Läs in från {0}", brand.url)}</button>
+            <input type="file" accept=".xlsx,.csv" ref={brandFile} id="brand-file" className="file" onChange={() => brandRefresh("file")} />
+            <label className="pick small" htmlFor="brand-file">{tr("…eller ladda upp sortimentet (Excel/CSV)")}</label>
+          </div>
+          {brand.import?.state === "failed" && <p className="error small">{brand.import.error}</p>}
+          <p className="muted small">{tr("Kolumner i filen: RSK, Benämning, Serie, Kategori, Bredd, Höjd, Djup, Material, Miljömärkning, Pris, URL. Bara en administratör kan läsa in sortimentet.")}</p>
+        </details>
+      )}
       {!ifc && <details className="settings tspec-cat">
         <summary>{tr("Läs in Dahls katalog")}</summary>
         <div className="row" style={{ marginTop: 8 }}>
@@ -244,6 +290,7 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
             {data.status === "FAILED" && <span className="error">{data.error}</span>}
             <span style={{ flex: 1 }} />
             <button className="secondary small" onClick={csv}>{tr("Exportera CSV")}</button>
+            {brand?.n > 0 && <button className="secondary small" onClick={eqCsv}>{trf("Likvärdighetsförslag {0} (CSV)", brand.brand)}</button>}
             <button className="secondary small" onClick={async () => { if (confirm(tr("Ta bort beskrivningen?"))) { await api.deleteTechSpec(active); setActive(""); await loadList(""); } }}>{tr("Ta bort")}</button>
           </div>
 
@@ -320,7 +367,7 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                 <table className="qty tspec-table">
                   <thead><tr>
                     <th></th><th>{tr("Kod")}</th><th>{tr("Benämning")}</th><th className="num">{tr("Antal")}</th>
-                    <th>{tr("Fabrikat")}</th><th>{tr("Typ")}</th><th>{tr("RSK")}</th><th>{tr("Status")}</th><th>{tr("Träff")}</th><th>{tr("Eget förslag (granskas)")}</th><th>{ifc ? tr("Per våning") : tr("Sida")}</th>
+                    <th>{tr("Fabrikat")}</th><th>{tr("Typ")}</th><th>{tr("RSK")}</th><th>{tr("Status")}</th><th>{tr("Träff")}</th><th>{tr("Eget förslag (granskas)")}</th>{brand?.n > 0 && <th>{trf("{0}-alternativ", brand.brand)}</th>}<th>{ifc ? tr("Per våning") : tr("Sida")}</th>
                   </tr></thead>
                   <tbody>
                     {rows.map((it) => {
@@ -341,7 +388,7 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                           <td className="num">{qty(it)}{it.quantity_from === "ritning" && (
                             <span className="badge small ok" style={{ marginLeft: 4 }}
                               title={it.description_quantity != null ? trf("Underlaget: {0}", it.description_quantity) : tr("Underlaget anger ingen mängd")}>{tr("ritning")}</span>)}</td>
-                          <td>{it.manufacturer || "–"}</td>
+                          <td>{it.manufacturer || "–"}{it.spec?.["Flagga"] && <span className="badge small warn" style={{ marginLeft: 4 }} title={it.inferred}>{tr(it.spec["Flagga"])}</span>}</td>
                           <td>{it.type || "–"}{it.or_equal && <span className="muted small"> {tr("el. likv.")}</span>}</td>
                           <td className="lf-mono tspec-rsk">
                             {it.rsk.length ? it.rsk.map((r) => r.length === 7 ? `${r.slice(0, 3)} ${r.slice(3, 5)} ${r.slice(5)}` : r).join(", ")
@@ -355,11 +402,37 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                           <td className="tspec-hit small">{it.match.suggestions?.[0]
                             ? <>{it.match.suggestions[0].ref} · {it.match.suggestions[0].name} <span className="badge small warn">{tr("förslag")}</span></>
                             : <span className="muted">–</span>}</td>
+                          {brand?.n > 0 && (() => {
+                            const c = it.match.equivalent?.candidates?.[0];
+                            return <td className="tspec-hit small">{c
+                              ? <>{c.name}{c.rsk && <span className="lf-mono"> · {c.rsk}</span>} <span className={`badge small ${c.state === "avviker" ? "bad" : c.state === "att verifiera" ? "warn" : "ok"}`}>{tr(c.state)}</span></>
+                              : <span className="muted">{it.match.equivalent?.note || "–"}</span>}</td>;
+                          })()}
                           <td className="muted small">{ifc ? it.spec?.["Per våning"] || "–" : it.page || "–"}</td>
                         </tr>,
                         open === it.id && (
-                          <tr key={it.id + "-d"} className="tspec-detail"><td colSpan={11}>
+                          <tr key={it.id + "-d"} className="tspec-detail"><td colSpan={12}>
                             <p className="small" style={{ whiteSpace: "normal" }}>{it.text || "–"}</p>
+                            {it.match.equivalent && it.match.equivalent.candidates.length > 0 && (
+                              <div className="small" style={{ margin: "6px 0" }}>
+                                <b>{trf("Likvärdigt ur {0}", brand?.brand ?? "")}</b>{" "}<span className="muted">{tr(it.match.equivalent.disclaimer)}</span>
+                                {it.match.equivalent.candidates.map((c, i) => (
+                                  <div key={i} style={{ marginTop: 4 }}>
+                                    <b>{c.name}</b>{c.rsk && <span className="lf-mono"> · RSK {c.rsk}</span>}{c.price != null && <> · {c.price.toLocaleString(locale())} kr</>}{" "}
+                                    <span className={`badge small ${c.state === "avviker" ? "bad" : c.state === "att verifiera" ? "warn" : "ok"}`}>{tr(c.state)}</span>
+                                    {c.url && <> · <a href={c.url} target="_blank" rel="noreferrer">{tr("produktsida")}</a></>}
+                                    <ul style={{ margin: "2px 0 0 18px" }}>{c.checks.map((k, j) => <li key={j}>{tr(k.krav)}: <span className={k.status === "uppfyllt" ? "" : k.status === "ej uppfyllt" ? "error" : "muted"}>{tr(k.status)}</span> – {k.detalj}</li>)}</ul>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <p className="small">
+                              <b>{tr("Antal")}:</b>{" "}
+                              <input style={{ width: 80 }} defaultValue={it.quantity_override ?? ""} placeholder={it.total_quantity != null ? String(it.total_quantity) : tr("ange")}
+                                onChange={(e) => setQEdit(e.target.value)} />{" "}
+                              <button className="secondary small" onClick={() => saveQty(it.id, qEdit)}>{tr("Spara antal")}</button>{" "}
+                              {it.quantity_override != null && <span className="muted">{tr("angivet för hand")}</span>}
+                            </p>
                             {it.from_drawing && (
                               <p className="small"><b>{tr("Mängd från ritning")}:</b>{" "}
                                 {it.from_drawing.kind === "antal"

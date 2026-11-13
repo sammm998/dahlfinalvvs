@@ -176,6 +176,12 @@ export const api = {
   techSpec: (id: string) => req(`/api/tech-specs/${id}`),
   deleteTechSpec: (id: string) => req(`/api/tech-specs/${id}`, { method: "DELETE" }),
   // AI-kontrollen: missat och val i katalogen, billigt och ur den gemensamma budgeten
+  // det egna varumärkets sortiment (Alterna) och likvärdighetsförslagen ur det
+  brandCatalog: () => req("/api/brand-catalog"),
+  brandImport: (url = "") => req("/api/brand-catalog/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) }),
+  brandUpload: (file: File) => { const fd = new FormData(); fd.append("file", file); return req("/api/brand-catalog/upload", { method: "POST", body: fd }); },
+  setItemQuantity: (specId: string, itemId: string, quantity: number | null) =>
+    req(`/api/tech-specs/${specId}/items/${itemId}/quantity`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quantity }) }),
   techSpecAi: (id: string) => req(`/api/tech-specs/${id}/ai`, { method: "POST" }),
   techSpecMissed: (id: string, key: string, accept: boolean) =>
     req(`/api/tech-specs/${id}/ai/missed/${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accept }) }),
