@@ -102,7 +102,19 @@ BRANDS: dict[str, str] = {
     "mapress": "Geberit",
     "sanha": "Sanha",
     "conex": "Conex",
-    "bänninger": "Conex Bänninger"
+    "bänninger": "Conex Bänninger",
+    "inr": "INR",
+    "smedbo": "Smedbo",
+    "hafa": "Hafa",
+    "byggbeslag": "Byggbeslag",
+    "marbodal": "Marbodal",
+    "swegon": "Swegon",
+    "beslagdesign": "Beslagdesign",
+    "alterna": "Alterna",
+    "vedum": "Vedum",
+    "ballingslöv": "Ballingslöv",
+    "tvättex": "Tvättex",
+    "macro": "Macro Design"
 }
 
 # Ord som står före "typ" utan att vara ett fabrikat: ett system (KV typ EA), ett don, ett ord i texten.

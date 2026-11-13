@@ -105,7 +105,7 @@ def run(s, items_with_match: list[dict[str, Any]], user_email: str = "") -> dict
     ask = make_ask(stats)
     raw = [{k: v for k, v in it.items() if k != "match"} for it in items_with_match]
     doc = None
-    if (getattr(s, "source", "tb") or "tb") == "tb":
+    if (getattr(s, "source", "tb") or "tb") == "tb" and (s.storage_key or "").lower().endswith(".pdf"):
         # en IFC-modell har inga rader att ha missat: antalet är antalet objekt. Bara valet i katalogen.
         with storage.open(s.storage_key) as fh:
             doc = pymupdf.open(stream=fh.read(), filetype="pdf")

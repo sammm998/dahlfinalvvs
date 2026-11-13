@@ -1,0 +1,66 @@
+{
+ "brand": "Alterna",
+ "source": "startsortiment: produkterna i det manuella facit (Ryttargården 2A)",
+ "updated_at": "2026-11-13",
+ "products": [
+  {
+   "rsk": "8948526",
+   "name": "Alterna Basic planspegel 450 x 900",
+   "series": "Basic",
+   "bredd": 450,
+   "höjd": 900,
+   "price": 300
+  },
+  {
+   "rsk": "8920499",
+   "name": "Alterna Picto toalettpappershållare",
+   "series": "Picto",
+   "price": 90
+  },
+  {
+   "rsk": "8920498",
+   "name": "Alterna Picto handdukskrok",
+   "series": "Picto",
+   "price": 40
+  },
+  {
+   "rsk": "8753247",
+   "name": "Alterna Ray elhanddukstork 53x70",
+   "series": "Ray",
+   "bredd": 530,
+   "höjd": 700,
+   "price": 1350
+  },
+  {
+   "rsk": "8912079",
+   "name": "Alterna Isella Aqua underskåp med tvättställ i porslin",
+   "series": "Isella Aqua",
+   "bredd": 600,
+   "material": "porslin",
+   "price": 3200
+  },
+  {
+   "rsk": "8912081",
+   "name": "Alterna Ariella Aqua 60 spegelskåp",
+   "series": "Ariella Aqua",
+   "bredd": 600,
+   "price": 1850
+  },
+  {
+   "rsk": "8946360",
+   "name": "Alterna Ariella Aqua 50 spegelskåp",
+   "series": "Ariella Aqua",
+   "bredd": 500,
+   "price": 1850
+  },
+  {
+   "rsk": "7333529",
+   "name": "Alterna duschhörna Lusso 80 x 80 rak",
+   "series": "Lusso",
+   "bredd": 800,
+   "djup": 800,
+   "material": "glas",
+   "price": 2450
+  }
+ ]
+}

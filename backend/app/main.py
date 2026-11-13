@@ -159,6 +159,8 @@ app.include_router(keyfigures_api.router)
 app.include_router(desk_api.router)
 from . import tech_spec as tech_spec_api  # noqa: E402
 app.include_router(tech_spec_api.router)
+from . import brand_catalog as brand_catalog_api  # noqa: E402
+app.include_router(brand_catalog_api.router)
 
 
 # ---------------------------------------------------------------- health / auth
