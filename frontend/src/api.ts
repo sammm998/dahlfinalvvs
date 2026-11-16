@@ -176,6 +176,17 @@ export const api = {
   techSpec: (id: string) => req(`/api/tech-specs/${id}`),
   deleteTechSpec: (id: string) => req(`/api/tech-specs/${id}`, { method: "DELETE" }),
   // AI-kontrollen: missat och val i katalogen, billigt och ur den gemensamma budgeten
+  // offerten: materialoffert och kalkyloffert ur den matchade listan
+  offers: (projectId: string) => req(`/api/projects/${projectId}/offers`),
+  offer: (id: string) => req(`/api/offers/${id}`),
+  createOffer: (projectId: string, body: any) =>
+    req(`/api/projects/${projectId}/offers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  patchOffer: (id: string, body: any) =>
+    req(`/api/offers/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  offerBonus: (id: string) => req(`/api/offers/${id}/bonus`, { method: "POST" }),
+  customers: (q: string) => req(`/api/customers?q=${encodeURIComponent(q)}`),
+  offerData: () => req("/api/offer-data"),
+  offerDataUpload: (kind: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/offer-data/${kind}`, { method: "POST", body: fd }); },
   // det egna varumärkets sortiment (Alterna) och likvärdighetsförslagen ur det
   brandCatalog: () => req("/api/brand-catalog"),
   brandImport: (url = "") => req("/api/brand-catalog/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) }),

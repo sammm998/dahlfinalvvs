@@ -453,6 +453,10 @@ def matched_items(s: TechSpec, with_ai: bool = True) -> list[dict[str, Any]]:
     from vvs_engine.tb.equivalent import suggest
     from .brand_catalog import products
     house = products()
+    from vvs_engine.tb.crossref import for_item
+    from vvs_engine.tb.match import _is_pipe as _pipe
+    from .offers import data as offer_data
+    crossref = offer_data("korsreferens")
     out = []
     for it in s.items or []:
         it = apply(it, link(it, found))
@@ -462,6 +466,10 @@ def matched_items(s: TechSpec, with_ai: bool = True) -> list[dict[str, Any]]:
         eq = suggest(it, house) if house and it.get("kind") not in ("krav", "arbete") else None
         if eq:
             m = {**m, "equivalent": eq}
+        if crossref and m.get("status") != "hittad" and _pipe(it):
+            xr = for_item(it, crossref)
+            m = {**m, "crossref": xr} if xr else {**m, "crossref_note": "varken fabrikat eller material och dimension "
+                                                                       "i korsreferenslistan - manuell hantering"}
         out.append({**it, "match": m})
     return out
 

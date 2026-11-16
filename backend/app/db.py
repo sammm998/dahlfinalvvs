@@ -158,6 +158,28 @@ class TechSpec(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class Offer(Base):
+    """En offert byggd ur ett projekts matchade underlag: materialoffert eller kalkyloffert (entreprenad).
+
+    Raderna sparas som de räknades, med artikel, kundens pris, inköp och marginal; kunden och rabatten som gällde
+    står på offerten, så att den går att räkna om när avtalet ändras och ändå visar vad som lämnades.
+    """
+    __tablename__ = "offers"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    number: Mapped[str] = mapped_column(String(32), default="")
+    kind: Mapped[str] = mapped_column(String(16), default="materialoffert")     # materialoffert | kalkyloffert
+    title: Mapped[str] = mapped_column(String(255), default="")
+    customer_no: Mapped[str] = mapped_column(String(64), default="")
+    customer_name: Mapped[str] = mapped_column(String(255), default="")
+    sources: Mapped[list] = mapped_column(JSON, default=list)
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    rows: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class AnalysisJob(Base):
     __tablename__ = "analysis_jobs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)

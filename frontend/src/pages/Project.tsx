@@ -8,6 +8,7 @@ import Tilted from "../components/Tilted";
 import { PriceTag } from "./Credits";
 import { ContractFormChoice, DisciplineChoice, Discipline, FALLBACK_DISCIPLINES, ProjectBadges, AbtVariantChoice } from "../components/ProjectForm";
 import TechSpecPanel from "../components/TechSpecPanel";
+import OfferPanel from "../components/OfferPanel";
 import { AbtPanel } from "../components/AbtRooms";
 
 const DATE = new Intl.DateTimeFormat(locale(), { day: "2-digit", month: "short", year: "numeric" });
@@ -129,6 +130,7 @@ export default function ProjectPage() {
       )}
       {project.tech_spec && <TechSpecPanel project={project} />}
       <TechSpecPanel key={`ifc-${ifcKey}`} project={project} source="ifc" />
+      <OfferPanel project={project} />
       {project.contract_form === "ABT06" && !specOnly && <AbtPanel project={project} />}
       {progress && <p role="status" aria-live="polite">{progress}</p>}
       {notice && <p role="status">{notice}</p>}
