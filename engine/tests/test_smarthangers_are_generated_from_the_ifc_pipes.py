@@ -134,7 +134,7 @@ def test_a_revision_shows_what_moved_and_which_produced_hangers_are_critical():
 def test_rules_are_examples_until_verified_and_the_heavier_load_flags():
     r = RL.default()
     assert r["verified"] is False and "EXEMPEL" in r["note"]
-    assert RL.spacing(r, "plast", 110)[0] == 1400 and RL.spacing(r, "stål", 65)[0] == 3500
+    assert RL.spacing(r, "plast", 110)[0] == 1900 and RL.spacing(r, "stål", 65)[0] == 3500
     assert RL.material_key("PEX-rör") == "plast" and RL.material_key("Kopparrör") == "koppar"
     weak = {"load": {**r["load"], "rod_capacity_kn": {"M8": 0.001}}}
     hs = G.generate(pipes(_ifc()), weak)["hangers"]
@@ -249,3 +249,13 @@ def test_the_prefab_flow_from_ifc_to_mounted(client):
     assert calc["assumptions"]["antal"] == rv["n"] and calc["assumptions"]["montor_kr_h"] == 700
     other = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "annan@dahl.se", "password": "hemligt1"}).json()["access_token"]}
     assert client.get(f"/api/hanger-sets/{sid}", headers=other).status_code == 404
+
+
+def test_plastic_spacing_follows_the_walraven_en806_table_and_rods_carry_the_bevego_number():
+    r = RL.default()
+    assert RL.spacing(r, "plast", None, "KV1", 32)[0] == 1000 and RL.spacing(r, "plast", None, "VV1", 32)[0] == 650
+    assert "Walraven" in RL.spacing(r, "plast", None, "VVC1", 20)[1]
+    hs = G.generate(pipes(_ifc()), {"geometry": {**r["geometry"], "max_rod": 2500}})["hangers"]
+    rod = next(b for b in hs[0]["bom"] if b["part"] == "gängstång")
+    size = hs[0]["rods"][0]["size"]
+    assert rod.get("art") == {"M8": "51721008", "M10": "51721010"}.get(size) and "NP-101-2024" in rod.get("art_source", "")

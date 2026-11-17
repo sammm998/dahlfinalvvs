@@ -24,6 +24,12 @@ DEFAULT: dict[str, Any] = {
         "stål": [[20, 2000], [32, 2500], [50, 3000], [80, 3500], [999, 4000]],
         "rostfritt": [[22, 1800], [35, 2400], [54, 2700], [999, 3000]],
         "plast": [[16, 500], [20, 600], [32, 750], [50, 900], [75, 1100], [110, 1400], [999, 1600]],
+        # Walraven, "Klammeravstånd för plaströr (enligt DIN EN 806-4:2010-06)", bild A (glidklammer, utan
+        # rörförstärkning), per ytterdiameter: kallvatten och varmvatten. Källa i "sources".
+        "plast_kv": [[16, 750], [20, 800], [25, 850], [32, 1000], [40, 1100], [50, 1250], [63, 1400], [75, 1500],
+                     [90, 1650], [110, 1900]],
+        "plast_vv": [[16, 400], [20, 500], [25, 600], [32, 650], [40, 800], [50, 1000], [63, 1200], [75, 1300],
+                     [90, 1450], [110, 1600]],
         "gjutjärn": [[999, 3000]],
         "okänt": [[999, 1200]],
     },
@@ -68,6 +74,22 @@ DEFAULT: dict[str, Any] = {
                                                           "Ute": "Varmförzinkat / rostfritt"}},
     "tolerance": {"position_mm": 10, "height_mm": 10},
     "stock": {"profile_mm": 3000, "rod_mm": 2000, "kerf_mm": 3},
+    "sources": {
+        "plast_kv": "Walraven datablad Klammeravstånd för plaströr enligt DIN EN 806-4:2010-06, bild A, kallvatten "
+                    "(https://files.walraven.com/repository/rnd/documents/Fixing-Distances-Plastic-Pipes-Datasheet-SE.pdf)",
+        "plast_vv": "Walraven datablad Klammeravstånd för plaströr enligt DIN EN 806-4:2010-06, bild A, varmvatten "
+                    "(https://files.walraven.com/repository/rnd/documents/Fixing-Distances-Plastic-Pipes-Datasheet-SE.pdf)",
+        "koppar": "EXEMPEL - ej från källa", "stål": "EXEMPEL - ej från källa", "rostfritt": "EXEMPEL - ej från källa",
+        "load": "EXEMPEL - Bevegos bärförmåga gick inte att hämta",
+    },
+    # artikelnummer som delarna får på materiallistan; nyckel "del storlek längd"
+    "articles": {
+        "gängstång M10 2000": {"art": "51721010", "supplier": "Bevego",
+                               "source": "Bevego Upphängningssystem NP-101-2024 (enligt sökresultat - kontrollera mot katalogen)"},
+        "gängstång M8 2000": {"art": "51721008", "supplier": "Bevego",
+                              "source": "Bevego Upphängningssystem NP-101-2024 (enligt sökresultat - kontrollera mot katalogen)"},
+    },
+    "hot_systems": ["VV", "VVC", "VS", "VP", "VÄRME", "KYL"],
     "packing": {"max_per_kolli": 20, "max_kg_per_kolli": 25.0},
 }
 
@@ -98,8 +120,20 @@ def material_key(text: str | None) -> str:
     return "okänt"
 
 
-def spacing(rules: dict[str, Any], material: str, dn: float | None) -> tuple[int, str]:
-    """Största klamringsavstånd (mm) och var det står."""
+def spacing(rules: dict[str, Any], material: str, dn: float | None, system: str = "", od: float | None = None) -> tuple[int, str]:
+    """Största klamringsavstånd (mm) och var det står. Plaströr läses per ytterdiameter, kall- eller varmvatten
+    efter systemet, när uppsättningen har tabellerna för det."""
+    if material == "plast":
+        hot = any((system or "").upper().replace(" ", "").startswith(s) for s in rules.get("hot_systems") or [])
+        key = "plast_vv" if hot else "plast_kv"
+        t = rules["spacing"].get(key)
+        if t and (od or dn):
+            d = od or dn
+            for top, s in t:
+                if d <= top:
+                    src = (rules.get("sources") or {}).get(key, "")
+                    return int(s), f"plast {'varmvatten' if hot else 'kallvatten'} D≤{top}: {s} mm - {src.split(' (')[0]}"
+            return int(t[-1][1]), f"plast D>{t[-1][0]}: {t[-1][1]} mm (största i tabellen)"
     table = rules["spacing"].get(material) or rules["spacing"]["okänt"]
     d = dn or 0
     for top, s in table:

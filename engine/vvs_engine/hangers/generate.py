@@ -77,7 +77,7 @@ class _P:
         self.od = float(p.get("od") or p.get("dn") or 22.0)
         self.system = p.get("system") or ""
         self.storey = p.get("storey") or "?"
-        self.spacing, self.spacing_rule = RL.spacing(rules, self.material, self.dn)
+        self.spacing, self.spacing_rule = RL.spacing(rules, self.material, self.dn, self.system, p.get("od"))
         self.kgm = RL.kg_per_m(rules, self.material, self.od, self.system)
 
     def at(self, u: np.ndarray, o: np.ndarray, t: float) -> np.ndarray:
@@ -366,7 +366,8 @@ def bom(h: dict[str, Any], rules: dict[str, Any]) -> list[dict[str, Any]]:
     for r in rods:
         lengths[(r["size"], r["length_mm"])] = lengths.get((r["size"], r["length_mm"]), 0) + 1
     for (sz, ln), q in lengths.items():
-        out.append({"part": "gängstång", "text": f"Gängstång {sz} förzinkad", "qty": q, "length_mm": ln})
+        out.append({"part": "gängstång", "text": f"Gängstång {sz} förzinkad", "qty": q, "length_mm": ln,
+                    "stock": f"gängstång {sz} {rules['stock']['rod_mm']}"})
         if ln and ln > rules["stock"]["rod_mm"]:
             out.append({"part": "skarvmutter", "text": f"Skarvmutter {sz}", "qty": q, "length_mm": None})
     anchor = re.sub(r"\bM\d+\b", size, h.get("anchor") or "Takinfästning")
@@ -376,6 +377,15 @@ def bom(h: dict[str, Any], rules: dict[str, Any]) -> list[dict[str, Any]]:
     for p in h["pipes"]:
         out.append({"part": "rörklammer", "text": f"Rörklammer {round(p['od'] or 0)} mm {('med gummiinlägg ' if p['material'] != 'plast' else '')}{size}-anslutning".replace("  ", " "),
                     "qty": 1, "length_mm": None, "pipe": p["id"]})
+    return _articles(out, rules)
+
+
+def _articles(out: list[dict[str, Any]], rules: dict[str, Any]) -> list[dict[str, Any]]:
+    arts = rules.get("articles") or {}
+    for b in out:
+        a = arts.get(b.pop("stock", "") or "")
+        if a:
+            b.update(art=a["art"], supplier=a.get("supplier"), art_source=a.get("source"))
     return out
 
 
