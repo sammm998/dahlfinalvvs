@@ -194,6 +194,9 @@ export const api = {
     const fd = new FormData(); fd.append("file", file); fd.append("heights", JSON.stringify(heights));
     return req(`/api/projects/${projectId}/hangers`, { method: "POST", body: fd });
   },
+  hangerDrawings: (projectId: string) => req(`/api/projects/${projectId}/hangers/drawings`),
+  hangersFromDrawing: (projectId: string, body: any) =>
+    req(`/api/projects/${projectId}/hangers/from-drawing`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   reviseHangerSet: (id: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/hanger-sets/${id}/revise`, { method: "POST", body: fd }); },
   regenerateHangerSet: (id: string, heights: Record<string, string>) =>
     req(`/api/hanger-sets/${id}/regenerate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ heights }) }),

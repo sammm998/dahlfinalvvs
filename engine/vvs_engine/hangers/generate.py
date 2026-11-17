@@ -35,6 +35,9 @@ def _up(v: float, step: float) -> int:
 
 
 def storey_code(name: str | None, index: int) -> str:
+    b = re.fullmatch(r"Blad (\d+)", name or "")
+    if b:
+        return f"B{b.group(1)}"
     m = re.search(r"(-?\d+)", name or "")
     return f"P{m.group(1)}" if m else f"P{index}"
 
@@ -342,6 +345,14 @@ def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_
             "placed_because": h.get("why") or "klamringsavstånd",
             "flags": flags, "status": "föreslagen", "history": [], "approved": {},
         }
+        unknown = [p for _, _, p in pipes_ if p.material == "okänt"]
+        if unknown:
+            flags.append(f"materialet okänt för {', '.join(sorted({p.raw.get('name') or p.id for p in unknown}))[:80]} - "
+                         f"försiktigt klamringsavstånd {rules['spacing']['okänt'][0][1]} mm")
+        if model.get("source") == "2D-ritning":
+            # en planritning har ingen höjd: takhöjden och rörets avstånd under taket är inmatade antaganden
+            hanger["height_source"] = ("antagen (2D-ritning)" if c["z"] is not None else "saknas")
+            hanger["flags"].append("höjd ur 2D-ritning - mät på plats innan produktion")
         hanger["bom"] = bom(hanger, rules)
         hangers.append(hanger)
     return {"hangers": hangers, "skipped": skipped + [dict(s, why=s.get("why")) for s in model.get("skipped") or []],

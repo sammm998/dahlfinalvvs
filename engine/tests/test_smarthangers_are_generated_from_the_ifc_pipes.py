@@ -259,3 +259,81 @@ def test_plastic_spacing_follows_the_walraven_en806_table_and_rods_carry_the_bev
     rod = next(b for b in hs[0]["bom"] if b["part"] == "gängstång")
     size = hs[0]["rods"][0]["size"]
     assert rod.get("art") == {"M8": "51721008", "M10": "51721010"}.get(size) and "NP-101-2024" in rod.get("art_source", "")
+
+
+def _reading(tmp):
+    """En analyserad 2D-ritning: två parallella stålrör VS2-S13-35 och ett plaströr KV1-E17-32 i skala 1:50."""
+    import json
+    sh = tmp / "sheets" / "0"
+    sh.mkdir(parents=True)
+    (tmp / "drawing-legend.json").write_text(json.dumps({"entries": [
+        {"code": "S13", "description": "STÅLRÖR/ TUNNVÄGGIGA", "role": "material"},
+        {"code": "E17", "description": "PLASTRÖR/ PEN", "role": "material"}]}))
+    k = 0.017638888888888885                                 # m per pdf-punkt i 1:50
+    L = 6.0 / k                                              # 6 m
+    pp = [{"physical_pipe_id": "a", "system": "VS2", "designation": "VS2-S13-35", "dn": 35, "evidence_state": "CONFIRMED",
+           "geometry": [[[100, 100], [100 + L / 2, 100], [100 + L, 100]]]},
+          {"physical_pipe_id": "b", "system": "VS2", "designation": "VS2-S13-35", "dn": 35, "evidence_state": "CONFIRMED",
+           "geometry": [[[100, 100 + 0.3 / k], [100 + L, 100 + 0.3 / k]]]},
+          {"physical_pipe_id": "c", "system": "KV1", "designation": "KV1-E17-32", "dn": 32, "evidence_state": "CONFIRMED",
+           "geometry": [[[100, 400], [100, 400 + 3.0 / k], [100 + 2.0 / k, 400 + 3.0 / k]]]},
+          {"physical_pipe_id": "d", "system": "S1", "designation": "S1-P3-110", "dn": 110, "evidence_state": "IN_HATCHED_AREA",
+           "geometry": [[[0, 0], [50, 0]]]}]
+    (sh / "physical-pipes.json").write_text(json.dumps({"physical_pipes": pp}))
+    (sh / "quantities.json").write_text(json.dumps({"scale": {"meters_per_pdf_point": k, "state": "VERIFIED",
+                                                               "evidence": [{"kind": "scale_text", "detail": {"ratio": 50}}]}}))
+    return tmp
+
+
+def test_hangers_from_a_2d_drawing_when_there_is_no_ifc(tmp_path):
+    from vvs_engine.hangers.from_drawing import ceilings_from, pipes_from_reading, sheets_in_reading
+    root = _reading(tmp_path)
+    assert sheets_in_reading(str(root))[0] == {"name": "Blad 1", "page": 0, "confirmed": 3, "pipes": 4, "m": 0.0,
+                                               "scale": "1:50", "scale_state": "VERIFIED", "usable": True}
+    m = pipes_from_reading(str(root), {"ceiling_mm": 2700, "drop_mm": 300}, "VS.pdf")
+    assert len(m["pipes"]) == 4                              # a rak (två punkter i linje blir en bit), b, c i två bitar
+    assert any("inte bekräftat" in s["why"] for s in m["skipped"])
+    a = next(p for p in m["pipes"] if p["id"].startswith("a:"))
+    assert abs((a["end"][0] - a["start"][0]) - 6000) < 1 and a["material"].startswith("STÅL") and a["start"][2] == 2700 - 300 + 17.5
+    r = G.generate(m, None, ceilings_from(m))
+    hs = r["hangers"]
+    assert hs[0]["id"].startswith("B1-") and all(h["height_source"] == "antagen (2D-ritning)" for h in hs)
+    assert all("höjd ur 2D-ritning - mät på plats innan produktion" in h["flags"] for h in hs)
+    steel = [h for h in hs if any(p["system"] == "VS2" for p in h["pipes"])]
+    assert all(h["kind"] == "takjärn" and len(h["pipes"]) == 2 for h in steel)
+    # rören vilar på takjärnet med underkanten 300 mm under taket: pendeln = 300 + 30 + 41 + 40, uppåt till 10 mm
+    assert steel[0]["rods"][0]["length_mm"] == 420 and not any("högre" in f for f in steel[0]["flags"])
+    xs = sorted(h["position"]["x"] for h in steel)
+    assert max(b - a for a, b in zip(xs, xs[1:])) <= RL.spacing(RL.default(), "stål", 35)[0]
+    kv = [h for h in hs if any(p["system"] == "KV1" for p in h["pipes"])]
+    assert kv and "Walraven" in kv[0]["pipes"][0]["spacing_rule"]                     # plast kallvatten 32: 1000 mm
+
+
+def test_the_service_makes_hangers_from_a_project_drawing(client, tmp_path):
+    import uuid
+    from app.db import AnalysisJob, Drawing, SessionLocal
+    from app.storage import storage
+    H = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "ritning@dahl.se", "password": "hemligt1"}).json()["access_token"]}
+    p = client.post("/api/projects", json={"name": "Kv Ritning", "contract_form": "ABT06"}, headers=H).json()
+    key = f"results/{uuid.uuid4().hex}"
+    import os
+    import shutil
+    dst = storage.path(key)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    shutil.copytree(_reading(tmp_path / "r"), dst)
+    with SessionLocal() as db:
+        d = Drawing(project_id=p["id"], filename="VS-plan.pdf", storage_key="x", sha256="0" * 64, size_bytes=1)
+        db.add(d)
+        db.flush()
+        db.add(AnalysisJob(drawing_id=d.id, status="COMPLETED", result_key=key))
+        db.commit()
+        did = d.id
+    lst = client.get(f"/api/projects/{p['id']}/hangers/drawings", headers=H).json()
+    assert lst[0]["drawing_id"] == did and lst[0]["sheets"][0]["confirmed"] == 3
+    r = client.post(f"/api/projects/{p['id']}/hangers/from-drawing", json={"drawing_id": did, "ceiling_mm": 2700, "drop_mm": 300}, headers=H)
+    assert r.status_code == 200, r.text
+    s = r.json()
+    assert s["n"] > 0 and s["settings"]["source"] == "2D-ritning" and s["hangers"][0]["height_source"] == "antagen (2D-ritning)"
+    rod = s["hangers"][0]["rods"][0]["length_mm"]
+    s2 = client.post(f"/api/hanger-sets/{s['id']}/regenerate", json={"heights": {"Blad 1": 3000}, "drop_mm": 500}, headers=H).json()
+    assert s2["hangers"][0]["rods"][0]["length_mm"] == rod + 200                       # 500 mm under taket i stället för 300

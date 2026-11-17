@@ -155,7 +155,8 @@ def _generate(s: HangerSet, model: dict[str, Any], heights: dict[str, float]) ->
     HG.pack(res["hangers"], r)
     s.settings = {**(s.settings or {}), "manual_heights": heights, "rules_version": r.get("version"),
                   "rules_verified": bool(r.get("verified")), "ceilings": res["ceilings"]}
-    s.pipes = {"pipes": model["pipes"], "fittings": model["fittings"], "storeys": model["storeys"], "skipped": res["skipped"]}
+    s.pipes = {"pipes": model["pipes"], "fittings": model["fittings"], "storeys": model["storeys"], "skipped": res["skipped"],
+               "source": model.get("source")}
     return res
 
 
@@ -181,6 +182,67 @@ async def create_set(project_id: str, file: UploadFile = File(...), heights: str
     res = _generate(s, model, _heights(heights))
     s.hangers = res["hangers"]
     _log(s, user, "genererad", n=len(res["hangers"]), rules_version=res["rules_version"])
+    _touch(s)
+    db.commit()
+    return _out(s)
+
+
+def _readings(db: Session, project_id: str) -> list[dict[str, Any]]:
+    """Projektets analyserade ritningar: den senaste färdiga läsningen per ritning."""
+    from .db import AnalysisJob, Drawing
+    rows = (db.query(AnalysisJob, Drawing).join(Drawing, AnalysisJob.drawing_id == Drawing.id)
+            .filter(Drawing.project_id == project_id, AnalysisJob.status == "COMPLETED")
+            .order_by(AnalysisJob.created_at.desc()).all())
+    seen, out = set(), []
+    for j, d in rows:
+        if d.id in seen or not j.result_key:
+            continue
+        seen.add(d.id)
+        root = storage.path(j.result_key)
+        if os.path.isdir(root):
+            out.append({"drawing_id": d.id, "job_id": j.id, "filename": d.filename, "root": root})
+    return out
+
+
+@router.get("/api/projects/{project_id}/hangers/drawings")
+def hanger_drawings(project_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Ritningarna som kan ge hängare när IFC saknas, med bladen och de bekräftade rören per blad."""
+    from vvs_engine.hangers.from_drawing import sheets_in_reading
+    p = _project(db, user, project_id)
+    return [{k: v for k, v in r.items() if k != "root"} | {"sheets": sheets_in_reading(r["root"])} for r in _readings(db, p.id)]
+
+
+class FromDrawing(BaseModel):
+    drawing_id: str
+    ceiling_mm: float | None = None
+    drop_mm: float = 300.0
+    sheets: list[str] | None = None
+    name: str = ""
+
+
+@router.post("/api/projects/{project_id}/hangers/from-drawing")
+def create_from_drawing(project_id: str, body: FromDrawing, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Hängare ur en analyserad 2D-ritning. Höjden är inmatad (takhöjd och avstånd till rörets underkant) och står
+    som antagen på varje hängare."""
+    from vvs_engine.hangers.from_drawing import ceilings_from, pipes_from_reading
+    p = _project(db, user, project_id)
+    r = next((x for x in _readings(db, p.id) if x["drawing_id"] == body.drawing_id), None)
+    if r is None:
+        raise HTTPException(404, "Ritningen har ingen färdig analys i projektet")
+    model = pipes_from_reading(r["root"], {"ceiling_mm": body.ceiling_mm, "drop_mm": body.drop_mm}, r["filename"], body.sheets)
+    if not model["pipes"]:
+        raise HTTPException(422, "Inga bekräftade rör på de valda bladen")
+    s = HangerSet(project_id=p.id, name=body.name or f"{p.name} – {r['filename']}", revision="A",
+                  source_filename=r["filename"], created_by=user.email, approvals={}, log=[],
+                  settings={"source": "2D-ritning", "drawing_id": body.drawing_id, "drop_mm": body.drop_mm,
+                            "ceiling_mm": body.ceiling_mm, "sheets": body.sheets})
+    db.add(s)
+    db.flush()
+    res = _generate(s, model, ceilings_from(model))
+    s.settings = {**s.settings, "source": "2D-ritning", "drawing_id": body.drawing_id, "drop_mm": body.drop_mm,
+                  "ceiling_mm": body.ceiling_mm, "sheets": body.sheets}
+    s.hangers = res["hangers"]
+    _log(s, user, "genererad ur ritning", n=len(res["hangers"]), drawing=r["filename"])
     _touch(s)
     db.commit()
     return _out(s)
@@ -214,6 +276,18 @@ def regenerate(set_id: str, body: dict[str, Any], user: User = Depends(current_u
         raise HTTPException(409, "Hängare är redan producerade - gör en ny revision i stället")
     heights = {str(k): float(v) for k, v in (body.get("heights") or {}).items() if v not in (None, "")}
     model = {k: (s.pipes or {}).get(k) or [] for k in ("pipes", "fittings", "storeys")}
+    model["source"] = (s.pipes or {}).get("source")
+    if model["source"] == "2D-ritning":
+        # ritningens rör har ingen egen höjd: underkanten flyttas med den nya takhöjden
+        drop = float(body.get("drop_mm") or (s.settings or {}).get("drop_mm") or 300)
+        for p in model["pipes"]:
+            c = heights.get(p.get("storey") or "")
+            z = (c - drop + float(p.get("dn") or 0) / 2) if c is not None else 0.0
+            p["start"][2] = p["end"][2] = z
+            p["drop_mm"] = drop
+        for st in model["storeys"]:
+            st["ceiling_mm"] = heights.get(st["name"])
+        s.settings = {**(s.settings or {}), "drop_mm": drop}
     res = _generate(s, model, heights)
     s.hangers = res["hangers"]
     s.approvals = {}

@@ -821,4 +821,13 @@ export const projekt: Record<string, string> = {
   "{0} rör utan takhängare (stigare, korta eller utan geometri)": "{0} pipes without ceiling hanger (risers, short or without geometry)",
   "ände": "end",
   "Läge i modellen": "Position in the model",
+  "Ingen IFC? Hängare ur de analyserade VS-ritningarna (PDF)": "No IFC? Hangers from the analysed plumbing drawings (PDF)",
+  "Bekräftade rör på ritningen används med system, material (ur teckenförklaringen) och dimension. En planritning har ingen höjd: ange takhöjd och avstånd från tak till rörets underkant. Varje hängare märks som antagen höjd och flaggas för mätning på plats. Välj bara de blad som visar samma rör en gång (planen eller detaljen, inte båda).": "Confirmed pipes on the drawing are used with system, material (from the legend) and size. A plan drawing has no height: enter the ceiling height and the distance from ceiling to the pipe's underside. Every hanger is marked as assumed height and flagged for measuring on site. Choose only sheets that show each pipe once (the plan or the detail, not both).",
+  "Takhöjd mm": "Ceiling height mm",
+  "Tak till rörets underkant mm": "Ceiling to pipe underside mm",
+  "Skapa hängare ur ritningen": "Create hangers from the drawing",
+  "{0} rör": "{0} pipes",
+  "ingen säker skala": "no reliable scale",
+  "antagen (2D-ritning)": "assumed (2D drawing)",
+  "höjd ur 2D-ritning - mät på plats innan produktion": "height from 2D drawing - measure on site before production",
 };

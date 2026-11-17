@@ -63,10 +63,23 @@ export default function PrefabPanel({ project }: { project: any }) {
   const [rules, setRules] = useState<any>(null);
   const [rulesText, setRulesText] = useState("");
   const nav = useNavigate();
+  const [drawings, setDrawings] = useState<any[]>([]);
+  const [dwg, setDwg] = useState("");
+  const [dwgSheets, setDwgSheets] = useState<Record<string, boolean>>({});
+  const [ceil, setCeil] = useState("2700");
+  const [drop, setDrop] = useState("300");
   const file = useRef<HTMLInputElement>(null);
   const revFile = useRef<HTMLInputElement>(null);
 
   const load = async () => setSets(await api.hangerSets(project.id));
+  useEffect(() => { api.hangerDrawings(project.id).then((d: any[]) => {
+    setDrawings(d);
+    if (d.length) { setDwg(d[0].drawing_id); setDwgSheets(Object.fromEntries(d[0].sheets.map((x: any) => [x.name, x.usable && x.confirmed > 0]))); }
+  }).catch(() => {}); }, [project.id]);
+  const pickDwg = (id: string) => { setDwg(id); const d = drawings.find((x) => x.drawing_id === id); setDwgSheets(Object.fromEntries((d?.sheets || []).map((x: any) => [x.name, x.usable && x.confirmed > 0]))); };
+  const fromDrawing = () => run(() => api.hangersFromDrawing(project.id, { drawing_id: dwg, ceiling_mm: Number(ceil) || null, drop_mm: Number(drop) || 300,
+                                                                            sheets: Object.entries(dwgSheets).filter(([, v]) => v).map(([k]) => k) }));
+  const curDwg = drawings.find((x) => x.drawing_id === dwg);
   useEffect(() => { load().catch((e) => setErr(e.message)); api.prefabRules().then((r: any) => { setRules(r); setRulesText(JSON.stringify(r, null, 2)); }).catch(() => {}); }, [project.id]);
 
   const show = (s: any) => {
@@ -112,6 +125,25 @@ export default function PrefabPanel({ project }: { project: any }) {
             {s.name} · rev {s.revision} · {trf("{0} hängare", s.n)}{s.flagged ? ` · ${trf("{0} flaggade", s.flagged)}` : ""}
           </button>))}
       </div>
+      {drawings.length > 0 && (
+        <details className="settings" style={{ marginTop: 10 }}>
+          <summary>{tr("Ingen IFC? Hängare ur de analyserade VS-ritningarna (PDF)")}</summary>
+          <p className="muted small">{tr("Bekräftade rör på ritningen används med system, material (ur teckenförklaringen) och dimension. En planritning har ingen höjd: ange takhöjd och avstånd från tak till rörets underkant. Varje hängare märks som antagen höjd och flaggas för mätning på plats. Välj bara de blad som visar samma rör en gång (planen eller detaljen, inte båda).")}</p>
+          <div className="row small" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <label>{tr("Ritning")}<br /><select value={dwg} onChange={(e) => pickDwg(e.target.value)}>
+              {drawings.map((d) => <option key={d.drawing_id} value={d.drawing_id}>{d.filename}</option>)}</select></label>
+            <label>{tr("Takhöjd mm")}<br /><input style={{ width: 80 }} value={ceil} onChange={(e) => setCeil(e.target.value)} /></label>
+            <label>{tr("Tak till rörets underkant mm")}<br /><input style={{ width: 80 }} value={drop} onChange={(e) => setDrop(e.target.value)} /></label>
+            <button className="small" disabled={busy || !dwg} onClick={fromDrawing}>{tr("Skapa hängare ur ritningen")}</button>
+          </div>
+          <div className="small" style={{ marginTop: 6, columns: 3 }}>
+            {(curDwg?.sheets || []).map((x: any) => (
+              <label key={x.name} className="check" style={{ display: "block", opacity: x.usable ? 1 : 0.5 }}>
+                <input type="checkbox" disabled={!x.usable || !x.confirmed} checked={!!dwgSheets[x.name]} onChange={(e) => setDwgSheets({ ...dwgSheets, [x.name]: e.target.checked })} />
+                {x.name} {x.scale || ""} · {trf("{0} rör", x.confirmed)}{!x.usable ? ` · ${tr("ingen säker skala")}` : ""}
+              </label>))}
+          </div>
+        </details>)}
       {err && <p className="error">{err}</p>}
 
       {open && (
