@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
+import SpecAnalysis from "./SpecAnalysis";
 import { t as tr, trf, locale } from "../i18n";
 
 /* Teknisk beskrivning: allt material en beskrivning föreskriver, utan ritningar.
@@ -18,6 +19,9 @@ type Item = {
   spec: Record<string, string>; text: string; category: string; subcategory: string; ama_code: string; page: number;
   parent: string; supplied_by: string; inferred: string;
   quantity_from?: string; description_quantity?: number | null;
+  quantity_source?: string; quantity_conflict?: { beskrivning: number; ritning: number } | null; quantity_flags?: string[];
+  adjustable?: { quantity: number; as_written: string } | null; by_drawing?: boolean; option?: boolean; article_status?: string;
+  conditions?: { kind: string; text: string; ama: string; page: number }[]; references?: { code: string; text: string }[];
   from_drawing?: { kind: "antal" | "meter"; quantity: number; unit: string; tag?: string; system?: string;
                    sheets?: Record<string, number>; by_dn?: Record<string, number>; review_m?: number; no_scale?: boolean };
   match: { status: "hittad" | "möjlig" | "förslag" | "saknas" | "allmänt" | "annan"; hits: Hit[]; in_catalog: boolean; note: string;
@@ -208,7 +212,7 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
           <p className="muted small" style={{ maxWidth: 640 }}>
             {ifc
               ? tr("Ladda upp en materiallista – ett mejl (.eml), text, Word, Excel eller CSV/BOM – eller en IFC-modell (.ifc/.zip), eller klistra in texten ur ett mejl. Varje position läses med all text som hör till den: fabrikat och RSK på raderna under räknas till positionen. Allt söks i Dahls katalog, och mängden hämtas från projektets ritningar när den står där.")
-              : tr("Beskrivningen läses utan ritningar: varje post med kod, antal, fabrikat, typ, RSK och specifikation, tillbehören under \"Härtill\", produkter som kravtexten nämner, allmänt material och arbete. Allt söks i materialboken och Dahls katalog.")}
+              : tr("Ladda upp den tekniska beskrivningen som PDF – i alla projekt, AB 04 som ABT 06. Den läses först och sedan tillsammans med projektets ritningar: varje post med kod, antal, fabrikat, typ, RSK och specifikation; \"antal enligt ritning\" hämtas från ritningen; samma objekt räknas en gång; olika mängder flaggas; reglerbara mängder (R20) och optioner märks. Förutsättningar och gränsdragning samlas för sig. Allt söks i materialboken och Dahls katalog.")}
           </p>
         </div>
         {pasteOpen && (
@@ -264,6 +268,7 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
       </details>}
 
       {err && <p className="error">{err}</p>}
+      {!ifc && active && data && <SpecAnalysis specId={active} project={project} onPriority={() => api.techSpec(active).then(setData)} />}
 
       {specs.length > 1 && (
         <div className="chips" style={{ marginTop: 10 }}>
@@ -384,10 +389,17 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                             {it.kind === "tillbehor" && <span className="muted">↳ </span>}{it.name}
                             {it.kind !== "post" && <span className="badge small" style={{ marginLeft: 6 }}>{tr(KIND[it.kind])}</span>}
                             {it.supplied_by && <span className="badge small warn" style={{ marginLeft: 6 }}>{it.supplied_by.startsWith("Ingår") ? it.supplied_by : trf("Levereras av {0}", it.supplied_by)}</span>}
+                            {it.option && <span className="badge small" style={{ marginLeft: 6, background: "#efe6ff", color: "#5b2fb0" }}>{tr("Option")}</span>}
+                            {it.kind === "post" && it.article_status === "funktion - artikel ej föreskriven" && <span className="badge small warn" style={{ marginLeft: 6 }} title={tr("Handlingen beskriver en funktion men föreskriver ingen artikel. Ett förslag måste verifieras.")}>{tr("artikel ej föreskriven")}</span>}
                           </td>
-                          <td className="num">{qty(it)}{it.quantity_from === "ritning" && (
-                            <span className="badge small ok" style={{ marginLeft: 4 }}
-                              title={it.description_quantity != null ? trf("Underlaget: {0}", it.description_quantity) : tr("Underlaget anger ingen mängd")}>{tr("ritning")}</span>)}</td>
+                          <td className="num" title={it.quantity_source ? tr(it.quantity_source) : undefined}>{qty(it)}
+                            {it.quantity_conflict ? <span className="badge small warn" style={{ marginLeft: 4 }}
+                                title={trf("Beskrivningen {0}, ritningen {1}", it.quantity_conflict.beskrivning, it.quantity_conflict.ritning)}>{tr("motstridig")}</span>
+                              : it.quantity_source === "beskrivning, bekräftad av ritning" ? <span className="badge small ok" style={{ marginLeft: 4 }}>✓ {tr("ritning")}</span>
+                              : it.quantity_from === "ritning" ? <span className="badge small ok" style={{ marginLeft: 4 }}
+                                  title={it.description_quantity != null ? trf("Underlaget: {0}", it.description_quantity) : tr("Underlaget anger ingen mängd")}>{tr("ritning")}</span>
+                              : it.by_drawing && it.total_quantity == null ? <span className="badge small warn" style={{ marginLeft: 4 }}>{tr("enl. ritning – ej hittad")}</span> : null}
+                            {it.adjustable && <span className="badge small" style={{ marginLeft: 4 }} title={tr("Reglerbar mängd: slutlig mängd regleras ekonomiskt")}>{it.adjustable.as_written}</span>}</td>
                           <td>{it.manufacturer || "–"}{it.spec?.["Flagga"] && <span className="badge small warn" style={{ marginLeft: 4 }} title={it.inferred}>{tr(it.spec["Flagga"])}</span>}</td>
                           <td>{it.type || "–"}{it.or_equal && <span className="muted small"> {tr("el. likv.")}</span>}</td>
                           <td className="lf-mono tspec-rsk">
@@ -433,6 +445,12 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                               <button className="secondary small" onClick={() => saveQty(it.id, qEdit)}>{tr("Spara antal")}</button>{" "}
                               {it.quantity_override != null && <span className="muted">{tr("angivet för hand")}</span>}
                             </p>
+                            {it.quantity_source && <p className="small"><b>{tr("Mängdens källa")}:</b> {tr(it.quantity_source)}
+                              {(it.quantity_flags ?? []).map((f) => <span key={f} className="badge small warn" style={{ marginLeft: 6 }}>{f}</span>)}</p>}
+                            {(it.conditions ?? []).length > 0 && <div className="small"><b>{tr("Förutsättningar som påverkar valet")}:</b>
+                              <ul style={{ margin: "2px 0 6px" }}>{it.conditions!.map((c, i) => <li key={i}>{c.text} <span className="muted">({c.ama} s. {c.page})</span></li>)}</ul></div>}
+                            {(it.references ?? []).length > 0 && <div className="small"><b>{tr("Hänvisningar")}:</b>
+                              <ul style={{ margin: "2px 0 6px" }}>{it.references!.map((r) => <li key={r.code}><b>{r.code}</b> {r.text.slice(0, 400)}</li>)}</ul></div>}
                             {it.from_drawing && (
                               <p className="small"><b>{tr("Mängd från ritning")}:</b>{" "}
                                 {it.from_drawing.kind === "antal"

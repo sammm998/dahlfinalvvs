@@ -74,6 +74,8 @@ class Project(Base):
     # ABT 06 i två varianter: "ritningar" läser handlingens alla blad (och kan ha en beskrivning bredvid),
     # "beskrivning" har bara den tekniska beskrivningen och inga ritningar. Tomt är "ritningar".
     abt_variant: Mapped[str] = mapped_column(String(16), default="")
+    # när beskrivning och ritning säger olika mängder: flagga (ingen avgör), beskrivning eller ritning går före
+    quantity_priority: Mapped[str] = mapped_column(String(16), default="flagga")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
     owner: Mapped[User] = relationship(back_populates="projects")
     drawings: Mapped[list["Drawing"]] = relationship(back_populates="project", cascade="all, delete-orphan")
@@ -824,6 +826,7 @@ _ADDED_COLUMNS = (
     ("tech_specs", "ai", "JSON"),
     ("tech_specs", "source", "VARCHAR(8) DEFAULT 'tb'"),
     ("api_spend", "user_email", "VARCHAR(255) DEFAULT ''"),
+    ("projects", "quantity_priority", "VARCHAR(16) DEFAULT 'flagga'"),
 )
 
 

@@ -129,7 +129,7 @@ export default function ProjectPage() {
           </div>
         </div>
       )}
-      {project.tech_spec && <TechSpecPanel project={project} />}
+      <TechSpecPanel project={project} />
       <TechSpecPanel key={`ifc-${ifcKey}`} project={project} source="ifc" />
       <OfferPanel project={project} />
       <PrefabPanel project={project} />

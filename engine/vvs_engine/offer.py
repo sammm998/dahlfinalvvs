@@ -161,11 +161,14 @@ def build_rows(items: list[dict[str, Any]], book: dict[str, dict[str, Any]], cus
                 flags.append("antal saknas")
             if price["netto"] is None and art["rsk"]:
                 flags.append("pris saknas")
+            flags += [f for f in sub.get("quantity_flags") or [] if f not in flags]
             row = {"id": sub.get("id"), "pos": sub.get("code") or "", "text": sub.get("name") or "",
                    "foreskrift": " ".join(x for x in (sub.get("manufacturer"), sub.get("type")) if x),
                    "rsk": art["rsk"], "artikel": art.get("name") or "", "val": art.get("route") or "",
                    "antal": qty, "enhet": sub.get("unit") or "st", **price, "inkop": inkop,
-                   "flaggor": flags, "kalla": sub.get("category") or ""}
+                   "flaggor": flags, "kalla": sub.get("category") or "",
+                   "option": bool(sub.get("option")), "mangd_kalla": sub.get("quantity_source") or "",
+                   "reglerbar": bool(sub.get("adjustable")), "artikelstatus": sub.get("article_status") or ""}
             if kind == "kalkyloffert":
                 per, src = hours_per_unit(sub)
                 row["tim_per_enhet"], row["tim_kalla"] = per, src
@@ -194,6 +197,20 @@ def compute(row: dict[str, Any], hourly_rate: float = 0.0) -> dict[str, Any]:
 
 def totals(rows: list[dict[str, Any]], bonus_pct: float | None = None, extra_hours: float = 0.0,
            hourly_rate: float = 0.0) -> dict[str, Any]:
+    """Grundomfattningen. Optionerna räknas för sig och ingår inte i totalen."""
+    opts = [r for r in rows if r.get("option")]
+    out = _totals([r for r in rows if not r.get("option")], bonus_pct, extra_hours, hourly_rate)
+    if opts:
+        o = _totals(opts, None, 0.0, hourly_rate)
+        out["optioner"] = {"material": o["material"], "arbete": o["arbete"], "timmar": o["timmar"], "total": o["total"],
+                           "rader": o["rader"]}
+    out["rader"] += len(opts)
+    out["flaggade"] += sum(1 for r in opts if r.get("flaggor"))
+    return out
+
+
+def _totals(rows: list[dict[str, Any]], bonus_pct: float | None = None, extra_hours: float = 0.0,
+            hourly_rate: float = 0.0) -> dict[str, Any]:
     material = sum(r["summa"] or 0 for r in rows)
     inkop = sum(r["inkop_summa"] or 0 for r in rows if r.get("inkop_summa") is not None)
     with_cost = sum(r["summa"] or 0 for r in rows if r.get("inkop_summa") is not None)

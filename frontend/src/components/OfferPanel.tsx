@@ -117,7 +117,9 @@ export default function OfferPanel({ project }: { project: any }) {
                 {open.rows.map((r: any) => (
                   <tr key={r.id}>
                     <td>{r.pos}</td>
-                    <td>{r.text}{r.foreskrift && <div className="muted small">{r.foreskrift}</div>}</td>
+                    <td>{r.text}{r.option && <span className="badge small" style={{ marginLeft: 4, background: "#efe6ff", color: "#5b2fb0" }}>{tr("Option")}</span>}
+                      {r.foreskrift && <div className="muted small">{r.foreskrift}</div>}
+                      {r.mangd_kalla && <div className="muted small">{tr("Mängd")}: {tr(r.mangd_kalla)}</div>}</td>
                     <td className="lf-mono">{r.rsk || "–"}</td>
                     <td className="small">{r.artikel || "–"}{r.val && <div className="muted">{tr(r.val)}</div>}</td>
                     <td className="num"><input style={{ width: 64, textAlign: "right" }} defaultValue={r.antal ?? ""}
@@ -139,6 +141,7 @@ export default function OfferPanel({ project }: { project: any }) {
             {kalk && <> · <b>{tr("Arbete")}:</b> {kr(T.arbete)} kr ({T.timmar} h)</>}
             {" · "}<b>{tr("Totalt exkl. moms")}:</b> {kr(T.total)} kr
             {T.bonus_kr ? <> · {trf("Bonus {0} %: {1} kr", T.bonus_pct, kr(T.bonus_kr))}</> : null}
+            {T.optioner && <><br /><b>{tr("Optioner (ingår inte i totalen)")}:</b> {kr(T.optioner.total)} kr · {trf("{0} rader", T.optioner.rader)}</>}
             {internal && T.marginal_kr != null && <span className="muted"> · {trf("Internt: inköp {0} kr, marginal {1} kr ({2} %), inköpspris finns för {3}", kr(T.inkop), kr(T.marginal_kr), T.marginal_pct, T.inkop_tackning)}</span>}
           </p>
         </div>)}

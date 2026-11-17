@@ -174,6 +174,9 @@ export const api = {
   uploadIfc: (projectId: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/ifc`, { method: "POST", body: fd }); },
   uploadTechSpec: (projectId: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/tech-specs`, { method: "POST", body: fd }); },
   techSpec: (id: string) => req(`/api/tech-specs/${id}`),
+  techSpecAnalysis: (id: string) => req(`/api/tech-specs/${id}/analysis`),
+  setQuantityPriority: (projectId: string, priority: string) =>
+    req(`/api/projects/${projectId}/quantity-priority`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ priority }) }),
   deleteTechSpec: (id: string) => req(`/api/tech-specs/${id}`, { method: "DELETE" }),
   // AI-kontrollen: missat och val i katalogen, billigt och ur den gemensamma budgeten
   // offerten: materialoffert och kalkyloffert ur den matchade listan

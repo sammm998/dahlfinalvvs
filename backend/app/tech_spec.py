@@ -438,9 +438,53 @@ def drawing_quantities(project_id: str) -> dict[str, Any]:
     return found
 
 
+def document_analysis(s: TechSpec) -> dict[str, Any]:
+    """Hela beskrivningens text läst (vvs_engine.tb.joint): förutsättningar, gränsdragning, optioner, kapiteltexter
+    och entreprenadform. Läses en gång ur den sparade PDF:en och sparas på beskrivningen."""
+    from sqlalchemy.orm.attributes import flag_modified
+    have = (s.stats or {}).get("analysis")
+    if have and have.get("v") == 1:
+        return have
+    empty = {"v": 1, "contract": {}, "conditions": [], "boundaries": [], "options": [], "option_codes": [], "by_code": {}}
+    if (s.source or "tb") != "tb" or not s.storage_key or not s.storage_key.lower().endswith(".pdf"):
+        return empty
+    try:
+        import pymupdf
+        from vvs_engine.tb import joint
+        with storage.open(s.storage_key) as fh:
+            doc = pymupdf.open(stream=fh.read(), filetype="pdf")
+        try:
+            a = {"v": 1, **joint.analyse(joint.blocks_of(doc), s.items or [])}
+        finally:
+            doc.close()
+    except Exception:                                    # noqa: BLE001 - posterna står kvar utan analysen
+        import logging
+        logging.getLogger("vvs.tb").warning("Beskrivningen kunde inte analyseras", exc_info=True)
+        return empty
+    try:
+        from .db import SessionLocal
+        with SessionLocal() as db:
+            row = db.get(TechSpec, s.id)
+            if row is not None:
+                row.stats = {**(row.stats or {}), "analysis": a}
+                flag_modified(row, "stats")
+                db.commit()
+        s.stats = {**(s.stats or {}), "analysis": a}
+    except Exception:                                    # noqa: BLE001 - nästa visning försöker igen
+        pass
+    return a
+
+
 def matched_items(s: TechSpec, with_ai: bool = True) -> list[dict[str, Any]]:
-    """Posterna med var de finns i katalogen - och med mängden ur projektets ritningar när den finns där."""
-    from vvs_engine.tb.drawing_link import apply, link
+    """Posterna med var de finns i katalogen - och mängden ur beskrivningen och ritningarna lästa tillsammans:
+    hänvisning till ritning, bekräftelse, motsägelse, reglerbar mängd, option, förutsättningar och hänvisningar."""
+    from vvs_engine.tb import joint
+    from vvs_engine.tb.drawing_link import link
+    from .db import Project as _P, SessionLocal as _SL
+    with _SL() as _db:
+        _p = _db.get(_P, s.project_id)
+        priority = (getattr(_p, "quantity_priority", None) or "flagga") if _p else "flagga"
+    analysis = document_analysis(s)
     from .tb_ai import overlay
     ix = material_index()
     picks = ((s.ai or {}).get("picks") or {}) if with_ai else {}
@@ -458,10 +502,13 @@ def matched_items(s: TechSpec, with_ai: bool = True) -> list[dict[str, Any]]:
     from .offers import data as offer_data
     crossref = offer_data("korsreferens")
     out = []
+    codes = set(analysis.get("option_codes") or [])
     for it in s.items or []:
-        it = apply(it, link(it, found))
-        if it.get("quantity_override") is not None:
-            it = {**it, "total_quantity": it["quantity_override"], "quantity_from": "manuellt"}
+        it = joint.quantity(it, link(it, found), priority)
+        conds = joint.relevant_conditions(it, analysis.get("conditions") or [])
+        refs = joint.references(it, analysis.get("by_code") or {})
+        it = {**it, "option": joint.is_option(it, codes), "article_status": joint.article_status(it),
+              "conditions": conds, "references": refs, "inquiry_text": joint.inquiry_text(it, conds, refs)}
         m = overlay(item_match(ix, it), picks.get(it.get("id")))
         eq = suggest(it, house) if house and it.get("kind") not in ("krav", "arbete") else None
         if eq:
@@ -606,6 +653,68 @@ def get_tech_spec(spec_id: str, user: User = Depends(current_user), db: Session 
     s = _spec(db, user, spec_id)
     items = matched_items(s)
     return {**_spec_out(s), "items": items, "facets": _facets(items), "sources": _sources(material_index())}
+
+
+@router.get("/api/tech-specs/{spec_id}/analysis")
+def spec_analysis(spec_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Det i beskrivningen som inte är mängder: projekt- och tekniska förutsättningar, gränsdragningslistan,
+    optioner och vilken entreprenadform handlingarna nämner."""
+    from vvs_engine.tb import joint
+    s = _spec(db, user, spec_id)
+    a = document_analysis(s)
+    p = db.get(Project, s.project_id)
+    c = a.get("contract") or {}
+    return {"contract": {**c, "project": p.contract_form if p else None,
+                         "differs": bool(c.get("guess") and p and c["guess"] != p.contract_form)},
+            "conditions": a.get("conditions") or [], "options": a.get("options") or [],
+            "boundaries": joint.boundary_list(a.get("boundaries") or [], s.items or []),
+            "quantity_priority": (getattr(p, "quantity_priority", None) or "flagga") if p else "flagga"}
+
+
+@router.get("/api/tech-specs/{spec_id}/boundaries.xlsx")
+def boundaries_xlsx(spec_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    import openpyxl
+    from openpyxl.styles import Font
+    a = spec_analysis(spec_id, user, db)
+    s = _spec(db, user, spec_id)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Gränsdragning"
+    ws.append(["Objekt / aktivitet", "Levereras av", "Monteras av", "Ansluts av", "Utförs av", "Ingår ej", "Källa (AMA, sida)", "Text"])
+    for c in ws[1]:
+        c.font = Font(bold=True)
+    for r in a["boundaries"]:
+        src = r["sources"][0] if r["sources"] else {}
+        ws.append([r["object"], r["levereras_av"] or "", r["monteras_av"] or "", r["ansluts_av"] or "", r["utförs_av"] or "",
+                   "ja" if r["ingår_ej"] else "", f"{src.get('ama') or ''} s. {src.get('page') or ''}".strip(), src.get("text") or ""])
+    w2 = wb.create_sheet("Förutsättningar")
+    w2.append(["Slag", "Krav", "Värden", "AMA", "Rubrik", "Sida", "Text"])
+    for c in a["conditions"]:
+        w2.append([c["kind"], "ja" if c.get("requirement") else "", ", ".join(c.get("values") or []), c.get("ama") or "",
+                   c.get("title") or "", c.get("page"), c["text"]])
+    w3 = wb.create_sheet("Optioner")
+    w3.append(["AMA", "Rubrik", "Sida", "Text"])
+    for o in a["options"]:
+        w3.append([o.get("ama") or "", o.get("title") or "", o.get("page"), o["text"]])
+    b = io.BytesIO()
+    wb.save(b)
+    return Response(b.getvalue(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": _disposition(f"Gränsdragning och förutsättningar - {s.title or s.filename}.xlsx")})
+
+
+class PriorityIn(BaseModel):
+    priority: str
+
+
+@router.post("/api/projects/{project_id}/quantity-priority")
+def set_priority(project_id: str, body: PriorityIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Vad som gäller när beskrivning och ritning säger olika mängder. 'flagga' avgör inget."""
+    if body.priority not in ("flagga", "beskrivning", "ritning"):
+        raise HTTPException(422, "Prioriteringen är flagga, beskrivning eller ritning")
+    p = _project(db, user, project_id)
+    p.quantity_priority = body.priority
+    db.commit()
+    return {"quantity_priority": p.quantity_priority}
 
 
 @router.delete("/api/tech-specs/{spec_id}")

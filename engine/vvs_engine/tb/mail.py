@@ -50,6 +50,8 @@ def rows(items: list[dict[str, Any]]) -> list[dict[str, str]]:
             "qty": _qty(it), "maker": " ".join(x for x in (it.get("manufacturer"), it.get("type")) if x),
             "spec": _spec(it), "numbers": _numbers(it),
             "where": f"s. {it.get('page')}" + (f" · {it['ama_code']}" if it.get("ama_code") else ""),
+            # hela kravtexten med hänvisade kapitel och förutsättningar: det leverantören behöver för att prissätta
+            "krav": (it.get("inquiry_text") or it.get("text") or "").strip(),
         })
     return out
 
@@ -70,6 +72,12 @@ def text_body(r: list[dict[str, str]], intro: str, sender: str) -> str:
         detail = " · ".join(v for v in (x["maker"], x["spec"], x["numbers"]) if v)
         if detail:
             lines.append(f"   {detail}")
+    krav = [x for x in r if x.get("krav")]
+    if krav:
+        lines += ["", "Kravtext ur beskrivningen per position:"]
+        for x in krav:
+            t = x["krav"] if len(x["krav"]) <= 700 else x["krav"][:700] + " …"
+            lines += ["", f"{x['pos']}. {x['code'] or x['name']} ({x['where']})", t]
     lines += ["", "Vänligen ange pris, leveranstid och artikelnummer (RSK) per rad.", "", "Med vänliga hälsningar"]
     if sender:
         lines.append(sender)
@@ -90,9 +98,13 @@ def html_body(r: list[dict[str, str]], intro: str, sender: str) -> str:
                                       (x["maker"], "left"), (x["spec"], "left"), (x["numbers"], "left")))
         + "</tr>" for x in r)
     sign = f"<br>{e(sender)}" if sender else ""
+    krav = "".join(f'<p style="margin:10px 0 2px"><b>{e(x["pos"])}. {e(x["code"] or x["name"])}</b> '
+                   f'<span style="color:#667">({e(x["where"])})</span></p>'
+                   f'<div style="white-space:pre-wrap;font-size:13px">{e(x["krav"])}</div>' for x in r if x.get("krav"))
+    krav = f"<h4 style=\"margin:16px 0 4px;color:#004976\">Kravtext ur beskrivningen per position</h4>{krav}" if krav else ""
     return ('<div style="font-family:Arial,Helvetica,sans-serif;color:#1d2a33;font-size:14px;line-height:1.5">'
             f"<p>Hej,</p><p>{e(intro)}</p>"
-            f'<table style="border-collapse:collapse;width:100%;margin:10px 0 14px">{head}{body}</table>'
+            f'<table style="border-collapse:collapse;width:100%;margin:10px 0 14px">{head}{body}</table>{krav}'
             "<p>Vänligen ange pris, leveranstid och artikelnummer (RSK) per rad.</p>"
             f"<p>Med vänliga hälsningar{sign}</p></div>")
 
