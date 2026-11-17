@@ -36,6 +36,7 @@ import TakeoffPickPage from "./pages/TakeoffPick";
 import BuildingCadPage from "./pages/BuildingCad";
 import AgentPage from "./pages/Agent";
 import CadPickPage from "./pages/CadPick";
+import HangerPage from "./pages/Hanger";
 import { DahlLogo, DahlMark } from "./components/DahlLogo";
 
 function Guard({ children }: { children: JSX.Element }) {
@@ -177,6 +178,7 @@ const ROUTES = (
     <Route path="/projects/:id/analys" element={<Guard><ProjectAnalysisPage /></Guard>} />
     <Route path="/drawings/:id" element={<Guard><DrawingPage /></Guard>} />
     <Route path="/jobs/:id" element={<Guard><AnalysisPage /></Guard>} />
+    <Route path="/montage/:setId/:hid" element={<Guard><HangerPage /></Guard>} />
     <Route path="/jobs/:id/kalkyl" element={<Guard><CalcPage /></Guard>} />
     <Route path="/mangda" element={<Guard><TakeoffPickPage /></Guard>} />
     <Route path="/mangda/:id" element={<Guard><TakeoffPage /></Guard>} />

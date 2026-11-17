@@ -187,6 +187,33 @@ export const api = {
   customers: (q: string) => req(`/api/customers?q=${encodeURIComponent(q)}`),
   offerData: () => req("/api/offer-data"),
   offerDataUpload: (kind: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/offer-data/${kind}`, { method: "POST", body: fd }); },
+  // SmartHangers: prefabricerade rörupphängningar ur IFC-modellen
+  hangerSets: (projectId: string) => req(`/api/projects/${projectId}/hangers`),
+  hangerSet: (id: string) => req(`/api/hanger-sets/${id}`),
+  createHangerSet: (projectId: string, file: File, heights: Record<string, string>) => {
+    const fd = new FormData(); fd.append("file", file); fd.append("heights", JSON.stringify(heights));
+    return req(`/api/projects/${projectId}/hangers`, { method: "POST", body: fd });
+  },
+  reviseHangerSet: (id: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/hanger-sets/${id}/revise`, { method: "POST", body: fd }); },
+  regenerateHangerSet: (id: string, heights: Record<string, string>) =>
+    req(`/api/hanger-sets/${id}/regenerate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ heights }) }),
+  deleteHangerSet: (id: string) => req(`/api/hanger-sets/${id}`, { method: "DELETE" }),
+  hanger: (id: string, hid: string) => req(`/api/hanger-sets/${id}/hangers/${encodeURIComponent(hid)}`),
+  patchHanger: (id: string, hid: string, body: any) =>
+    req(`/api/hanger-sets/${id}/hangers/${encodeURIComponent(hid)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  deleteHanger: (id: string, hid: string) => req(`/api/hanger-sets/${id}/hangers/${encodeURIComponent(hid)}`, { method: "DELETE" }),
+  hangerPhoto: (id: string, hid: string, file: File, comment: string) => {
+    const fd = new FormData(); fd.append("file", file); fd.append("comment", comment);
+    return req(`/api/hanger-sets/${id}/hangers/${encodeURIComponent(hid)}/photo`, { method: "POST", body: fd });
+  },
+  approveHangerSet: (id: string, kind: string) =>
+    req(`/api/hanger-sets/${id}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind }) }),
+  hangerCalc: (id: string, body?: any) => body
+    ? req(`/api/hanger-sets/${id}/calc`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    : req(`/api/hanger-sets/${id}/calc`),
+  prefabRules: () => req("/api/prefab/rules"),
+  putPrefabRules: (body: any) => req("/api/prefab/rules", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  verifyPrefabRules: () => req("/api/prefab/rules/verify", { method: "POST" }),
   // det egna varumärkets sortiment (Alterna) och likvärdighetsförslagen ur det
   brandCatalog: () => req("/api/brand-catalog"),
   brandImport: (url = "") => req("/api/brand-catalog/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) }),

@@ -158,6 +158,29 @@ class TechSpec(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class HangerSet(Base):
+    """SmartHangers: ett projekts prefabricerade rörupphängningar ur en IFC-modell, en revision i taget.
+
+    Rören (en ögonblicksbild), hängarna med status och historik, godkännandena (offert, konstruktion,
+    produktionsfrisläppning) och händelseloggen står på uppsättningen, så att en ny revision kan jämföras med
+    den förra och det som redan är producerat eller monterat syns som kritiskt.
+    """
+    __tablename__ = "hanger_sets"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255), default="")
+    revision: Mapped[str] = mapped_column(String(8), default="A")
+    source_filename: Mapped[str] = mapped_column(String(255), default="")
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    pipes: Mapped[dict] = mapped_column(JSON, default=dict)
+    hangers: Mapped[list] = mapped_column(JSON, default=list)
+    approvals: Mapped[dict] = mapped_column(JSON, default=dict)
+    log: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class Offer(Base):
     """En offert byggd ur ett projekts matchade underlag: materialoffert eller kalkyloffert (entreprenad).
 
