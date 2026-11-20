@@ -1,7 +1,7 @@
 """ABT 06 fas 3: nyckeltalen och schablonraderna.
 
 Ett nyckeltal är företagets eget: per enhet ("ett WC ger ...") eller per m² ("ett badrum ger ... per m²"), med vad
-det ger - rör per system och dimension, artiklar ur materialboken, timmar. Inget värde här är en branschsanning.
+det ger - rör per system och dimension, artiklar ur Dahls katalog, timmar. Inget värde här är en branschsanning.
 Biblioteket är tomt tills någon lägger in sina egna, och ett nyckeltal används inte i ett projekt förrän någon har
 bekräftat det (docs/abt06-plan.md, fas 3).
 

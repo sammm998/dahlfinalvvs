@@ -17,6 +17,25 @@ os.environ.setdefault("VVS_DEV", "1")
 
 from app import calc as C  # noqa: E402
 
+# Dahls katalog i testets form: metervaror med dimensionen i benämningen och priser ur prislistan
+CATALOG = [
+    {"a": "R75", "n": "75 Rostfritt avloppsrör EN 1.4404 3 m", "e": "m", "p": 420.0},
+    {"a": "R75b", "n": "75 Rostfritt avloppsrör EN 1.4301 6 m", "e": "m", "p": None},
+    {"a": "R110", "n": "110 Rostfritt avloppsrör EN 1.4404", "e": "m", "p": 610.0},
+    {"a": "X16", "n": "16 PEX-rör RIR i skyddsrör", "e": "m", "p": 22.0},
+    {"a": "X16b", "n": "16 PEX-rör", "e": "m", "p": 15.0},
+    {"a": "P110", "n": "110 PP-rör slätt avlopp", "e": "m", "p": 95.0},
+    {"a": "P110b", "n": "110 PP avloppsrör", "e": "m", "p": None},
+    {"a": "P75", "n": "75 PP-rör slätt avlopp", "e": "m", "p": 70.0},
+    {"a": "K18", "n": "Kopparrör hårda raka enligt EN 18 mm, Gods tjlek. 1,0", "e": "m", "p": 80.0},
+    {"a": "S22", "n": "22 Stålrör förzinkat", "e": "m", "p": 50.0},
+]
+
+
+@pytest.fixture(autouse=True)
+def _catalog(monkeypatch):
+    monkeypatch.setattr(C, "_book", lambda: {"rows": CATALOG, "kind": "dahl"})
+
 LEGEND = [
     {"code": "X31", "description": "LEDNINGAR AV PEX IPE-XAI MED RIR", "role": "material"},
     {"code": "R8", "description": "LEDNINGAR AV ROSTFRIA RÖR", "role": "material"},
@@ -45,7 +64,7 @@ def test_the_articles_carry_the_class_and_the_dimension():
     rf = C._find_articles(["rostfri", "rostfria"], 75, klass="rostfri")
     assert rf, "boken har rostfria 75-rör"
     for a in rf:
-        assert C._leading_dim(a["n"]) == 75.0, a
+        assert 75.0 in ({C._leading_dim(a["n"])} | C._named_dims(a["n"])), a
         assert a["e"] == "m"
     import re
     assert all(re.search(C._CLASS["rostfri"][2], a["n"], re.I) for a in rf)
@@ -66,7 +85,7 @@ def test_the_articles_carry_the_class_and_the_dimension():
 def test_a_metal_dn_is_looked_up_as_its_outer_diameter():
     """Kopparrör DN 15 ligger på dy 18 i boken; stålrör DN 100 på 114,3."""
     cu = C._find_articles(["koppar"], 15, klass="koppar")
-    assert cu and all(C._leading_dim(a["n"]) in (15.0, 18.0) for a in cu)
+    assert cu and all(({C._leading_dim(a["n"])} | C._named_dims(a["n"])) & {15.0, 18.0} for a in cu)
     assert C._dims_for(100, plastic=False) == {100.0, 114.3}
     assert C._dims_for(110, plastic=True) == {110.0}
 

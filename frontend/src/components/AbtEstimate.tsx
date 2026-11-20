@@ -4,7 +4,7 @@ import { locale, num, t as tr, trf } from "../i18n";
 
 /* ABT 06 fas 3: nyckeltalen och schablonraderna.
  *
- * Nyckeltalen är dina egna: per enhet eller per m², med vad de ger – rör per system, artiklar ur materialboken,
+ * Nyckeltalen är dina egna: per enhet eller per m², med vad de ger – rör per system, artiklar ur Dahls katalog,
  * timmar. Inget här är ett branschvärde. Biblioteket är tomt tills du lägger in dina, och ett nyckeltal används i
  * ett projekt först när du har bekräftat det. Ändrar du ett bekräftat nyckeltal blir det ett utkast igen.
  *
@@ -93,7 +93,7 @@ export function AbtKeyFigures({ project }: { project: any }) {
     ...(bases?.symbols ?? []).map((s: any) => s.name), ...(bases?.apartments ?? []).map((a: any) => a.type)])];
   return (
     <div style={{ marginTop: 12 }}>
-      <p className="muted small">{tr("Nyckeltalen är dina egna: per enhet eller per m², med vad de ger – rör per system, artiklar ur materialboken, timmar. Inget här är ett branschvärde. Ett nyckeltal används i projektet först när du har bekräftat det, och ett bekräftat nyckeltal som ändras blir ett utkast igen.")}</p>
+      <p className="muted small">{tr("Nyckeltalen är dina egna: per enhet eller per m², med vad de ger – rör per system, artiklar ur Dahls katalog, timmar. Inget här är ett branschvärde. Ett nyckeltal används i projektet först när du har bekräftat det, och ett bekräftat nyckeltal som ändras blir ett utkast igen.")}</p>
       {err && <p className="error" role="alert">{err}</p>}
       <div className="row" style={{ gap: 8, margin: "8px 0" }}>
         <button className="small" onClick={() => setForm({ ...EMPTY, outputs: EMPTY.outputs.map((o) => ({ ...o })) })}>{tr("Nytt nyckeltal")}</button>

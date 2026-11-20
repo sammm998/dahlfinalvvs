@@ -114,7 +114,14 @@ BRANDS: dict[str, str] = {
     "vedum": "Vedum",
     "ballingslöv": "Ballingslöv",
     "tvättex": "Tvättex",
-    "macro": "Macro Design"
+    "macro": "Macro Design",
+    "hewi": "HEWI",
+    "franke": "Franke",
+    "gustavsberg": "Gustavsberg",
+    "tece": "TECE",
+    "geberit": "Geberit",
+    "oras": "Oras",
+    "mora": "Mora Armatur",
 }
 
 # Ord som står före "typ" utan att vara ett fabrikat: ett system (KV typ EA), ett don, ett ord i texten.

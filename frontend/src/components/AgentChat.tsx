@@ -51,7 +51,7 @@ const STEP_SAID: Record<string, (a: Record<string, unknown>) => string> = {
   fragorna: (a) => `Hämtade de olösta fallen i ${String(a.fil ?? "läsningen")}`,
   jamfor: (a) => `Jämförde ${String(a.fil_a ?? "A")} mot ${String(a.fil_b ?? "B")}`,
   rakna: (a) => `Räknade ut ${String(a.uttryck ?? "uttrycket")}`,
-  material: (a) => `Slog upp "${String(a.sok ?? "")}" i materialboken`,
+  material: (a) => `Slog upp "${String(a.sok ?? "")}" i Dahls katalog`,
 };
 
 function stepSaid(namn: string, arg: Record<string, unknown>): string {

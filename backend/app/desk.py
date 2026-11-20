@@ -271,7 +271,7 @@ def _rakna(desk: Desk, uttryck: str) -> dict:
     return {"uttryck": uttryck, "svar": round(v, 4)}
 
 
-@tool("material_pris", "Slå upp artiklar i materialboken på ord ur benämningen eller artikelnumret.",
+@tool("material_pris", "Slå upp artiklar i Dahls katalog på ord ur benämningen eller artikelnumret.",
       _obj({"sok": {"type": "string"}}, ["sok"]))
 def _material(desk: Desk, sok: str) -> dict:
     from .main import _material as book

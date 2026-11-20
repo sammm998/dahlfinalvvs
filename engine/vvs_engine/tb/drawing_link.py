@@ -65,6 +65,11 @@ def collect(readings: list[dict[str, Any]]) -> dict[str, Any]:
     pipes: dict[str, dict[str, Any]] = {}
     for r in readings:
         root, drawing = r["dir"], r.get("drawing") or ""
+        # ett principschema (blad utan uppmätt skala) visar samma komponenter som planen: de räknas på planen, och
+        # bara det som enbart står på schemat räknas därifrån
+        dq0 = _load(os.path.join(root, "document-quantities.json")) or {}
+        schematic = {s.get("page") for s in dq0.get("sheets_without_a_settled_scale") or []
+                     if s.get("reason") == "section_not_measured" or s.get("state") == "NONE"}
         # all text på bladen: i resultatets rot (märkt med sida), och per blad där en läsning skrev den så
         rows: list[dict[str, Any]] = list((_load(os.path.join(root, "vector-designations.json")) or {}).get("text_rows") or [])
         have = {t.get("page") for t in rows}
@@ -97,8 +102,10 @@ def collect(readings: list[dict[str, Any]]) -> dict[str, Any]:
                     if key in seen:
                         continue
                     seen.add(key)
-                    g = tags.setdefault(code, {"count": 0, "sheets": defaultdict(int)})
+                    g = tags.setdefault(code, {"count": 0, "plan": 0, "sheets": defaultdict(int)})
                     g["count"] += 1
+                    if page not in schematic:
+                        g["plan"] += 1
                     g["sheets"][f"{drawing} blad {int(page or 0) + 1}".strip()] += 1
         dq = _load(os.path.join(root, "document-quantities.json")) or _load(os.path.join(root, "quantities.json")) or {}
         for row in dq.get("rows") or []:
@@ -119,8 +126,20 @@ def collect(readings: list[dict[str, Any]]) -> dict[str, Any]:
             g["designations"].add(des)
             g["drawings"].add(drawing)
             g["no_scale"] = g["no_scale"] or row.get("state") == "NO_SCALE"
+    # en kod med löpnummer 01-09 (VVB01, KVP02) är en apparat, inte en typ: den står på plan, schema och
+    # förteckning men är en sak. En typkod (RV601, BL701) räknas varje gång den står.
+    for k, v in tags.items():
+        if v.get("plan") and v["plan"] < v["count"]:
+            v["shown"], v["count"] = v["count"], v["plan"]          # planen räknar; schemat visar samma sak
+        elif not v.get("plan") and len(v["sheets"]) > 1:
+            # bara på scheman: flera scheman visar samma komponent - det största antalet på ett blad
+            v["shown"], v["count"] = v["count"], max(v["sheets"].values())
+        if re.fullmatch(r"[A-ZÅÄÖ]{2,5}0\d", k) and v["count"] > 1:
+            v.setdefault("shown", v["count"])
+            v["count"] = 1
     return {
-        "tags": {k: {"count": v["count"], "sheets": dict(v["sheets"])} for k, v in tags.items()},
+        "tags": {k: {"count": v["count"], "sheets": dict(v["sheets"]), **({"shown": v["shown"]} if "shown" in v else {})}
+                 for k, v in tags.items()},
         "pipes": {k: {"m": round(v["m"], 2), "review_m": round(v["review_m"], 2),
                       "by_dn": {dn: round(x, 2) for dn, x in sorted(v["by_dn"].items(), key=lambda kv: int(kv[0]))},
                       "designations": sorted(v["designations"])[:30], "drawings": sorted(v["drawings"]),

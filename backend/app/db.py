@@ -74,6 +74,8 @@ class Project(Base):
     # ABT 06 i två varianter: "ritningar" läser handlingens alla blad (och kan ha en beskrivning bredvid),
     # "beskrivning" har bara den tekniska beskrivningen och inga ritningar. Tomt är "ritningar".
     abt_variant: Mapped[str] = mapped_column(String(16), default="")
+    # när beskrivning och ritning säger olika mängder: flagga (ingen avgör), beskrivning eller ritning går före
+    quantity_priority: Mapped[str] = mapped_column(String(16), default="flagga")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
     owner: Mapped[User] = relationship(back_populates="projects")
     drawings: Mapped[list["Drawing"]] = relationship(back_populates="project", cascade="all, delete-orphan")
@@ -156,6 +158,51 @@ class TechSpec(Base):
     # tb = teknisk beskrivning (PDF), ifc = IFC-modell: samma poster, samma matchning
     source: Mapped[str] = mapped_column(String(8), default="tb")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class HangerSet(Base):
+    """SmartHangers: ett projekts prefabricerade rörupphängningar ur en IFC-modell, en revision i taget.
+
+    Rören (en ögonblicksbild), hängarna med status och historik, godkännandena (offert, konstruktion,
+    produktionsfrisläppning) och händelseloggen står på uppsättningen, så att en ny revision kan jämföras med
+    den förra och det som redan är producerat eller monterat syns som kritiskt.
+    """
+    __tablename__ = "hanger_sets"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255), default="")
+    revision: Mapped[str] = mapped_column(String(8), default="A")
+    source_filename: Mapped[str] = mapped_column(String(255), default="")
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    pipes: Mapped[dict] = mapped_column(JSON, default=dict)
+    hangers: Mapped[list] = mapped_column(JSON, default=list)
+    approvals: Mapped[dict] = mapped_column(JSON, default=dict)
+    log: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Offer(Base):
+    """En offert byggd ur ett projekts matchade underlag: materialoffert eller kalkyloffert (entreprenad).
+
+    Raderna sparas som de räknades, med artikel, kundens pris, inköp och marginal; kunden och rabatten som gällde
+    står på offerten, så att den går att räkna om när avtalet ändras och ändå visar vad som lämnades.
+    """
+    __tablename__ = "offers"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    number: Mapped[str] = mapped_column(String(32), default="")
+    kind: Mapped[str] = mapped_column(String(16), default="materialoffert")     # materialoffert | kalkyloffert
+    title: Mapped[str] = mapped_column(String(255), default="")
+    customer_no: Mapped[str] = mapped_column(String(64), default="")
+    customer_name: Mapped[str] = mapped_column(String(255), default="")
+    sources: Mapped[list] = mapped_column(JSON, default=list)
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    rows: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class AnalysisJob(Base):
@@ -779,6 +826,7 @@ _ADDED_COLUMNS = (
     ("tech_specs", "ai", "JSON"),
     ("tech_specs", "source", "VARCHAR(8) DEFAULT 'tb'"),
     ("api_spend", "user_email", "VARCHAR(255) DEFAULT ''"),
+    ("projects", "quantity_priority", "VARCHAR(16) DEFAULT 'flagga'"),
 )
 
 

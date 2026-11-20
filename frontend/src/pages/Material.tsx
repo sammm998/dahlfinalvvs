@@ -61,7 +61,7 @@ export default function MaterialPage() {
         <div>
           <h1>Material</h1>
           <p className="lead">
-            {data ? <>{data.book.n.toLocaleString(locale())} {tr("artiklar ur")} {data.book.source ?? tr("materialboken")}</>
+            {data ? <>{data.book.n.toLocaleString(locale())} {tr("artiklar ur")} {data.book.source ?? tr("Dahls produktkatalog")}</>
               : "Laddar…"} · sök på några ord i valfri ordning, till exempel <code>{tr("110 pp mark")}</code>.
           </p>
         </div>
@@ -110,8 +110,8 @@ export default function MaterialPage() {
                     : <td className="lf-mono">{r.a}</td>}
                   <td>{r.n}</td>
                   <td className="muted">{r.e || "–"}</td>
-                  <td className="num" title={r.p_src === "materialsortering" ? tr("Priset kommer ur materialboken på samma RSK-nummer; katalogen skriver inget pris.") : undefined}>
-                    {kr(price(r))}{r.p_src === "materialsortering" && <sup className="muted"> *</sup>}</td>
+                  <td className="num" title={r.p_src === "prislista" ? tr("Priset kommer ur Dahls prislista på samma RSK-nummer; katalogen skriver inget pris.") : undefined}>
+                    {kr(price(r))}{r.p_src === "prislista" && <sup className="muted"> *</sup>}</td>
                   <td className="num muted">{r.r ? `${Math.round(r.r * 100)} %` : "–"}</td>
                   <td className="num muted">{num(r.w)}</td>
                   <td className="num muted">{num(r.co2)}</td>

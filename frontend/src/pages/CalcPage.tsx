@@ -6,7 +6,7 @@ import { api } from "../api";
 /* Kalkylen: från mängd till pris, och anbudet. En egen sida, för det är ett eget arbete.
  *
  * Två steg som hålls isär så att varje krona går att spåra till en rad på ritningen. Material: varje
- * beteckning matchas mot materialboken och får ett FÖRSLAG med alternativ bredvid - den som räknar väljer.
+ * beteckning matchas mot Dahls katalog och får ett FÖRSLAG med alternativ bredvid - den som räknar väljer.
  * Arbete: timmarna kommer ur Normtid VVS, med tillägg och avvikelseanalys utskrivna. Där boken inte har någon
  * tid står det, och timmen skrivs för hand.
  *
@@ -128,7 +128,7 @@ export default function CalcPage() {
         <div>
           <h1>Kalkyl</h1>
           <p className="lead">
-            {drawingName ? `${drawingName} · ` : ""}Material ur materialboken, timmar ur Normtid VVS, allt utskrivet
+            {drawingName ? `${drawingName} · ` : ""}Material ur Dahls katalog, timmar ur Normtid VVS, allt utskrivet
             rad för rad. Talen räknas ur läsningen med dina rättelser ovanpå. {under?.normtid?.warning}
           </p>
         </div>
@@ -218,7 +218,7 @@ export default function CalcPage() {
           {!calc && (
             <div className="card calc-empty">
               <h3>{tr("Inget räknat ännu")}</h3>
-              <p className="muted">Tryck <b>Kalkylera</b> {tr("så matchas varje beteckning mot materialboken och får sin normtid. Du väljer sedan artikel och rättar timmar rad för rad.")}</p>
+              <p className="muted">Tryck <b>Kalkylera</b> {tr("så matchas varje beteckning mot Dahls katalog och får sin normtid. Du väljer sedan artikel och rättar timmar rad för rad.")}</p>
             </div>
           )}
           {calc && (

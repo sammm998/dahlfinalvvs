@@ -161,6 +161,10 @@ from . import tech_spec as tech_spec_api  # noqa: E402
 app.include_router(tech_spec_api.router)
 from . import brand_catalog as brand_catalog_api  # noqa: E402
 app.include_router(brand_catalog_api.router)
+from . import offers as offers_api  # noqa: E402
+app.include_router(offers_api.router)
+from . import prefab as prefab_api  # noqa: E402
+app.include_router(prefab_api.router)
 
 
 # ---------------------------------------------------------------- health / auth
@@ -1002,67 +1006,63 @@ def undo_correction(drawing_id: str, correction_id: str, user: User = Depends(cu
 _MATERIAL: dict | None = None
 
 
-_BOOK: dict | None = None
-
-
 def _material_book() -> dict:
-    """Materialboken med sina priser, som kalkylen och nyckeltalen räknar med. Dahls katalog skriver inga priser
-    ("dagspris gäller") och benämner inte rör med dimensionen först, så kalkylen prissätter ur boken tills
-    katalogen har priser."""
-    global _BOOK
-    if _BOOK is None:
-        import gzip
-        here = os.environ.get("VVS_MATERIAL_DIR") or os.path.join(os.path.dirname(__file__), "data")
-        path = os.path.join(here, "material.json.gz")
-        if os.path.exists(path):
-            with gzip.open(path, "rt", encoding="utf-8") as fh:
-                _BOOK = json.load(fh)
-            _BOOK["kind"] = "materialbok"
-        else:
-            _BOOK = {"n": 0, "rows": [], "source": None, "kind": None}
-    return _BOOK
+    """Artiklarna med pris, som offerten, kalkylen och nyckeltalen räknar med: Dahls katalog med priserna ur
+    Dahls uppladdade prislista (offertdata "prislista"). Den gamla materialboken från före Dahl finns inte längre.
+    En artikel utan pris i prislistan har inget pris - det flaggas där det används, det hämtas inte någon annanstans."""
+    return _material()
+
+
+def _reset_material() -> None:
+    global _MATERIAL
+    _MATERIAL = None
+    try:
+        from .tech_spec import _reset_index
+        _reset_index()
+    except Exception:                                   # noqa: BLE001
+        pass
 
 
 def _material() -> dict:
-    """Materialet, läst en gång: Dahls produktkatalog när den finns, annars materialboken.
+    """Dahls produktkatalog (data/dahl_catalog.json.gz, tools/import_dahl_catalog.py), läst en gång, med priser och
+    rabattgrupper ur Dahls prislista när en sådan är uppladdad (p_src = "prislista").
 
-    Femtiofemtusen artiklar är för många att skicka till en webbläsare och för få att förtjäna en databas. Filen
+    Tjugosjutusen artiklar är för många att skicka till en webbläsare och för få att förtjäna en databas. Filen
     ligger komprimerad bredvid koden, läses in vid första frågan och stannar - sökningen sker här, och bara det
-    som frågades efter går över tråden.
-
-    Dahls katalog (data/dahl_catalog.json.gz, tools/import_dahl_catalog.py) är källan när den finns. Skriver
-    katalogen inget pris för en artikel tas priset ur materialboken på samma RSK-nummer och märks så (p_src): en
-    kalkyl ska inte tappa ett pris för att katalogen saknar det, och den som läser ska se var priset kommer ifrån.
-    """
+    som frågades efter går över tråden."""
     global _MATERIAL
     if _MATERIAL is None:
         import gzip
         here = os.environ.get("VVS_MATERIAL_DIR") or os.path.join(os.path.dirname(__file__), "data")
-
-        def load(name):
-            path = os.path.join(here, name)
-            if not os.path.exists(path):
-                return None
+        path = os.path.join(here, "dahl_catalog.json.gz")
+        dahl = None
+        if os.path.exists(path):
             with gzip.open(path, "rt", encoding="utf-8") as fh:
-                return json.load(fh)
-
-        book = _material_book()
-        dahl = load("dahl_catalog.json.gz")
+                dahl = json.load(fh)
         if dahl and dahl.get("rows"):
-            prices = {r.get("a"): r for r in (book or {}).get("rows", []) if r.get("a")}
+            try:
+                from .offers import data as offer_data
+                from vvs_engine.tb.rsk import normalize as rsk_norm
+                prices = {}
+                for p in offer_data("prislista"):
+                    if p.get("rsk"):
+                        prices[p["rsk"]] = p
+                        prices[rsk_norm(p["rsk"]) or p["rsk"]] = p
+            except Exception:                           # noqa: BLE001 - utan prislista inga priser
+                prices = {}
             for r in dahl["rows"]:
-                r.setdefault("p_src", "katalog" if r.get("p") is not None else None)
-                other = prices.get(r.get("rsk") or r.get("a"))
-                if r.get("p") is None and other is not None and other.get("p") is not None:
-                    r["p"], r["r"] = other.get("p"), other.get("r")
-                    r["w"], r["co2"] = r.get("w") or other.get("w"), r.get("co2") or other.get("co2")
-                    r["p_src"] = "materialsortering"
+                hit = prices.get(r.get("rsk") or "") or prices.get(r.get("dahl") or "") or prices.get(r.get("a") or "")
+                if hit and hit.get("pris") is not None:
+                    r["p"], r["p_src"] = float(hit["pris"]), "prislista"
+                    if hit.get("grupp"):
+                        r["k"] = str(hit["grupp"])
+                else:
+                    r["p_src"] = "katalog" if r.get("p") is not None else None
             dahl["kind"] = "dahl"
+            dahl["priced"] = sum(1 for r in dahl["rows"] if r.get("p") is not None)
             _MATERIAL = dahl
-        elif book and book.get("rows"):
-            _MATERIAL = book
         else:
-            _MATERIAL = {"n": 0, "rows": [], "source": None, "kind": None}
+            _MATERIAL = {"n": 0, "rows": [], "source": None, "kind": None, "priced": 0}
     return _MATERIAL
 
 
