@@ -24,7 +24,7 @@ type Item = {
   conditions?: { kind: string; text: string; ama: string; page: number }[]; references?: { code: string; text: string }[];
   from_drawing?: { kind: "antal" | "meter"; quantity: number; unit: string; tag?: string; system?: string;
                    sheets?: Record<string, number>; by_dn?: Record<string, number>; review_m?: number; no_scale?: boolean };
-  match: { status: "hittad" | "möjlig" | "förslag" | "saknas" | "allmänt" | "annan"; hits: Hit[]; in_catalog: boolean; note: string;
+  match: { status: "hittad" | "möjlig" | "förslag" | "saknas" | "allmänt" | "annan" | "likvärdig" | "text"; hits: Hit[]; in_catalog: boolean; note: string;
            basis?: string; suggestions?: Hit[];
            rsk?: { value: string | null; kind: "förslag" | "storlek" | "ai"; name: string; sure?: boolean; before?: string | null;
                    variants?: { rsk: string; name: string; size: string | null }[] } | null;
@@ -38,12 +38,13 @@ type Draft = { maker: string; subject: string; text: string; html: string; mailt
                rows: { pos: string; code: string; name: string; qty: string; maker: string; spec: string; numbers: string }[] };
 
 const KIND: Record<string, string> = {
-  post: "Post", tillbehor: "Tillbehör", omnamnd: "Omnämnd produkt", krav: "Allmänt material", arbete: "Arbete",
+  post: "Post", tillbehor: "Tillbehör", omnamnd: "Omnämnd produkt", krav: "Allmänt material", arbete: "Arbete", text: "Beskrivande text",
 };
 const STATUS: Record<string, { label: string; cls: string }> = {
   hittad: { label: "Hittad", cls: "ok" }, "möjlig": { label: "Möjlig träff", cls: "warn" },
   "förslag": { label: "Eget förslag", cls: "warn" }, saknas: { label: "Saknas", cls: "bad" },
   "allmänt": { label: "Enligt ritning", cls: "" }, annan: { label: "Levereras av annan", cls: "" },
+  "likvärdig": { label: "Likvärdig (eget varumärke)", cls: "ok" }, text: { label: "Ingen vara", cls: "" },
 };
 
 const qty = (it: Item) => {
@@ -286,12 +287,14 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
           <div className="row tspec-head" style={{ marginTop: 14, gap: 10, flexWrap: "wrap" }}>
             <b>{data.title || data.filename}</b>
             {ifc
-              ? <><span className="badge">{data.stats?.schema}</span><span className="badge">{trf("{0} VVS-objekt", data.stats?.elements ?? 0)}</span><span className="badge">{trf("{0} våningar", data.stats?.storeys?.length ?? 0)}</span></>
+              ? data.stats?.schema && <><span className="badge">{data.stats?.schema}</span><span className="badge">{trf("{0} VVS-objekt", data.stats?.elements ?? 0)}</span><span className="badge">{trf("{0} våningar", data.stats?.storeys?.length ?? 0)}</span></>
               : <span className="badge">{trf("{0} sidor", data.n_pages)}</span>}
             <span className="badge">{trf("{0} poster", items.length)}</span>
             <span className="badge ok">{trf("{0} hittade", counts["hittad"] ?? 0)}</span>
             <span className="badge warn">{trf("{0} möjliga", counts["möjlig"] ?? 0)}</span>
+            {(counts["likvärdig"] ?? 0) > 0 && <span className="badge ok">{trf("{0} likvärdiga (eget varumärke)", counts["likvärdig"])}</span>}
             <span className="badge bad">{trf("{0} saknas", counts["saknas"] ?? 0)}</span>
+            {(counts["text"] ?? 0) > 0 && <span className="badge" title={tr("Rader som beskriver kulör, utförande eller montage - inga varor")}>{trf("{0} beskrivande rader", counts["text"])}</span>}
             {data.status === "FAILED" && <span className="error">{data.error}</span>}
             <span style={{ flex: 1 }} />
             <button className="secondary small" onClick={csv}>{tr("Exportera CSV")}</button>
@@ -479,7 +482,7 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                                 <ul className="tspec-hits">{it.match.suggestions!.map((x, i) => <li key={i}><b>{x.ref}</b> {x.name} <span className="muted">– {x.why}</span></li>)}</ul>
                               </div>
                             )}
-                            {(it.match.status === "saknas" || it.match.status === "möjlig" || it.match.status === "förslag") && <button className="secondary small" onClick={() => draft([it.id])}>{tr("Mejlutkast för den här")}</button>}
+                            {(it.match.status === "saknas" || it.match.status === "möjlig" || it.match.status === "förslag" || it.match.status === "likvärdig") && <button className="secondary small" onClick={() => draft([it.id])}>{tr("Mejlutkast för den här")}</button>}
                           </td></tr>
                         ),
                       ];

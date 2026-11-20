@@ -202,7 +202,9 @@ class MaterialIndex:
         aliases = brand_aliases(brand)
         model = item.get("type") or ""
         art = " ".join(item.get("art_nr") or [])
-        model_toks = {t for t in compact_tokens(model + " " + art) if re.search(r"\d", t) and len(t) >= 3}
+        # ett mått (400mm, 25l, 1200) är inget modellnummer: "Stödhandtag 400 mm" är inte varje rad med 400 mm
+        model_toks = {t for t in compact_tokens(model + " " + art) if re.search(r"\d", t) and len(t) >= 3
+                      and not re.fullmatch(r"\d+(?:[.,]\d+)?(?:mm|cm|m|l|st|kg|w|kw|v|°c|c)?", t)}
         # ett kort serienummer (Eminent 55) räknas bara tillsammans med fabrikatet
         short_nums = {t for t in words(model) if re.fullmatch(r"\d{2}", t)} if aliases else set()
         series = {t for t in words(model) if not re.search(r"\d", t) and len(t) >= 4} - aliases - {"eller", "typ"}

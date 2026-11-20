@@ -69,6 +69,12 @@ def material_index() -> MaterialIndex:
             if book.get("rows"):
                 if book.get("kind") == "dahl":
                     ix.add_material_book(book["rows"], label=book.get("source") or "Dahls produktkatalog", source="katalog")
+                    # materialboken söks också: den har artiklar katalogen inte tar upp (INR, Hafa, diskbänkar ...)
+                    # och RSK med pris. Katalogens träff står först när båda har varan.
+                    from .main import _material_book
+                    mb = _material_book()
+                    if mb.get("rows"):
+                        ix.add_material_book(mb["rows"], label="Materialboken")
                 else:
                     ix.add_material_book(book["rows"], label=f"Materialboken ({book.get('source') or 'materialsortering'})")
             cat = _catalog_index()
@@ -407,6 +413,9 @@ def item_match(ix: MaterialIndex, it: dict[str, Any]) -> dict[str, Any]:
     who = it.get("supplied_by") or ""
     if who and not who.startswith("Ingår"):
         return {"status": "annan", "hits": [], "in_catalog": False, "note": f"Levereras av {who}"}
+    if it.get("kind") == "text":
+        return {"status": "text", "hits": [], "in_catalog": False,
+                "note": "Beskrivande text i handlingen (kulör, utförande, anvisning) - ingen vara att köpa"}
     if it.get("kind") in ("krav", "arbete"):
         return {"status": "allmänt", "hits": [], "in_catalog": False,
                 "note": "Allmänt krav: mängd och val enligt ritning" if it.get("kind") == "krav" else "Arbete"}
@@ -503,16 +512,24 @@ def matched_items(s: TechSpec, with_ai: bool = True) -> list[dict[str, Any]]:
     crossref = offer_data("korsreferens")
     out = []
     codes = set(analysis.get("option_codes") or [])
+    from vvs_engine.tb.rooms import descriptive
     for it in s.items or []:
+        if it.get("kind") == "post" and not it.get("manufacturer") and not it.get("code") and not it.get("ama_code") \
+                and descriptive(it.get("text") or ""):
+            it = {**it, "kind": "text"}              # en rumsbeskrivning läst före regeln: samma tolkning nu
         it = joint.quantity(it, link(it, found), priority)
         conds = joint.relevant_conditions(it, analysis.get("conditions") or [])
         refs = joint.references(it, analysis.get("by_code") or {})
         it = {**it, "option": joint.is_option(it, codes), "article_status": joint.article_status(it),
               "conditions": conds, "references": refs, "inquiry_text": joint.inquiry_text(it, conds, refs)}
         m = overlay(item_match(ix, it), picks.get(it.get("id")))
-        eq = suggest(it, house) if house and it.get("kind") not in ("krav", "arbete") else None
+        eq = suggest(it, house) if house and it.get("kind") not in ("krav", "arbete", "text") else None
         if eq:
             m = {**m, "equivalent": eq}
+            best = (eq.get("candidates") or [{}])[0]
+            if m.get("status") in ("saknas", "förslag") and str(best.get("state") or "").startswith("uppfyller"):
+                # inte i katalogen, men vårt eget varumärke har en vara som uppfyller kraven: ett förslag att granska
+                m = {**m, "status": "likvärdig", "note": f"{best.get('name')} uppfyller angivna krav - granska likvärdigheten"}
         if crossref and m.get("status") != "hittad" and _pipe(it):
             xr = for_item(it, crossref)
             m = {**m, "crossref": xr} if xr else {**m, "crossref_note": "varken fabrikat eller material och dimension "
@@ -643,7 +660,7 @@ def _facets(items: list[dict[str, Any]]) -> dict[str, Any]:
         return [{"value": k, "n": n} for k, n in sorted(c.items(), key=lambda kv: (kv[0] == "", kv[0].lower()))]
     status = Counter(it["match"]["status"] for it in items)
     return {"categories": count("category"), "manufacturers": count("manufacturer"), "kinds": count("kind"),
-            "status": [{"value": k, "n": status.get(k, 0)} for k in ("hittad", "möjlig", "förslag", "saknas", "allmänt", "annan")
+            "status": [{"value": k, "n": status.get(k, 0)} for k in ("hittad", "möjlig", "likvärdig", "förslag", "saknas", "allmänt", "annan", "text")
                        if status.get(k, 0) or k in ("hittad", "möjlig", "saknas")]}
 
 

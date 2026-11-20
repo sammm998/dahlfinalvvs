@@ -888,4 +888,10 @@ export const projekt: Record<string, string> = {
   "system": "system",
   "temperatur": "temperature",
   "tryck": "pressure",
+  "Beskrivande text": "Descriptive text",
+  "Likvärdig (eget varumärke)": "Equivalent (own brand)",
+  "Ingen vara": "Not a product",
+  "{0} likvärdiga (eget varumärke)": "{0} equivalent (own brand)",
+  "{0} beskrivande rader": "{0} descriptive lines",
+  "Rader som beskriver kulör, utförande eller montage - inga varor": "Lines describing colour, finish or installation - not products",
 };

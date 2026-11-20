@@ -149,7 +149,7 @@ def build_rows(items: list[dict[str, Any]], book: dict[str, dict[str, Any]], cus
                use_house_brand: bool = False, crossref: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for it in items:
-        if it.get("kind") in ("krav", "arbete") or (it.get("supplied_by") and not str(it["supplied_by"]).startswith("Ingår")):
+        if it.get("kind") in ("krav", "arbete", "text") or (it.get("supplied_by") and not str(it["supplied_by"]).startswith("Ingår")):
             continue
         for sub in pipe_rows(it, crossref):
             art = sub.pop("_article", None) or pick_article(sub, use_house_brand)

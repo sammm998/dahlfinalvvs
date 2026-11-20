@@ -143,3 +143,27 @@ def test_an_ab04_project_reads_its_description_with_analysis(tmp_path):
         assert c.post(f"/api/projects/{p['id']}/quantity-priority", json={"priority": "x"}, headers=H).status_code == 422
         x = c.get(f"/api/tech-specs/{s.json()['id']}/boundaries.xlsx", headers=H)
         assert {"Gränsdragning", "Förutsättningar", "Optioner"} == set(openpyxl.load_workbook(io.BytesIO(x.content)).sheetnames)
+
+
+def test_room_description_text_is_not_a_product():
+    from vvs_engine.tb.rooms import descriptive
+    for t in ("Trappa:", "RAL 6028", "C41:01", "Mörkt grågrön kulör (motsvarighet: NCS 6030-B90G)", "Lärosal 1028",
+              "Blankpolerat utförande", "Handledare ska monteras både på trappans inner- och yttervarv.",
+              "1100 mm över golv vid vilplan.", "RWC-inredning enligt våtrumsuppställning.", "Enligt senare besked"):
+        assert descriptive(t), t
+    for t in ("Postboxar", "Duschdraperistång", "Spegel WC, infälld, mått enligt ritning K 03",
+              "Kommod INR, typ Core Solid XS, b=60 cm", "Hatthylla av ek och aluminium, typ Byggbeslag BB14 enkel 1200 mm"):
+        assert not descriptive(t), t
+
+
+def test_a_size_is_not_a_model_number():
+    from vvs_engine.tb.match import MaterialIndex
+    ix = MaterialIndex()
+    ix.add_material_book([{"a": "1", "n": "15 Ahlsell Nordic Flow sprinklerslang 1200 mm"},
+                          {"a": "2", "n": "INR Linc Angel 90x90 duschvägg"}])
+    hylla = {"name": "Hatthylla", "manufacturer": "Byggbeslag", "type": "Byggbeslag BB14 enkel 1200 mm", "text": "Hatthylla av ek",
+             "spec": {}, "rsk": [], "art_nr": [], "kind": "post"}
+    assert ix.match(hylla)["status"] == "saknas"                                       # inte sprinklerslangen
+    dusch = {"name": "Duschdörrar", "manufacturer": "INR", "type": "Linc", "text": "Duschdörrar från INR Linc",
+             "spec": {}, "rsk": [], "art_nr": [], "kind": "post"}
+    assert ix.match(dusch)["hits"][0]["name"].startswith("INR Linc")

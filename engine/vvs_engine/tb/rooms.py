@@ -85,6 +85,29 @@ def _entries(lines: list[str]) -> list[tuple[str, str]]:
     return out
 
 
+DESCRIPTIVE_START = {"i", "förslag", "utbredning", "panelhöjd", "enligt", "samma", "en", "industrilackas", "betong",
+                     "rostfritt", "vitt", "blankpolerat", "mörkt", "ljusgrå", "ljus", "omfattning", "placering"}
+DESCRIPTIVE_VERB = re.compile(r"\b(ska|skall|utförs|lackas|fästes|förses|monteras|placeras|utföras)\b", re.I)
+
+
+def descriptive(text: str) -> bool:
+    """En rad i rumsbeskrivningen som beskriver i stället för att vara en vara: en rubrik ("Trappa:"), en kulör
+    ("RAL 6028", "Mörkt grågrön kulör"), ett utförande ("Blankpolerat utförande"), ett rumsnummer ("Lärosal 1028"),
+    en anvisning ("Handledare ska monteras ...") eller en hänvisning ("RWC-inredning enligt våtrumsuppställning")."""
+    t = text.strip()
+    first = re.split(r"[\s,:]+", t.lower(), maxsplit=1)[0] if t else ""
+    return bool(
+        t.endswith(":")
+        or re.match(r"^(RAL\s*\d|NCS\b|[A-Z]\d{2}:\d{2}\b|\d)", t)
+        or first in DESCRIPTIVE_START
+        or (re.search(r"\b(utseende|utförande)\.?$", t, re.I) and len(t.split()) <= 6)
+        or re.fullmatch(r"[A-ZÅÄÖ][a-zåäö]+(?:\s+\d{4})+", t)
+        or re.search(r"enligt våtrumsuppställning|enligt senare besked", t, re.I)
+        or (DESCRIPTIVE_VERB.search(t) and not re.search(r"\btyp\b", t, re.I))
+        or re.match(r"^[A-ZÅÄÖ][\w /-]{2,30}:\s+\S", t) and DESCRIPTIVE_VERB.search(t)
+    )
+
+
 def _product(text: str, n: int, room: str, group: str, count: int, count_from: str, section: str) -> dict[str, Any]:
     brand, raw, typ = find_maker(text)
     if not brand:
@@ -111,7 +134,8 @@ def _product(text: str, n: int, room: str, group: str, count: int, count_from: s
     if ncs:
         spec["NCS"] = ncs.group(1)
     per_plan = bool(re.search(r"se planritning|enl\.? planritning|enligt planritning", text, re.I))
-    return {"id": f"r{n}", "kind": "post", "code": "", "name": name[:1].upper() + name[1:120],
+    return {"id": f"r{n}", "kind": "text" if descriptive(text) and not brand else "post", "code": "",
+            "name": name[:1].upper() + name[1:120],
             "quantity": float(count) if count else None, "unit": "st" if count else "",
             "quantity_text": (f"1 per rum × {count} rum" if count else "antal rum okänt"),
             "manufacturer": brand, "manufacturer_text": raw, "type": (typ or "")[:120], "rsk": rsk_find(text),
