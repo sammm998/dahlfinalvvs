@@ -68,13 +68,8 @@ def material_index() -> MaterialIndex:
             book = _material()
             if book.get("rows"):
                 if book.get("kind") == "dahl":
+                    # bara Dahls katalog: den gamla materialboken (före Dahl) söks inte
                     ix.add_material_book(book["rows"], label=book.get("source") or "Dahls produktkatalog", source="katalog")
-                    # materialboken söks också: den har artiklar katalogen inte tar upp (INR, Hafa, diskbänkar ...)
-                    # och RSK med pris. Katalogens träff står först när båda har varan.
-                    from .main import _material_book
-                    mb = _material_book()
-                    if mb.get("rows"):
-                        ix.add_material_book(mb["rows"], label="Materialboken")
                 else:
                     ix.add_material_book(book["rows"], label=f"Materialboken ({book.get('source') or 'materialsortering'})")
             cat = _catalog_index()
@@ -99,7 +94,7 @@ def _sources(ix: MaterialIndex) -> dict[str, Any]:
 
 @router.get("/api/catalog")
 def catalog_status(user: User = Depends(current_user)):
-    """Vad posterna jämförs med: materialboken alltid, Dahls katalog när den är inläst."""
+    """Vad posterna jämförs med: Dahls produktkatalog (artiklarna och den inlästa katalog-PDF:en)."""
     return _sources(material_index())
 
 
@@ -752,7 +747,7 @@ class MailIn(BaseModel):
 
 @router.post("/api/tech-specs/{spec_id}/mail")
 def mail_draft(spec_id: str, body: MailIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """Ett mejlutkast för det som inte finns i materialboken eller katalogen - eller för de poster som valts."""
+    """Ett mejlutkast för det som inte finns i Dahls katalog - eller för de poster som valts."""
     s = _spec(db, user, spec_id)
     items = matched_items(s)
     if body.ids:
@@ -761,7 +756,7 @@ def mail_draft(spec_id: str, body: MailIn, user: User = Depends(current_user), d
     else:
         chosen = [it for it in items if it["match"]["status"] == "saknas"]
     if not chosen:
-        raise HTTPException(422, "Inga poster att fråga om: allt finns i materialboken eller katalogen.")
+        raise HTTPException(422, "Inga poster att fråga om: allt finns i Dahls katalog.")
     p = db.get(Project, s.project_id)
     drafts = drafts_by_maker(chosen, project=p.name if p else "", document=s.title or s.filename, to=body.to,
                              sender=body.sender or user.email)

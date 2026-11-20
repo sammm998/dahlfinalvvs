@@ -83,7 +83,7 @@ Det första exemplet visar en typisk svaghet. Rubrikerna för flera produkter p�
 | benämning ur produktsidans tabell | 21 399, varav 14 338 med dimension/kolumnvärde |
 | utan sida (bara i registret) | 128 |
 | Enhet | st 26 616, m 422, par 29 |
-| `material.json.gz` | 55 161 rader. **9 021** av katalogens artikelnummer (`a`) finns även där |
+| ~~`material.json.gz`~~ (borttagen 2026-11-20) | 55 161 rader. **9 021** av katalogens artikelnummer (`a`) finns även där |
 
 Kapitlen: 1 Tryckrör Avloppsystem, 2 Stålrör och Ståldelar, 3 Kopparrör och Koppardelar, 4 Slangar,
 5 PVCrör och PPrör, 6 Övriga plaströr, 7 Fästdetaljer Isolering, 8 Armaturer, Stängventiler, 9 Regler och

@@ -213,7 +213,7 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
           <p className="muted small" style={{ maxWidth: 640 }}>
             {ifc
               ? tr("Ladda upp en materiallista – ett mejl (.eml), text, Word, Excel eller CSV/BOM – eller en IFC-modell (.ifc/.zip), eller klistra in texten ur ett mejl. Varje position läses med all text som hör till den: fabrikat och RSK på raderna under räknas till positionen. Allt söks i Dahls katalog, och mängden hämtas från projektets ritningar när den står där.")
-              : tr("Ladda upp den tekniska beskrivningen som PDF – i alla projekt, AB 04 som ABT 06. Den läses först och sedan tillsammans med projektets ritningar: varje post med kod, antal, fabrikat, typ, RSK och specifikation; \"antal enligt ritning\" hämtas från ritningen; samma objekt räknas en gång; olika mängder flaggas; reglerbara mängder (R20) och optioner märks. Förutsättningar och gränsdragning samlas för sig. Allt söks i materialboken och Dahls katalog.")}
+              : tr("Ladda upp den tekniska beskrivningen som PDF – i alla projekt, AB 04 som ABT 06. Den läses först och sedan tillsammans med projektets ritningar: varje post med kod, antal, fabrikat, typ, RSK och specifikation; \"antal enligt ritning\" hämtas från ritningen; samma objekt räknas en gång; olika mängder flaggas; reglerbara mängder (R20) och optioner märks. Förutsättningar och gränsdragning samlas för sig. Allt söks i Dahls katalog.")}
           </p>
         </div>
         {pasteOpen && (
@@ -235,11 +235,9 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
       </div>
 
       <p className="muted small tspec-src">
-        {tr("Söks i")}: <b>{catalog?.materialbok?.label ?? tr("Materialboken")}</b>
-        {catalog?.materialbok?.n ? ` (${catalog.materialbok.n.toLocaleString(locale())} ${tr("artiklar")})` : ""}
-        {" · "}
+        {tr("Söks i")}:{" "}
         {catalog?.katalog
-          ? <><b>{tr("Dahls produktkatalog")}</b> ({catalog.katalog.pages ? `${catalog.katalog.pages} ${tr("sidor")}` : `${(catalog.katalog.n ?? 0).toLocaleString(locale())} ${tr("artiklar")}`})</>
+          ? <><b>{catalog.katalog.label || tr("Dahls produktkatalog")}</b> ({catalog.katalog.pages ? `${catalog.katalog.pages} ${tr("sidor")}` : `${(catalog.katalog.n ?? 0).toLocaleString(locale())} ${tr("artiklar")}`})</>
           : <span>{tr("Dahls produktkatalog är inte inläst än")}</span>}
       </p>
       {brand && (
@@ -474,7 +472,7 @@ export default function TechSpecPanel({ project, source = "tb" }: { project: any
                             )}
                             {it.match.hits.length > 0 && (
                               <ul className="small tspec-hits">
-                                {it.match.hits.map((x, i) => <li key={i}><b>{x.ref}</b> {x.name} <span className="muted">– {x.source === "katalog" ? tr("Dahls katalog") : tr("materialboken")}, {x.why}{x.price != null && <>, {x.price.toLocaleString(locale(), { maximumFractionDigits: 2 })} kr/{x.unit || "st"}</>}</span></li>)}
+                                {it.match.hits.map((x, i) => <li key={i}><b>{x.ref}</b> {x.name} <span className="muted">– {tr("Dahls katalog")}, {x.why}{x.price != null && <>, {x.price.toLocaleString(locale(), { maximumFractionDigits: 2 })} kr/{x.unit || "st"}</>}</span></li>)}
                               </ul>
                             )}
                             {(it.match.suggestions?.length ?? 0) > 0 && (

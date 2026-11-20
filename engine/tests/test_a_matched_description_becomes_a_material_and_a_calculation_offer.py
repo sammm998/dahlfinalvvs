@@ -125,10 +125,11 @@ def _xlsx(rows):
 def test_the_offer_flow_from_customer_number_to_customer_pdf(client):
     admin = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "admin@dahl.se", "password": "hemligt1"}).json()["access_token"]}
     H = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "saljare@dahl.se", "password": "hemligt1"}).json()["access_token"]}
-    from app.main import _material_book
-    book = {r["a"]: r for r in _material_book()["rows"]}
-    group = book["7606418"]["k"]
     up = lambda kind, rows, hdr=admin: client.post(f"/api/offer-data/{kind}", files={"file": (f"{kind}.xlsx", _xlsx(rows), "application/octet-stream")}, headers=hdr)
+    # priserna kommer ur Dahls prislista: den gamla materialboken finns inte
+    assert up("prislista", [["RSK", "Bruttopris", "Rabattgrupp"], ["760 64 18", 2000, "4200"]]).json()["n"] == 1
+    group = "4200"
+    book = {"7606418": {"p": 2000.0}}
     assert up("kunder", [["Kundnr", "Namn", "Bonus %"], [10234, "Rörfirman AB", 2.5]]).json()["n"] == 1
     assert up("rabatter", [["Kundnr", "Rabattgrupp", "Rabatt %"], [10234, group, 35]]).json()["n"] == 1
     assert up("inkopspriser", [["RSK", "Inköpspris"], ["760 64 18", 500]]).json()["n"] == 1

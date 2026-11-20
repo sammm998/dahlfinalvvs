@@ -10,6 +10,7 @@ import { t as tr, trf, locale } from "../i18n";
 
 const kr = (v: number | null | undefined) => v == null ? "–" : v.toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const DATA_KINDS: [string, string, string][] = [
+  ["prislista", "Dahls prislista", "RSK eller Dahl art.nr, Bruttopris, Rabattgrupp, Enhet"],
   ["kunder", "Kunder", "Kundnr, Namn, Bonus %, Bonusavtal"],
   ["rabatter", "Rabattmatris", "Kundnr, Rabattgrupp, Rabatt %"],
   ["nettopriser", "Kundunika nettopriser", "Kundnr, RSK, Nettopris"],
@@ -147,8 +148,8 @@ export default function OfferPanel({ project }: { project: any }) {
         </div>)}
 
       <details className="settings" style={{ marginTop: 12 }}>
-        <summary>{tr("Offertdata (tills M3 är kopplat): kunder, rabattmatris, nettopriser, inköpspriser, korsreferens")}</summary>
-        <p className="muted small">{tr("Laddas upp som Excel eller CSV av en administratör. Bruttopris och rabattgrupp kommer ur materialboken.")}</p>
+        <summary>{tr("Offertdata (tills M3 är kopplat): prislista, kunder, rabattmatris, nettopriser, inköpspriser, korsreferens")}</summary>
+        <p className="muted small">{tr("Laddas upp som Excel eller CSV av en administratör. Bruttopris och rabattgrupp kommer ur Dahls prislista; utan den saknar raderna pris.")}</p>
         {DATA_KINDS.map(([k, label, cols]) => (
           <div key={k} className="row small" style={{ gap: 8, alignItems: "center", margin: "4px 0" }}>
             <b style={{ width: 190 }}>{tr(label)}</b>

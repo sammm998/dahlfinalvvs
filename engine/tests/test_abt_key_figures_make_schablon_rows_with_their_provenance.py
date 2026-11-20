@@ -46,10 +46,21 @@ def _project(client, tmp_path, email):
 
 
 def test_key_figures_are_drafts_until_confirmed_and_make_rows_with_their_provenance_and_risk(client, tmp_path):
-    client.post("/api/auth/register", json={"email": "first@example.com", "password": "hemligt1"})
+    admin = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "first@example.com", "password": "hemligt1"}).json()["access_token"]}
     p, H = _project(client, tmp_path, "kalkyl@example.com")
-    art = client.get("/api/materials?q=tvättställsblandare&limit=50", headers=H).json()["rows"]
-    art = next(a for a in art if a.get("p"))
+    art = client.get("/api/materials?q=tvättställsblandare&limit=50", headers=H).json()["rows"][0]
+    # priset kommer ur Dahls prislista (den gamla materialboken finns inte): en prislista med artikeln
+    import io
+    import openpyxl
+    wb = openpyxl.Workbook()
+    wb.active.append(["Artikelnr", "Bruttopris", "Rabattgrupp"])
+    wb.active.append([art.get("rsk") or art["a"], 1000, "4200"])
+    b = io.BytesIO()
+    wb.save(b)
+    assert client.post("/api/offer-data/prislista", files={"file": ("pris.xlsx", b.getvalue(), "application/octet-stream")},
+                       headers=admin).json()["n"] == 1
+    art = next(a for a in client.get("/api/materials?q=tvättställsblandare&limit=50", headers=H).json()["rows"] if a["a"] == art["a"])
+    assert art["p"] == 1000.0 and art["p_src"] == "prislista"
     per_unit = client.post("/api/key-figures", json={
         "name": "Testtal tvättmaskin", "basis": "per_enhet", "unit_code": "TM", "hours": 1.5,
         "source": "Påhittat för testet",

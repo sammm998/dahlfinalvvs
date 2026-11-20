@@ -3,7 +3,7 @@
 En mängd är meter och antal. Ett anbud är tid och pengar. Det här är bron, i två steg som hålls isär så att
 varje krona går att spåra tillbaka till en rad på ritningen:
 
-  * **Material.** Varje beteckning matchas mot materialboken - bladets egen förklaringslista säger vad
+  * **Material.** Varje beteckning matchas mot Dahls katalog - bladets egen förklaringslista säger vad
     materialkoden betyder, dimensionen står i beteckningen - och får en artikel med nettopris. Matchningen är
     ett FÖRSLAG med alternativ bredvid; den som räknar väljer, och valet sparas.
   * **Arbete.** Timmarna kommer ur Normtid VVS (`vvs_engine.normtid`): grundtid per meter efter dimension och
@@ -181,6 +181,16 @@ def _leading_dim(name: str) -> float | None:
     return float(m.group(1).replace(",", ".")) if m else None
 
 
+def _named_dims(name: str) -> set[float]:
+    """Dimensionerna Dahls katalog skriver i benämningen: "15 mm", "DN 200", "Ø 22", "22x1,0"."""
+    out = set()
+    for m in re.finditer(r"(?:\bDN\s*|Ø\s*|\b)(\d+(?:[.,]\d+)?)\s*(?:mm\b|x\s*\d)", name or "", re.I):
+        out.add(float(m.group(1).replace(",", ".")))
+    for m in re.finditer(r"\bDN\s*(\d+)\b", name or "", re.I):
+        out.add(float(m.group(1)))
+    return out
+
+
 def _dims_for(dn: int | None, plastic: bool) -> set[float]:
     """Talen boken kan skriva för en nominell dimension: DN själv, och för metallrör ytterdiametern."""
     if not dn:
@@ -213,16 +223,19 @@ def _find_articles(words: list[str], dn: int | None, unit: str = "m", limit: int
     extra = [w for w in words if w != klass and len(w) >= 3]
     scored = []
     for r in rows:
-        if (r.get("e") or "").lower() != unit:
-            continue
         n = r.get("n") or ""
+        if (r.get("e") or "").lower() != unit:
+            # Dahls katalog säljer många rör per styck i längder ("PEX-rör ... 6 m", "rulle 100 m"): rör ändå
+            if not (unit == "m" and re.search(r"rör", n, re.I) and re.search(r"\b\d+(?:[.,]\d+)?\s*m\b|rulle|längd", n, re.I)):
+                continue
         if in_name is not None and not in_name.search(n):
             continue
         if in_name is None and "rör" not in n.lower():
             continue
         if dims:
-            d = _leading_dim(n)
-            if d is None or not any(abs(d - x) <= 0.6 for x in dims):
+            # dimensionen först i namnet, eller var som helst i Dahls katalogs benämning: "... EN 15 mm, ...", "DN 200"
+            found = {x for x in (_leading_dim(n),) if x is not None} | _named_dims(n)
+            if not any(abs(d - x) <= 0.6 for d in found for x in dims):
                 continue
         low = n.lower()
         hits = sum(1 for w in extra if w in low)
@@ -331,7 +344,7 @@ def build(rows: list[dict], legend: list[dict], assumptions: dict, overrides: di
         if art is None and klass is None:
             caveats.append(f"{name}: materialet framgår inte av bladets förklaring ({mcode or 'ingen kod'}) - välj artikel.")
         elif art is None:
-            caveats.append(f"{name}: ingen artikel i materialboken för {klass} DN{dn or '?'} - välj en.")
+            caveats.append(f"{name}: ingen artikel i Dahls katalog för {klass} DN{dn or '?'} - välj en.")
         if timmar is None:
             caveats.append(f"{name}: normtid saknas ({source}) - ange timmar.")
 
@@ -528,7 +541,7 @@ def tender_html(calc: dict, meta: dict) -> str:
 <li>Timpris {_kr(A['timpris'])} per montörtimme. Normtider enligt Normtid VVS: grundtid per meter efter dimension och material.</li>
 <li>Tillägg: {e(', '.join(sup_labels) or 'inga')}. Avvikelseanalys: {_num(calc['avvikelse_pct'], 0)} %.</li>
 <li>Kalkylmängd = nettomängd + {_num(A['spill_pct'], 0)} % spill. Stigare räknade som {_num(A['floor_height_m'], 1)} m per stigare där ritningen inte anger höjd.</li>
-<li>Materialpriser är nettopriser ur materialboken på anbudsdagen. Betalning: {e(A.get('betalning') or '30 dagar netto')}.</li>
+<li>Materialpriser är priser ur Dahls prislista på anbudsdagen. Betalning: {e(A.get('betalning') or '30 dagar netto')}.</li>
 <li>Anbudet är giltigt till {M['valid']}.</li>
 </ul>
 {"<h2>Avtalsvillkor · " + e(M["regelverk"]) + "</h2><ul>" + rules_html + "</ul>" if rules else ""}

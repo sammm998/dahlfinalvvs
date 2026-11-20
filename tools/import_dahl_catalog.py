@@ -1,4 +1,4 @@
-"""Dahls produktkatalog 2026 -> backend/app/data/dahl_catalog.json.gz (samma form som material.json.gz).
+"""Dahls produktkatalog 2026 -> backend/app/data/dahl_catalog.json.gz.
 
 Katalogen ligger i en iPaper-bläddringsvy på katalog.dahl.se. Själva PDF:en nås via
 <vy>/GetPDF.ashx, som omdirigerar till cdn.ipaper.io. Där den värden inte går att nå läser skriptet

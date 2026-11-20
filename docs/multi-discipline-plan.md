@@ -26,7 +26,7 @@ VVS-exporterna ändras inte, och golden-tester och korpusspärren visar det efte
 | Datamodell | `backend/app/db.py`; schemaändringar via `create_all` plus `_ADDED_COLUMNS` (ingen Alembic). `Project` har namn, beskrivning och `analysis_mode`. |
 | Exporter | `main.py` (`/api/jobs/{id}/export/{fmt}`) och `exports.py`: xlsx, csv, json, rapport, markerad pdf, kontroll-pdf. |
 | Kalkyl/anbud | `calc.py` och `vvs_engine/normtid.py` (Normtid VVS: timmar per meter efter dimension och material). |
-| Materialbok | `backend/app/data/material.json.gz` – 55 161 artiklar, global; artikelval sparas per kalkyl. |
+| Material | Dahls produktkatalog (`backend/app/data/dahl_catalog.json.gz`) med priser ur Dahls uppladdade prislista; den gamla materialboken är borttagen. |
 | Credits | `credits.py` – pris per blad efter format och bläck; återbetalning när läsningen inte gav en enda meter. |
 | UI | `pages/Projects.tsx` (skapa projekt: namn, beskrivning), `Project.tsx`, `Analysis.tsx`, `components/QuantityTable.tsx`, `three/model.ts`, `pages/Takeoff.tsx` (manuell mängdning: m, m², m³, st). |
 

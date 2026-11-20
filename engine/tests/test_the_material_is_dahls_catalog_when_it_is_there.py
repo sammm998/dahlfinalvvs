@@ -1,8 +1,8 @@
-"""Materialet är Dahls produktkatalog när den finns, och materialboken annars.
+"""Materialet är Dahls produktkatalog - den gamla materialboken från före Dahl finns inte.
 
 Katalogen (backend/app/data/dahl_catalog.json.gz, tools/import_dahl_catalog.py) bär Dahls artikelnummer,
-RSK-numret och sidan i katalogen. Skriver den inget pris för en artikel tas priset ur materialboken på samma
-RSK-nummer och märks med var det kommer ifrån, så att kalkylen inte tappar ett pris.
+RSK-numret och sidan i katalogen. Priset kommer ur Dahls prislista (offertdata "prislista") och märks så; en
+artikel utan pris där har inget pris.
 """
 from __future__ import annotations
 
@@ -21,8 +21,10 @@ def _write(path, obj):
 
 @pytest.fixture()
 def main(tmp_path, monkeypatch):
-    _write(tmp_path / "material.json.gz", {"n": 1, "source": "Materialsortering", "rows": [
-        {"a": "7115125", "n": "Furo 142 273x273 110B btg", "e": "st", "p": 4200.0, "r": 0.4, "w": 6.0, "co2": 0, "gr": "x"}]})
+    st = tmp_path / "storage" / "offer"
+    st.mkdir(parents=True)
+    (st / "prislista.json").write_text(json.dumps({"rows": [{"rsk": "7115125", "pris": 4200.0, "grupp": "4200"}]}))
+    monkeypatch.setenv("VVS_STORAGE_ROOT", str(tmp_path / "storage"))
     _write(tmp_path / "dahl_catalog.json.gz", {"n": 2, "source": "Dahls produktkatalog 2026", "origin": "https://katalog.dahl.se/", "rows": [
         {"a": "7115125", "n": "Furhoff golvbrunn Furo 142 273x273 110B", "e": "st", "p": None, "r": None, "w": None,
          "co2": None, "gr": "Golvbrunnar", "y": "", "k": "", "pre": "", "dahl": "1234567", "rsk": "7115125", "page": 412},
@@ -32,11 +34,11 @@ def main(tmp_path, monkeypatch):
     backend = os.path.join(os.path.dirname(__file__), "..", "..", "backend")
     sys.path.insert(0, os.path.abspath(backend))
     import app.main as m
+    from app import storage as stg
+    monkeypatch.setattr(stg.storage, "root", str(tmp_path / "storage"), raising=False)
     monkeypatch.setattr(m, "_MATERIAL", None)
-    monkeypatch.setattr(m, "_BOOK", None)
     yield m
     m._MATERIAL = None
-    m._BOOK = None
 
 
 def test_the_catalog_is_the_material_and_keeps_its_own_numbers(main):
@@ -46,9 +48,9 @@ def test_the_catalog_is_the_material_and_keeps_its_own_numbers(main):
     assert furo["dahl"] == "1234567" and furo["page"] == 412
 
 
-def test_a_price_the_catalog_does_not_write_comes_from_the_book_and_says_so(main):
+def test_a_price_comes_from_dahls_price_list_and_says_so(main):
     rows = {r["rsk"]: r for r in main._material()["rows"]}
-    assert rows["7115125"]["p"] == 4200.0 and rows["7115125"]["p_src"] == "materialsortering"
+    assert rows["7115125"]["p"] == 4200.0 and rows["7115125"]["p_src"] == "prislista" and rows["7115125"]["k"] == "4200"
     assert rows["9999999"]["p"] == 199.0 and rows["9999999"]["p_src"] == "katalog"
 
 
@@ -57,6 +59,8 @@ def test_the_search_finds_dahls_own_article_number(main):
     assert out["total"] == 1 and out["book"]["kind"] == "dahl"
 
 
-def test_the_calculation_still_prices_from_the_book(main):
-    """Katalogen har inga priser: kalkylen räknar med materialboken."""
-    assert main._material_book()["kind"] == "materialbok" and main._material_book()["rows"][0]["p"] == 4200.0
+def test_the_calculation_prices_from_the_catalog_with_the_price_list(main):
+    """Kalkylen och offerten räknar på katalogen med prislistans priser - aldrig på en gammal materialbok."""
+    book = main._material_book()
+    assert book["kind"] == "dahl" and book["priced"] == 2
+    assert not os.path.exists(os.path.join(os.path.dirname(main.__file__), "data", "material.json.gz"))

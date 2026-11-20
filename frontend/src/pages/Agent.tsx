@@ -28,7 +28,7 @@ const START = [
   "Vad är det här för blad?",
   "Läs ritningen och visa mängderna",
   "Vad kunde inte avgöras?",
-  "Vad kostar rören enligt materialboken?",
+  "Vilka rör finns i Dahls katalog?",
 ];
 
 function kb(n: number) {

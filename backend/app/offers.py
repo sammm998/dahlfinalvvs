@@ -6,13 +6,14 @@ med en knapp, och inköpspris och marginal visas per rad och totalt - internt, a
 
 Data som M3 ska leverera, tills kopplingen finns: laddas upp som filer (Excel eller CSV) av en administratör.
 
+    prislista     RSK (eller Dahls artikelnr), Bruttopris, Rabattgrupp, Enhet   (priserna på Dahls katalog)
     kunder        Kundnr, Namn, Bonus %, Bonusavtal
     rabatter      Kundnr, Rabattgrupp, Rabatt %                 (kundens rabattmatris)
     nettopriser   Kundnr, RSK (eller artikelnr), Nettopris      (kundunika priser, går före rabatten)
     inkopspriser  RSK (eller artikelnr), Inköpspris
     korsreferens  Material, Dimension, Fabrikat, Serie, RSK, Benämning, Pris saknas   (valregeln för rör)
 
-Bruttopris och rabattgrupp kommer ur materialboken (RSK, pris, rabattgrupp).
+Bruttopris och rabattgrupp kommer ur Dahls prislista (prislista: RSK/artikelnr, bruttopris, rabattgrupp).
 """
 from __future__ import annotations
 
@@ -47,6 +48,10 @@ KINDS = {
                     "rsk": ("rsk", "rsk-nr", "artikel", "artikelnr", "artikelnummer"), "pris": ("nettopris", "pris")},
     "inkopspriser": {"rsk": ("rsk", "rsk-nr", "artikel", "artikelnr", "artikelnummer"),
                      "pris": ("inköpspris", "inkopspris", "inköp", "pris")},
+    "prislista": {"rsk": ("rsk", "rsk-nr", "rsk nr", "artikel", "artikelnr", "artikelnummer", "dahl art.nr", "dahl artikelnr"),
+                  "pris": ("bruttopris", "listpris", "pris", "brutto"),
+                  "grupp": ("rabattgrupp", "rabatt grupp", "grupp", "prisgrupp", "varugrupp"),
+                  "enhet": ("enhet", "enh")},
     "korsreferens": {"material": ("material",), "dimension": ("dimension", "dim", "storlek"),
                      "fabrikat": ("fabrikat", "förskrivet fabrikat", "tillverkare"), "serie": ("serie",),
                      "rsk": ("rsk", "rsk-nr", "artikel", "artikelnr", "dahl art.nr", "vår artikel"),
@@ -147,6 +152,9 @@ async def offer_data_upload(kind: str, file: UploadFile = File(...), admin: User
         raise HTTPException(422, "Inga rader i filen")
     storage.put(_key(kind), io.BytesIO(json.dumps({"file": file.filename, "updated_at": dt.datetime.now(
         dt.timezone.utc).isoformat(), "rows": rows}, ensure_ascii=False).encode("utf-8")))
+    if kind == "prislista":
+        from .main import _reset_material
+        _reset_material()                           # priserna gäller direkt i offert, kalkyl och sökning
     return {"kind": kind, "n": len(rows)}
 
 
@@ -186,7 +194,16 @@ def customer(no: str, user: User = Depends(current_user)):
 
 def _book() -> dict[str, dict[str, Any]]:
     from .main import _material_book
-    return {str(r.get("a")): r for r in (_material_book().get("rows") or []) if r.get("a")}
+    out: dict[str, dict[str, Any]] = {}
+    for r in _material_book().get("rows") or []:
+        for k in (r.get("a"), r.get("dahl"), r.get("rsk"), rsk_norm(r.get("rsk") or "")):
+            if k:
+                out.setdefault(str(k), r)              # RSK och Dahls artikelnummer slår upp samma artikel
+    for p in data("prislista"):                     # en artikel som bara står i prislistan har ändå sitt pris
+        if p.get("rsk") and p.get("pris") is not None and (p["rsk"] not in out or out[p["rsk"]].get("p") is None):
+            out[p["rsk"]] = {"a": p["rsk"], "n": out.get(p["rsk"], {}).get("n") or "", "p": float(p["pris"]),
+                             "k": str(p.get("grupp") or ""), "e": p.get("enhet") or "st"}
+    return out
 
 
 def _project(db: Session, user: User, pid: str) -> Project:
