@@ -171,3 +171,31 @@ def test_the_offer_flow_from_customer_number_to_customer_pdf(client):
     assert k["totals"]["timmar"] > 0 and k["totals"]["arbete"] == round(k["totals"]["timmar"] * 650, 2)
     other = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "annan@dahl.se", "password": "hemligt1"}).json()["access_token"]}
     assert client.get(f"/api/offers/{o['id']}", headers=other).status_code == 404
+
+
+def test_dahls_price_file_with_both_sheets_prices_the_catalog_and_the_offer(client):
+    admin = {"Authorization": "Bearer " + client.post("/api/auth/login", data={"username": "admin@dahl.se", "password": "hemligt1"}).json()["access_token"]}
+    wb = openpyxl.Workbook()
+    a = wb.active
+    a.title = "Artiklar_bruttopris"
+    for r in (["Artnr", "Benämning", "Kalkylgr", "Enh", "Bruttopris"], ["7606418", "TVÄTTSTÄLL CERA     ", "HA1413", "STK", 2000],
+              ["9990001", "PRISFILENS EGEN ARTIKEL DN100", "HA1413", "M  ", 500]):
+        a.append(r)
+    g = wb.create_sheet("Grupper_rabatter")
+    for r in (["Prod.gr", "Benämning", "Rabatt"], ["HA1413", "Sanitet", 25]):
+        g.append(r)
+    b = io.BytesIO()
+    wb.save(b)
+    r = client.post("/api/offer-data/prislista", files={"file": ("Prisfil.xlsx", b.getvalue(), "application/octet-stream")}, headers=admin).json()
+    assert r == {"kind": "prislista", "n": 2, "grundrabatter": 1}
+    own = client.get("/api/materials?q=prisfilens", headers=admin).json()["rows"]
+    assert own and own[0]["a"] == "9990001" and own[0]["e"] == "m" and own[0]["p"] == 500.0       # artikeln finns i materialet
+    p = client.post("/api/projects", json={"name": "Prisfil", "contract_form": "AB04"}, headers=admin).json()
+    doc = pymupdf.open()
+    for i, rows in enumerate(PAGES):
+        _page(doc, rows, i + 1, len(PAGES))
+    client.post(f"/api/projects/{p['id']}/tech-specs", files={"file": ("tb.pdf", doc.tobytes(), "application/pdf")}, headers=admin)
+    o = client.post(f"/api/projects/{p['id']}/offers", json={"kind": "materialoffert"}, headers=admin).json()
+    ts = next(r for r in o["rows"] if r["rsk"] == "7606418")
+    # ingen kund vald: prisfilens rabatt för kalkylgruppen
+    assert (ts["brutto"], ts["rabatt_pct"], ts["netto"]) == (2000.0, 25.0, 1500.0) and "grundrabatt" in ts["pris_enligt"]

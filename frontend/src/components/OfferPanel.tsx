@@ -10,7 +10,7 @@ import { t as tr, trf, locale } from "../i18n";
 
 const kr = (v: number | null | undefined) => v == null ? "–" : v.toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const DATA_KINDS: [string, string, string][] = [
-  ["prislista", "Dahls prislista", "RSK eller Dahl art.nr, Bruttopris, Rabattgrupp, Enhet"],
+  ["prislista", "Dahls prisfil", "Hela prisfilen: fliken med Artnr, Benämning, Kalkylgr, Enh, Bruttopris och fliken med Prod.gr, Rabatt"],
   ["kunder", "Kunder", "Kundnr, Namn, Bonus %, Bonusavtal"],
   ["rabatter", "Rabattmatris", "Kundnr, Rabattgrupp, Rabatt %"],
   ["nettopriser", "Kundunika nettopriser", "Kundnr, RSK, Nettopris"],
@@ -153,7 +153,8 @@ export default function OfferPanel({ project }: { project: any }) {
         {DATA_KINDS.map(([k, label, cols]) => (
           <div key={k} className="row small" style={{ gap: 8, alignItems: "center", margin: "4px 0" }}>
             <b style={{ width: 190 }}>{tr(label)}</b>
-            <span className="muted" style={{ width: 90 }}>{trf("{0} rader", dataStatus?.[k]?.n ?? 0)}</span>
+            <span className="muted" style={{ width: 90 }}>{trf("{0} rader", dataStatus?.[k]?.n ?? 0)}
+              {k === "prislista" && (dataStatus?.grundrabatter?.n ?? 0) > 0 && <><br />{trf("{0} grupprabatter", dataStatus.grundrabatter.n)}</>}</span>
             <input type="file" accept=".xlsx,.csv" id={`od-${k}`} className="file" ref={(el) => { files.current[k] = el; }} onChange={() => upload(k)} />
             <label className="pick small" htmlFor={`od-${k}`}>{tr("Ladda upp")}</label>
             <span className="muted">{tr("Kolumner")}: {cols}</span>

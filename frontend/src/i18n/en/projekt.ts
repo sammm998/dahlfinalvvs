@@ -903,4 +903,7 @@ export const projekt: Record<string, string> = {
   "Dahls prislista": "Dahl's price list",
   "RSK eller Dahl art.nr, Bruttopris, Rabattgrupp, Enhet": "RSK or Dahl article no., List price, Discount group, Unit",
   "Vilka rör finns i Dahls katalog?": "Which pipes are in Dahl's catalogue?",
+  "Dahls prisfil": "Dahl's price file",
+  "Hela prisfilen: fliken med Artnr, Benämning, Kalkylgr, Enh, Bruttopris och fliken med Prod.gr, Rabatt": "The whole price file: the sheet with Artnr, Description, Calc group, Unit, List price and the sheet with Prod. group, Discount",
+  "{0} grupprabatter": "{0} group discounts",
 };
