@@ -135,13 +135,17 @@ def customer_price(rsk: str, book: dict[str, dict[str, Any]], customer: dict[str
         net = float(cust["netto"][rsk])
         return {"brutto": brutto, "rabattgrupp": group, "rabatt_pct": None, "netto": net, "pris_enligt": "kundens nettopris"}
     pct = (cust.get("rabatter") or {}).get(group)
+    base = False
+    if pct is None and group and (cust.get("grundrabatter") or {}).get(group) is not None:
+        pct, base = cust["grundrabatter"][group], True             # prisfilens rabatt för kalkylgruppen
     if brutto is None:
         return {"brutto": None, "rabattgrupp": group, "rabatt_pct": pct, "netto": None, "pris_enligt": "pris saknas"}
     if pct is None:
         return {"brutto": brutto, "rabattgrupp": group, "rabatt_pct": 0.0, "netto": round(float(brutto), 2),
                 "pris_enligt": "bruttopris (gruppen finns inte i kundens rabattmatris)" if customer else "bruttopris"}
     return {"brutto": brutto, "rabattgrupp": group, "rabatt_pct": float(pct),
-            "netto": round(float(brutto) * (1 - float(pct) / 100.0), 2), "pris_enligt": f"rabattgrupp {group}"}
+            "netto": round(float(brutto) * (1 - float(pct) / 100.0), 2),
+            "pris_enligt": f"grundrabatt kalkylgrupp {group}" if base else f"rabattgrupp {group}"}
 
 
 def build_rows(items: list[dict[str, Any]], book: dict[str, dict[str, Any]], customer: dict[str, Any] | None,
