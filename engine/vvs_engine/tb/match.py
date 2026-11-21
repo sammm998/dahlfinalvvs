@@ -185,7 +185,8 @@ class MaterialIndex:
     @staticmethod
     def _prescribed_model(item: dict[str, Any]) -> set[str]:
         typ = " ".join([item.get("type") or ""] + list(item.get("art_nr") or []))
-        out = {t for t in compact_tokens(typ) if len(t) >= 4 and re.search(r"\d", t) and re.search(r"[a-zåäö]", t)}
+        # en modellbeteckning är minst fem tecken: "r150" ("R 150") finns i för många benämningar för att bära ett fabrikat
+        out = {t for t in compact_tokens(typ) if len(t) >= 5 and re.search(r"\d", t) and re.search(r"[a-zåäö]", t)}
         out |= {w for w in words(typ) if len(w) >= 5 and not re.search(r"\d", w) and w not in {"eller", "typ", "likvärdig"}}
         return out
 

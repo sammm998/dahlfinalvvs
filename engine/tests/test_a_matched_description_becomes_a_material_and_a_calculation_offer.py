@@ -199,3 +199,25 @@ def test_dahls_price_file_with_both_sheets_prices_the_catalog_and_the_offer(clie
     ts = next(r for r in o["rows"] if r["rsk"] == "7606418")
     # ingen kund vald: prisfilens rabatt för kalkylgruppen
     assert (ts["brutto"], ts["rabatt_pct"], ts["netto"]) == (2000.0, 25.0, 1500.0) and "grundrabatt" in ts["pris_enligt"]
+
+
+def test_a_possible_hit_or_own_suggestion_becomes_a_checked_article_only_when_it_is_the_same_kind_of_thing():
+    possible = _item(name="Avstängningsventiler", manufacturer="", type="", category="Ventiler",
+                     match={"status": "möjlig", "hits": [{"ref": "s. 412", "name": "Kulventiler sida"},
+                                                         {"ref": "1234567", "name": "Kulventil IMI 15"}]})
+    a = OF.pick_article(possible)
+    assert a["rsk"] == "1234567" and "kontrollera" in a["flag"]                      # sidan i PDF:en är ingen artikel
+    wrong = _item(name="R 150", manufacturer="Lindab", type="R 150", category="Takavvattning",
+                  match={"status": "möjlig", "hits": [{"ref": "999", "name": "NIBE VVB COMPACT SC - R 150"}],
+                         "basis": "förskrivet fabrikat", "rsk": {"value": "999", "name": "NIBE VVB COMPACT SC - R 150"}})
+    assert OF.pick_article(wrong)["rsk"] == ""                                        # en varmvattenberedare är inget takrör
+    pipe = _item(name="Spillvatten", subcategory="Ledningar av PP-rör", manufacturer="", type="",
+                 match={"status": "möjlig", "hits": [{"ref": "5", "name": "110 DUBBELGRENRÖR WAFIX PP"}]})
+    assert OF.pick_article(pipe)["rsk"] == ""                                         # ett rör får ingen rördel
+    rows = OF.build_rows([{**_item(name="Tappkallvatten", subcategory="Ledningar av kopparrör", text="Kopparrör",
+                                   manufacturer="", type="", unit="m", quantity=None, total_quantity=None,
+                                   match={"status": "saknas", "hits": []}),
+                           "from_drawing": {"kind": "meter", "quantity": 10.0, "by_dn": {"15": 10.0}}}],
+                         {"77": {"a": "77", "n": "15X1,0 KOPPARRÖR", "p": 58.0, "k": ""}}, None, {},
+                         pipe_finder=lambda it, dn: {"a": "77", "n": "15X1,0 KOPPARRÖR"} if dn == 15 else None)
+    assert rows[0]["rsk"] == "77" and rows[0]["summa"] == 580.0 and "katalogen" in rows[0]["val"]

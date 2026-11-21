@@ -269,6 +269,18 @@ def _book() -> dict[str, dict[str, Any]]:
     return out
 
 
+def _pipe_finder(item: dict[str, Any], dn: int) -> dict[str, Any] | None:
+    """Ett rör i rätt material och dimension ur Dahls katalog och prisfil - samma sökning som ritningskalkylen.
+    Materialet ur postens text (kopparrör, PEX, rostfritt ...); utan känt material inget förslag."""
+    from . import calc as C
+    text = " ".join(str(item.get(k) or "") for k in ("name", "subcategory", "category", "text"))
+    klass = C._material_class(text)
+    if not klass:
+        return None
+    found = C._find_articles([klass], dn, klass=klass, limit=1)
+    return found[0] if found else None
+
+
 def _project(db: Session, user: User, pid: str) -> Project:
     p = db.get(Project, pid)
     if p is None or p.owner_id != user.id:
@@ -320,6 +332,7 @@ def _build(db: Session, o: Offer) -> None:
         terms = {"rabatter": {}, "netto": {}, "grundrabatter": base_discounts()}   # ingen kund: prisfilens grundrabatt
     purchase = {r["rsk"]: r["pris"] for r in data("inkopspriser") if r.get("pris") is not None}
     rows = OF.build_rows(items, _book(), terms, purchase, kind=o.kind, hourly_rate=st.get("hourly_rate") or 0,
+                         pipe_finder=_pipe_finder,
                          use_house_brand=bool(st.get("use_house_brand")), crossref=data("korsreferens"))
     # det någon ändrat för hand står kvar när offerten räknas om
     manual = {r["id"]: r for r in (o.rows or []) if r.get("manuellt")}

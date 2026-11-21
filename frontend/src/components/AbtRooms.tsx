@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { num, t as tr, trf } from "../i18n";
 import { AbtKeyFigures, AbtSchablon } from "./AbtEstimate";
+import SpecAnalysis from "./SpecAnalysis";
 
 /* ABT 06: rummen i projektet, lästa ur A-planernas rumsetiketter.
  *
@@ -26,17 +27,27 @@ export function AbtPanel({ project }: { project: any }) {
         <button className={tab === "symboler" ? "active" : ""} onClick={() => setTab("symboler")}>{tr("Symboler")}</button>
         <button className={tab === "nyckeltal" ? "active" : ""} onClick={() => setTab("nyckeltal")}>{tr("Nyckeltal")}</button>
         <button className={tab === "schablon" ? "active" : ""} onClick={() => setTab("schablon")}>{tr("Schablon")}</button>
-        {["Krav"].map((t) => (
-          <button key={t} disabled title={tr("Kommer i nästa del av ABT 06.")}>{tr(t)} · {tr("kommer")}</button>
-        ))}
+        <button className={tab === "krav" ? "active" : ""} onClick={() => setTab("krav")}>{tr("Krav")}</button>
       </div>
       {tab === "rum" && <AbtRooms project={project} />}
       {tab === "enheter" && <AbtUnits project={project} />}
       {tab === "symboler" && <AbtSymbols project={project} />}
       {tab === "nyckeltal" && <AbtKeyFigures project={project} />}
       {tab === "schablon" && <AbtSchablon project={project} />}
+      {tab === "krav" && <AbtKrav project={project} />}
     </section>
   );
+}
+
+/** Kraven för projekteringen: projekt- och tekniska förutsättningar, gränsdragning och optioner ur projektets
+ * tekniska beskrivningar. I en totalentreprenad är det underlaget man projekterar efter. */
+function AbtKrav({ project }: { project: any }) {
+  const [specs, setSpecs] = useState<any[] | null>(null);
+  useEffect(() => { api.techSpecs(project.id).then((r: any) => setSpecs((r.specs ?? r).filter((s: any) => s.status === "COMPLETED"))).catch(() => setSpecs([])); }, [project.id]);
+  if (specs === null) return <p className="muted small">{tr("Laddar…")}</p>;
+  if (!specs.length) return <p className="muted small">{tr("Ladda upp den tekniska beskrivningen (PDF) under Teknisk beskrivning nedan, så samlas kraven, förutsättningarna, gränsdragningen och optionerna här.")}</p>;
+  return <>{specs.map((s) => <div key={s.id} style={{ marginTop: 8 }}><b>{s.title || s.filename}</b>
+    <SpecAnalysis specId={s.id} project={project} onPriority={() => {}} /></div>)}</>;
 }
 
 export default function AbtRooms({ project }: { project: any }) {
