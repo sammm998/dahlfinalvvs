@@ -45,6 +45,23 @@ function Drawing({ h }: { h: any }) {
     </svg>);
 }
 
+/** Ritningsutsnittet: rören och hängarna runt den här, med den markerad, och referenslinjerna (vägg/grid). */
+function Cutout({ h, nb, onPick }: { h: any; nb: any; onPick: (id: string) => void }) {
+  if (!nb) return null;
+  const [x0, y0, x1, y1] = nb.box;
+  const w = x1 - x0, r = w / 90;
+  return (
+    <svg viewBox={`${x0} ${-y1} ${w} ${y1 - y0}`} style={{ width: "100%", maxWidth: 560, aspectRatio: "1", background: "#fff", border: "1px solid #ddd", borderRadius: 6 }}>
+      {nb.references.map((l: any, i: number) => l.axis === "x"
+        ? <g key={i}><line x1={l.value} y1={-y1} x2={l.value} y2={-y0} stroke="#c88a12" strokeDasharray={`${r * 2} ${r}`} strokeWidth={r / 3} /><text x={l.value + r} y={-y1 + r * 4} fontSize={r * 3} fill="#c88a12">{l.name}</text></g>
+        : <g key={i}><line x1={x0} y1={-l.value} x2={x1} y2={-l.value} stroke="#c88a12" strokeDasharray={`${r * 2} ${r}`} strokeWidth={r / 3} /><text x={x0 + r} y={-l.value - r} fontSize={r * 3} fill="#c88a12">{l.name}</text></g>)}
+      {nb.pipes.map((p: any) => <line key={p.id} x1={p.start[0]} y1={-p.start[1]} x2={p.end[0]} y2={-p.end[1]} stroke="#7aa7d9" strokeWidth={r * 0.8} />)}
+      {nb.hangers.map((o: any) => <circle key={o.id} cx={o.x} cy={-o.y} r={o.id === h.id ? r * 2.2 : r * 1.1}
+        fill={o.id === h.id ? "#d64545" : statusColor(o.status)} stroke="#fff" strokeWidth={r / 3} style={{ cursor: "pointer" }} onClick={() => onPick(o.id)} />)}
+      <text x={h.position.x + r * 3} y={-h.position.y - r * 2} fontSize={r * 3.4} fontWeight="bold">{h.id}</text>
+    </svg>);
+}
+
 export default function HangerPage() {
   const { setId = "", hid = "" } = useParams();
   const [q] = useSearchParams();
@@ -110,6 +127,8 @@ export default function HangerPage() {
         {h.flags?.map((f: string) => <div key={f} className="badge warn small" style={{ marginTop: 4, marginRight: 4 }}>{tr(f)}</div>)}
       </div>
 
+      {!prod && <div style={{ marginTop: 10 }}><div className="small muted">{tr("Ritningsutsnitt (10 x 10 m runt hängaren)")}</div>
+        <Cutout h={h} nb={d.nearby} onPick={(id) => go(id)} /></div>}
       <div style={{ marginTop: 10 }}><Drawing h={h} /></div>
 
       {prod && (

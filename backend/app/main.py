@@ -49,6 +49,14 @@ async def _lifespan(_app: FastAPI):
     if os.environ.get("PYTEST_CURRENT_TEST") is None:
         from .reset_once import run as _reset_once
         _reset_once(storage.path(""))
+        try:                        # 5 000 kr av budgeten är redan förbrukade före nystarten: en rad, en gång
+            from .db import SessionLocal
+            with SessionLocal() as _db:
+                api_budget.shared_start(_db)
+                api_budget.opening_balance(_db)
+        except Exception:           # noqa: BLE001
+            import logging
+            logging.getLogger("vvs").warning("Budgetens ingående förbrukning kunde inte föras in", exc_info=True)
     # Var data bor, sagt i loggen vid varje uppstart. Den som letar efter försvunna ritningar hittar svaret här
     # i stället för att gissa, och den som driftsätter ser det innan den första ritningen laddas upp.
     try:

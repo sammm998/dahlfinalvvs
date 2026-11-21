@@ -230,7 +230,15 @@ def test_the_prefab_flow_from_ifc_to_mounted(client):
     assert ph.json()["n"] == 1 and client.get(f"/api/hanger-sets/{sid}/hangers/{hid}/photo/1", headers=H).content == b"\xff\xd8bild"
     # ut: material, kapplan, packlista; etiketter med QR; IFC
     wb = openpyxl.load_workbook(io.BytesIO(client.get(f"/api/hanger-sets/{sid}/export.xlsx", headers=H).content))
-    assert {"Hängare", "Material per hängare", "Material projekt", "Kapplan", "Packlista"} <= set(wb.sheetnames)
+    assert {"Hängare", "Material per hängare", "Material projekt", "Kapplan", "Packlista", "Material per kolli"} <= set(wb.sheetnames)
+    # referensmått från vald vägg/gridlinje, och ritningsutsnittet i montageguiden
+    rs = client.post(f"/api/hanger-sets/{sid}/references", json={"references": [{"name": "Grid 1", "axis": "x", "value": 1000},
+                                                                                  {"name": "Vägg A", "axis": "y", "value": -500}]}, headers=H).json()
+    h0 = next(h for h in rs["hangers"] if h["id"] == hid)
+    assert [l["name"] for l in h0["reference"]["lines"]] == ["Grid 1", "Vägg A"]
+    assert h0["reference"]["text"].startswith(f"{abs(h0['position']['x'] - 1000):,} mm från Grid 1".replace(",", " "))
+    nb = client.get(f"/api/hanger-sets/{sid}/hangers/{hid}", headers=H).json()["nearby"]
+    assert nb["pipes"] and any(x["id"] == hid for x in nb["hangers"]) and len(nb["references"]) == 2
     pdf = client.get(f"/api/hanger-sets/{sid}/export.pdf", headers=H).content
     doc = pymupdf.open(stream=pdf, filetype="pdf")
     assert doc.page_count == s["n"] and hid in doc[0].get_text()

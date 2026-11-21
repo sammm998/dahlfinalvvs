@@ -174,6 +174,7 @@ LABELS = {
     "röst_transkribering": "Röstsamtal – transkribering",
     "röst_text": "Samtalsagent i text",
     "tb": "Teknisk beskrivning (AI)",
+    "tidigare": "Förbrukat före nystarten",
 }
 
 
@@ -324,6 +325,25 @@ def shared_start(db) -> bool:
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     save(db, {"limit_kr": LIMIT_KR_DEFAULT, "reset_at": now})
     db.add(ServiceSetting(key=SHARED_START, value={"v": {"at": now}}))
+    db.commit()
+    return True
+
+
+OPENING = "api:budget:opening_2026_11_21"
+OPENING_KR = 5000.0
+
+
+def opening_balance(db) -> bool:
+    """En gång: det som redan gått åt av budgeten före nystarten den 21 november 2026 (5 000 kr av 10 000 kr)
+    förs in som en rad i reskontran, så att 5 000 kr står kvar. Raden syns under Credits som "Förbrukat före
+    nystarten" och tas bort med en nollställning som allt annat. Returnerar True om den fördes in nu."""
+    from .db import ApiSpend, ServiceSetting
+    if db.get(ServiceSetting, OPENING) is not None:
+        return False
+    now = dt.datetime.now(dt.timezone.utc)
+    db.add(ApiSpend(source="tidigare", model="", user_email="", kr=OPENING_KR, created_at=now,
+                    price={"note": "Förbrukat före nystarten 2026-11-21 - inlagt så att 5 000 kr av 10 000 kr står kvar"}))
+    db.add(ServiceSetting(key=OPENING, value={"v": {"at": now.isoformat(), "kr": OPENING_KR}}))
     db.commit()
     return True
 
