@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import os
 import shutil
 import tempfile
@@ -1050,14 +1051,30 @@ def _material() -> dict:
                         prices[rsk_norm(p["rsk"]) or p["rsk"]] = p
             except Exception:                           # noqa: BLE001 - utan prislista inga priser
                 prices = {}
+            used = set()
             for r in dahl["rows"]:
-                hit = prices.get(r.get("rsk") or "") or prices.get(r.get("dahl") or "") or prices.get(r.get("a") or "")
+                key = next((k for k in (r.get("rsk"), r.get("dahl"), r.get("a")) if k and k in prices), None)
+                hit = prices.get(key) if key else None
                 if hit and hit.get("pris") is not None:
                     r["p"], r["p_src"] = float(hit["pris"]), "prislista"
+                    used.add(hit["rsk"])
                     if hit.get("grupp"):
                         r["k"] = str(hit["grupp"])
                 else:
                     r["p_src"] = "katalog" if r.get("p") is not None else None
+            # Dahls artiklar som prisfilen har men katalog-PDF:en inte tar upp: samma artikelregister, med pris
+            units = {"STK": "st", "ST": "st", "M": "m", "PAR": "par", "KG": "kg", "FRP": "frp", "L": "l", "M2": "m2"}
+            extra = []
+            for p in {id(v): v for v in prices.values()}.values():
+                if p["rsk"] in used or not p.get("namn"):
+                    continue
+                extra.append({"a": p["rsk"], "n": re.sub(r"\s+", " ", p["namn"]).strip(), "e": units.get(
+                    str(p.get("enhet") or "").strip().upper(), str(p.get("enhet") or "").strip().lower() or "st"),
+                    "p": float(p["pris"]) if p.get("pris") is not None else None, "k": str(p.get("grupp") or ""),
+                    "r": None, "w": None, "co2": None, "gr": "", "rsk": p["rsk"], "dahl": p["rsk"],
+                    "p_src": "prislista", "src": "prislista"})
+            dahl["rows"] = dahl["rows"] + extra
+            dahl["n"] = len(dahl["rows"])
             dahl["kind"] = "dahl"
             dahl["priced"] = sum(1 for r in dahl["rows"] if r.get("p") is not None)
             _MATERIAL = dahl

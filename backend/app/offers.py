@@ -22,6 +22,7 @@ import datetime as dt
 import html as _html
 import io
 import json
+import os
 import re
 from typing import Any
 
@@ -29,6 +30,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFil
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
+from starlette.concurrency import run_in_threadpool
 
 from vvs_engine import offer as OF
 from vvs_engine.tb.rsk import normalize as rsk_norm
@@ -48,10 +50,15 @@ KINDS = {
                     "rsk": ("rsk", "rsk-nr", "artikel", "artikelnr", "artikelnummer"), "pris": ("nettopris", "pris")},
     "inkopspriser": {"rsk": ("rsk", "rsk-nr", "artikel", "artikelnr", "artikelnummer"),
                      "pris": ("inköpspris", "inkopspris", "inköp", "pris")},
-    "prislista": {"rsk": ("rsk", "rsk-nr", "rsk nr", "artikel", "artikelnr", "artikelnummer", "dahl art.nr", "dahl artikelnr"),
+    "prislista": {"rsk": ("rsk", "rsk-nr", "rsk nr", "artnr", "art.nr", "art nr", "artikel", "artikelnr", "artikelnummer",
+                          "dahl art.nr", "dahl artikelnr"),
+                  "namn": ("benämning", "artikelbenämning", "namn"),
                   "pris": ("bruttopris", "listpris", "pris", "brutto"),
-                  "grupp": ("rabattgrupp", "rabatt grupp", "grupp", "prisgrupp", "varugrupp"),
+                  "grupp": ("kalkylgr", "kalkylgrupp", "rabattgrupp", "rabatt grupp", "grupp", "prisgrupp", "varugrupp", "prod.gr"),
                   "enhet": ("enhet", "enh")},
+    # rabatt per kalkylgrupp (Prisfilens flik "Grupper_rabatter"): gäller där kunden saknar en egen rabatt för gruppen
+    "grundrabatter": {"grupp": ("prod.gr", "produktgrupp", "kalkylgr", "kalkylgrupp", "rabattgrupp", "grupp"),
+                      "namn": ("benämning", "namn"), "pct": ("rabatt", "rabatt %", "rabattprocent")},
     "korsreferens": {"material": ("material",), "dimension": ("dimension", "dim", "storlek"),
                      "fabrikat": ("fabrikat", "förskrivet fabrikat", "tillverkare"), "serie": ("serie",),
                      "rsk": ("rsk", "rsk-nr", "artikel", "artikelnr", "dahl art.nr", "vår artikel"),
@@ -64,11 +71,32 @@ def _key(kind: str) -> str:
     return f"offer/{kind}.json"
 
 
+_CACHE: dict[str, tuple[float, list]] = {}
+
+
 def data(kind: str) -> list[dict[str, Any]]:
     if not storage.exists(_key(kind)):
         return []
+    try:
+        stamp = os.path.getmtime(storage.path(_key(kind)))
+    except (OSError, AttributeError, NotImplementedError):
+        stamp = -1.0
+    hit = _CACHE.get(kind)
+    if hit and hit[0] == stamp and stamp >= 0:
+        return hit[1]
     with storage.open(_key(kind)) as fh:
-        return json.load(fh).get("rows") or []
+        rows = json.load(fh).get("rows") or []
+    _CACHE[kind] = (stamp, rows)
+    return rows
+
+
+def _sheets_from_file(name: str, raw: bytes) -> list[list[list[Any]]]:
+    """Alla flikar i en Excel-fil (en CSV är en flik)."""
+    if name.lower().endswith((".xlsx", ".xlsm")):
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+        return [[list(r) for r in ws.iter_rows(values_only=True)] for ws in wb.worksheets]
+    return [_rows_from_file(name, raw)]
 
 
 def _rows_from_file(name: str, raw: bytes) -> list[list[Any]]:
@@ -147,14 +175,43 @@ def offer_data_status(user: User = Depends(current_user)):
 async def offer_data_upload(kind: str, file: UploadFile = File(...), admin: User = Depends(current_admin)):
     if kind not in KINDS:
         raise HTTPException(404, "Okänd sorts data")
-    rows = parse(kind, _rows_from_file(file.filename or "", await file.read()))
-    if not rows:
-        raise HTTPException(422, "Inga rader i filen")
-    storage.put(_key(kind), io.BytesIO(json.dumps({"file": file.filename, "updated_at": dt.datetime.now(
-        dt.timezone.utc).isoformat(), "rows": rows}, ensure_ascii=False).encode("utf-8")))
+    raw = await file.read()
+    stamp = dt.datetime.now(dt.timezone.utc).isoformat()
+
+    def store(k: str, rows: list[dict[str, Any]]) -> None:
+        storage.put(_key(k), io.BytesIO(json.dumps({"file": file.filename, "updated_at": stamp, "rows": rows},
+                                                   ensure_ascii=False).encode("utf-8")))
+        _CACHE.pop(k, None)
+
     if kind == "prislista":
+        # Dahls prisfil: en flik med artiklarna och bruttopriset, en med rabatten per kalkylgrupp
+        found: dict[str, list] = {}
+        for sheet in await run_in_threadpool(_sheets_from_file, file.filename or "", raw):
+            for k in ("prislista", "grundrabatter"):
+                if k in found:
+                    continue
+                try:
+                    rows = parse(k, sheet)
+                except HTTPException:
+                    continue
+                if k == "prislista" and not any(r.get("pris") is not None for r in rows[:200]):
+                    continue
+                if k == "grundrabatter" and not any(r.get("pct") is not None for r in rows[:200]):
+                    continue
+                if rows:
+                    found[k] = rows
+                    break
+        if "prislista" not in found:
+            raise HTTPException(422, "Hittade ingen flik med artikelnummer och bruttopris (Artnr/RSK, Bruttopris)")
+        for k, rows in found.items():
+            store(k, rows)
         from .main import _reset_material
         _reset_material()                           # priserna gäller direkt i offert, kalkyl och sökning
+        return {"kind": kind, "n": len(found["prislista"]), "grundrabatter": len(found.get("grundrabatter") or [])}
+    rows = parse(kind, _rows_from_file(file.filename or "", raw))
+    if not rows:
+        raise HTTPException(422, "Inga rader i filen")
+    store(kind, rows)
     return {"kind": kind, "n": len(rows)}
 
 
@@ -171,7 +228,13 @@ def customer_terms(no: str) -> dict[str, Any] | None:
     if c is None and not rab and not net:
         return None
     return {"kundnr": no, "namn": (c or {}).get("namn") or "", "bonus": (c or {}).get("bonus"),
-            "bonusavtal": (c or {}).get("bonusavtal") or "", "rabatter": rab, "netto": net}
+            "bonusavtal": (c or {}).get("bonusavtal") or "", "rabatter": rab, "netto": net,
+            "grundrabatter": base_discounts()}
+
+
+def base_discounts() -> dict[str, float]:
+    """Rabatten per kalkylgrupp ur prisfilen, för grupper där kunden saknar en egen."""
+    return {r["grupp"]: r["pct"] for r in data("grundrabatter") if r.get("grupp") and r.get("pct") is not None}
 
 
 @router.get("/api/customers")
@@ -253,6 +316,8 @@ def _build(db: Session, o: Offer) -> None:
         if s is not None and s.project_id == o.project_id:
             items += matched_items(s)
     terms = customer_terms(o.customer_no)
+    if terms is None and base_discounts():
+        terms = {"rabatter": {}, "netto": {}, "grundrabatter": base_discounts()}   # ingen kund: prisfilens grundrabatt
     purchase = {r["rsk"]: r["pris"] for r in data("inkopspriser") if r.get("pris") is not None}
     rows = OF.build_rows(items, _book(), terms, purchase, kind=o.kind, hourly_rate=st.get("hourly_rate") or 0,
                          use_house_brand=bool(st.get("use_house_brand")), crossref=data("korsreferens"))
