@@ -118,13 +118,13 @@ MATERIAL_CLASSES: list[tuple[str, str, str, bool]] = [
     # (klass, mönster i förklaringen, mönster i artikelnamnet, plaströr)
     ("pex",     r"pe-?x|ipe-?x|\brir\b|rör.?i.?rör|multipex|sanipex", r"pex|pe-x|\brir\b|rör i rör|kombirör", True),
     ("koppar",  r"koppar|\bcu\b",                                   r"koppar|cupori|\bcu\b",                  False),
-    ("rostfri", r"rostfri|syrafast|\brf\b|aisi|1[.,]44",               r"rostfri|syrafast|\brf\b|aisi|1[.,]44",   False),
+    ("rostfri", r"rostfri|syrafast|\brf\b|aisi|1[.,]44",               r"rostfri|syrafast|\brf\b|aisi|1[.,]44|\b3(?:16|04)l?\b", False),
     ("pp",      r"\bpp\b|pp-|polypropen|\bhtp\b",                    r"\bpp\b|pp-|polypropen|\bhtp\b",         True),
     ("pe",      r"\bpem\b|\bpeh\b|\bpe\s?\d{2,3}\b|polyet(en|ylen)",  r"\bpem\b|\bpeh\b|\bpe\d{2,3}|pe-rör|\bpe\b", True),
     ("pvc",     r"pvc",                                                r"pvc",                                     True),
     ("gjut",    r"gjut|\bgjj\b|segjärn|\bsml\b|\bma-?rör",              r"\bgjj\b|gjut|segjärn|\bsml\b|ma-rör",      False),
     ("galv",    r"förzink|galv",                                       r"förzink|galv",                            False),
-    ("stal",    r"stål|svart|tunnvägg|mapress|kolstål|\bsms\b",         r"stål|svartrör|tunnvägg|mapress|kolstål",   False),
+    ("stal",    r"stål|svart|tunnvägg|mapress|kolstål|\bsms\b",         r"stål|svartrör|tunnvägg|mapress|kolstål|\belfz\b|elförz", False),
 ]
 _CLASS = {c[0]: c for c in MATERIAL_CLASSES}
 

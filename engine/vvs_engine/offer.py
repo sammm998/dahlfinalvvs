@@ -62,7 +62,51 @@ def hours_per_unit(item: dict[str, Any]) -> tuple[float | None, str]:
 # ---------------------------------------------------------------- artikel
 
 def _ref(hit: dict[str, Any] | None) -> str:
-    return (hit or {}).get("ref") or ""
+    r = (hit or {}).get("ref") or ""
+    return "" if r.startswith("s. ") else r          # "s. 412" är en sida i katalog-PDF:en, inget artikelnummer
+
+
+FITTING = re.compile(r"grenrör|\bböj|muff|t-rör|\bt-stycke|reduktion|övergång|nippel|koppling|vinkel|förskruvning|"
+                     r"dubbelgren|\bhylsa|\bpropp|lock\b|fäste|klammer", re.I)
+TAILS = ("ventil", "blandare", "brunn", "pump", "beredare", "skåp", "spegel", "krok", "hållare", "stång", "dusch",
+         "toalett", "klosett", "tvättställ", "diskbänk", "handtag", "tork", "kran", "mätare", "filter", "kärl", "radiator",
+         "termostat", "avskiljare", "lucka", "galler")
+GENERIC = {"typ", "enligt", "med", "och", "för", "till", "från", "eller", "likvärdig", "inkl", "samt", "per"}
+
+
+def _noun(text: str) -> str:
+    """Huvudordet i en benämning, kortat till sin stam: "Duschdraperistång" -> "duschdra", "Kulventiler" -> "kulvent"."""
+    for w in re.findall(r"[a-zåäö]{4,}", (text or "").lower()):
+        if w not in GENERIC:
+            return w[:max(5, min(8, len(w) - 2))]
+    return ""
+
+
+def plausible(item: dict[str, Any], hit: dict[str, Any]) -> bool:
+    """Är träffen samma slags vara som posten? Ett förslag som inte delar postens huvudord (en tvålhylla för en
+    duschdraperistång, en varmvattenberedare för ett takavvattningsrör "R 150") är inget förslag. Ett rör får
+    aldrig en rördel."""
+    name = (hit.get("name") or "").lower()
+    from .tb.match import _is_pipe
+    if _is_pipe(item) and FITTING.search(name):
+        return False
+    n = _noun(item.get("name") or "")
+    if n and n in name:
+        return True
+    # sammansatta ord: "Avstängningsventiler" är en ventil, "Kulventiler" också
+    full = (item.get("name") or "").lower()
+    if any(t in full and t in name for t in TAILS):
+        return True
+    # förskriven serie eller typ med ord ("INR Linc" -> "INR Linc Angel duschvägg")
+    typ = {w for w in re.findall(r"[a-zåäö]{4,}", (item.get("type") or "").lower()) if w not in GENERIC}
+    if typ and any(re.search(rf"\b{re.escape(w)}\b", name) for w in typ):
+        return True
+    words = {_noun(w) for w in re.findall(r"[a-zåäö]{5,}", (item.get("subcategory") or item.get("category") or "").lower())}
+    return any(w and w in name for w in words)
+
+
+def _first_article(hits: list[dict[str, Any]], item: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    return next((h for h in hits or [] if _ref(h) and (item is None or plausible(item, h))), None)
 
 
 def pick_article(item: dict[str, Any], use_house_brand: bool = False) -> dict[str, Any]:
@@ -76,8 +120,13 @@ def pick_article(item: dict[str, Any], use_house_brand: bool = False) -> dict[st
     if rsk.get("kind") == "ai" and rsk.get("value"):
         return {"rsk": rsk["value"], "name": rsk.get("name", ""), "route": "AI-val",
                 "flag": "" if rsk.get("sure") else "AI-val att kontrollera"}
-    if m.get("status") == "möjlig" and basis.startswith("förskrivet") and rsk.get("value"):
+    if m.get("status") == "möjlig" and basis.startswith("förskrivet") and rsk.get("value") \
+            and plausible(item, {"name": rsk.get("name", "")}):
         return {"rsk": rsk["value"], "name": rsk.get("name", ""), "route": "förskrivet fabrikat", "flag": ""}
+    if m.get("status") == "möjlig" and _first_article(hits, item):
+        h = _first_article(hits, item)
+        return {"rsk": _ref(h), "name": h.get("name", ""), "route": "möjlig träff i katalogen",
+                "flag": "möjlig träff - kontrollera artikeln"}
     if rsk.get("kind") == "storlek":
         return {"rsk": "", "name": rsk.get("name", ""), "route": "", "flag": "storlek inom serien går inte att avgöra",
                 "variants": rsk.get("variants") or []}
@@ -85,14 +134,19 @@ def pick_article(item: dict[str, Any], use_house_brand: bool = False) -> dict[st
     if xr and xr.get("rsk"):
         return {"rsk": xr["rsk"], "name": xr.get("name", ""), "route": "korsreferens (vår likvärdiga)", "flag": ""}
     eq = (m.get("equivalent") or {}).get("candidates") or []
-    if use_house_brand and eq and eq[0].get("state") != "avviker":
+    if (use_house_brand or m.get("status") == "likvärdig") and eq and eq[0].get("state") != "avviker":
         return {"rsk": eq[0].get("rsk") or "", "name": eq[0].get("name", ""), "route": "eget varumärke (likvärdigt)",
                 "flag": "" if eq[0].get("state") == "uppfyller angivna krav" else "likvärdighet att verifiera",
                 "price": eq[0].get("price")}
+    sug = _first_article(m.get("suggestions") or [], item)
+    if m.get("status") == "förslag" and sug:
+        return {"rsk": _ref(sug), "name": sug.get("name", ""), "route": "eget förslag (inget förskrivet)",
+                "flag": "eget förslag - teknisk granskning"}
     return {"rsk": "", "name": "", "route": "", "flag": "ingen artikel - manuell hantering"}
 
 
-def pipe_rows(item: dict[str, Any], crossref: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+def pipe_rows(item: dict[str, Any], crossref: list[dict[str, Any]] | None = None,
+              pipe_finder=None) -> list[dict[str, Any]]:
     """Ett rör med mängd från ritning blir en rad per dimension; storleken väljs ur seriens storlekar."""
     fd = item.get("from_drawing") or {}
     by_dn = {int(k): float(v) for k, v in (fd.get("by_dn") or {}).items() if float(v or 0) > 0}
@@ -112,12 +166,16 @@ def pipe_rows(item: dict[str, Any], crossref: list[dict[str, Any]] | None = None
             from .tb.crossref import for_item
             xr = for_item(item, crossref, str(dn))
             row["_article"] = ({"rsk": xr["rsk"], "name": xr["name"], "route": f"korsreferens DN{dn} (vår likvärdiga)",
-                                "flag": "pris saknas enligt korsreferensen" if xr["price_missing"] else ""} if xr else
-                               {"rsk": "", "name": "", "route": "", "flag": f"DN{dn}: varken fabrikat eller material och "
-                                                                            "dimension i katalogen - manuell hantering"})
-        else:
+                                "flag": "pris saknas enligt korsreferensen" if xr["price_missing"] else ""} if xr else None)
+        if not row.get("_article") and pipe_finder is not None:
+            # varken serie eller korsreferens: rör i rätt material och dimension ur Dahls katalog, som förslag
+            a = pipe_finder(item, dn)
+            if a:
+                row["_article"] = {"rsk": a["a"], "name": a.get("n", ""), "route": f"katalogen: material och DN{dn}",
+                                   "flag": "rörartikel ur katalogen - kontrollera serien"}
+        if not row.get("_article"):
             row["_article"] = {"rsk": "", "name": "", "route": "",
-                               "flag": f"DN{dn}: storleken finns inte bland seriens storlekar - manuell hantering"}
+                               "flag": f"DN{dn}: ingen rörartikel i rätt material och dimension - manuell hantering"}
         out.append(row)
     return out
 
@@ -150,12 +208,13 @@ def customer_price(rsk: str, book: dict[str, dict[str, Any]], customer: dict[str
 
 def build_rows(items: list[dict[str, Any]], book: dict[str, dict[str, Any]], customer: dict[str, Any] | None,
                purchase: dict[str, float], kind: str = "materialoffert", hourly_rate: float = 0.0,
-               use_house_brand: bool = False, crossref: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+               use_house_brand: bool = False, crossref: list[dict[str, Any]] | None = None,
+               pipe_finder=None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for it in items:
         if it.get("kind") in ("krav", "arbete", "text") or (it.get("supplied_by") and not str(it["supplied_by"]).startswith("Ingår")):
             continue
-        for sub in pipe_rows(it, crossref):
+        for sub in pipe_rows(it, crossref, pipe_finder):
             art = sub.pop("_article", None) or pick_article(sub, use_house_brand)
             qty = sub.get("total_quantity") if sub.get("total_quantity") is not None else sub.get("quantity")
             price = customer_price(art["rsk"], book, customer, art.get("price"))
