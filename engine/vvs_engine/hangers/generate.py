@@ -524,3 +524,23 @@ def diff(old_pipes: list[dict[str, Any]], new_pipes: list[dict[str, Any]], hange
             affected.append({"hanger": h["id"], "status": h.get("status"), "pipes": hit, "critical": crit})
     return {"added": added, "removed": removed, "moved": moved, "changed": changed, "affected": affected,
             "critical": sum(1 for a in affected if a["critical"])}
+
+
+def apply_references(hangers: list[dict[str, Any]], refs: list[dict[str, Any]] | None) -> None:
+    """Referensmått från valda väggar eller gridlinjer: en linje är {"name": "Grid 3", "axis": "x", "value": 12000}
+    (x = konstant x, en linje i y-led). Varje hängare får avståndet till närmaste linje i var riktning, och
+    referenstexten blir det montören mäter ifrån ("1 057 mm från Grid 3, 2 300 mm från Vägg A")."""
+    refs = [r for r in (refs or []) if r.get("axis") in ("x", "y") and r.get("value") is not None]
+    for h in hangers:
+        ref = h.setdefault("reference", {})
+        lines = []
+        for axis in ("x", "y"):
+            cands = [r for r in refs if r["axis"] == axis and (not r.get("storey") or r["storey"] == h.get("storey"))]
+            if not cands or h["position"].get(axis) is None:
+                continue
+            r = min(cands, key=lambda r: abs(h["position"][axis] - float(r["value"])))
+            lines.append({"name": r.get("name") or f"{axis} = {r['value']}", "axis": axis,
+                          "mm": int(round(abs(h["position"][axis] - float(r["value"]))))})
+        ref["lines"] = lines
+        along = f"{ref.get('along_run_mm', h.get('station_mm', 0))} mm längs {h.get('zone') or 'stråket'} från dess början"
+        ref["text"] = ", ".join(f"{l['mm']:,} mm från {l['name']}".replace(",", " ") for l in lines) or along

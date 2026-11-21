@@ -906,4 +906,9 @@ export const projekt: Record<string, string> = {
   "Dahls prisfil": "Dahl's price file",
   "Hela prisfilen: fliken med Artnr, Benämning, Kalkylgr, Enh, Bruttopris och fliken med Prod.gr, Rabatt": "The whole price file: the sheet with Artnr, Description, Calc group, Unit, List price and the sheet with Prod. group, Discount",
   "{0} grupprabatter": "{0} group discounts",
+  "Ritningsutsnitt (10 x 10 m runt hängaren)": "Drawing cut-out (10 x 10 m around the hanger)",
+  "Referenslinjer – vägg och grid ({0})": "Reference lines – wall and grid ({0})",
+  "Montören mäter från en vägg eller gridlinje. Ange linjens läge i modellens koordinater (mm): x = en linje i y-led, y = en linje i x-led. Varje hängare får avståndet till närmaste linje.": "The fitter measures from a wall or grid line. Enter the line's position in model coordinates (mm): x = a line running along y, y = a line running along x. Each hanger gets the distance to the nearest line.",
+  "Namn, t.ex. Grid 3": "Name, e.g. Grid 3",
+  "läge mm": "position mm",
 };

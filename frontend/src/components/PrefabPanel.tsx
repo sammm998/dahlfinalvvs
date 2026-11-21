@@ -169,6 +169,22 @@ export default function PrefabPanel({ project }: { project: any }) {
           </div>
 
           <details className="settings" style={{ marginTop: 10 }}>
+            <summary>{trf("Referenslinjer – vägg och grid ({0})", (open.settings?.references || []).length)}</summary>
+            <p className="muted small">{tr("Montören mäter från en vägg eller gridlinje. Ange linjens läge i modellens koordinater (mm): x = en linje i y-led, y = en linje i x-led. Varje hängare får avståndet till närmaste linje.")}</p>
+            {(open.settings?.references || []).map((l: any, i: number) => (
+              <div key={i} className="small">{l.name} · {l.axis} = {l.value}{l.storey ? ` · ${l.storey}` : ""}{" "}
+                <button className="secondary small" onClick={() => run(() => api.hangerReferences(open.id, open.settings.references.filter((_: any, j: number) => j !== i)))}>{tr("Ta bort")}</button></div>))}
+            <form className="row small" style={{ gap: 6, marginTop: 6 }} onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget);
+              run(() => api.hangerReferences(open.id, [...(open.settings?.references || []), { name: f.get("name"), axis: f.get("axis"), value: Number(f.get("value")), storey: f.get("storey") || undefined }])); }}>
+              <input name="name" placeholder={tr("Namn, t.ex. Grid 3")} style={{ width: 130 }} required />
+              <select name="axis"><option value="x">x</option><option value="y">y</option></select>
+              <input name="value" placeholder={tr("läge mm")} style={{ width: 90 }} required />
+              <select name="storey"><option value="">{tr("alla våningar")}</option>{storeys.map((s: any) => <option key={s.name} value={s.name}>{s.name}</option>)}</select>
+              <button className="small">{tr("Lägg till")}</button>
+            </form>
+          </details>
+
+          <details className="settings" style={{ marginTop: 10 }}>
             <summary>{tr("Takhöjder per våning")}</summary>
             <p className="muted small">{tr("Tom ruta: höjden räknas ur nästa våning minus bjälklaget. Absolut höjd i mm i modellens koordinater.")}</p>
             {storeys.map((s: any) => (

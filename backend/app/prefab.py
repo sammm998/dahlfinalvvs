@@ -153,6 +153,7 @@ def _generate(s: HangerSet, model: dict[str, Any], heights: dict[str, float]) ->
     r = rules()
     res = HG.generate(model, r, heights, project=s.name, revision=s.revision)
     HG.pack(res["hangers"], r)
+    HG.apply_references(res["hangers"], (s.settings or {}).get("references"))
     s.settings = {**(s.settings or {}), "manual_heights": heights, "rules_version": r.get("version"),
                   "rules_verified": bool(r.get("verified")), "ceilings": res["ceilings"]}
     s.pipes = {"pipes": model["pipes"], "fittings": model["fittings"], "storeys": model["storeys"], "skipped": res["skipped"],
@@ -362,7 +363,54 @@ def get_hanger(set_id: str, hid: str, user: User = Depends(current_user), db: Se
     i = hs.index(h)
     nxt = next((x["id"] for x in hs[i + 1:] if x.get("status") not in ("monterad",)), None)
     return {"set": _out(s, full=False), "hanger": h, "next": nxt, "prev": hs[i - 1]["id"] if i else None,
-            "index": i + 1, "of": len(hs)}
+            "index": i + 1, "of": len(hs), "nearby": _nearby(s, h)}
+
+
+def _nearby(s: HangerSet, h: dict[str, Any], r: float = 5000.0) -> dict[str, Any]:
+    """Ritningsutsnittet runt hängaren: rören och hängarna på samma våning inom några meter, och referenslinjerna."""
+    x, y = h["position"]["x"], h["position"]["y"]
+    inside = lambda px, py: abs(px - x) <= r and abs(py - y) <= r
+    pipes = []
+    for p in (s.pipes or {}).get("pipes") or []:
+        if p.get("storey") != h.get("storey"):
+            continue
+        (x1, y1), (x2, y2) = p["start"][:2], p["end"][:2]
+        # med om någon del av röret ligger i rutan (ändpunkt inne, eller röret korsar rutan)
+        if inside(x1, y1) or inside(x2, y2) or (min(x1, x2) <= x + r and max(x1, x2) >= x - r
+                                                and min(y1, y2) <= y + r and max(y1, y2) >= y - r):
+            pipes.append({"id": p["id"], "start": [x1, y1], "end": [x2, y2], "dn": p.get("dn"), "system": p.get("system")})
+    hangers = [{"id": o["id"], "x": o["position"]["x"], "y": o["position"]["y"], "status": o.get("status")}
+               for o in s.hangers or [] if o.get("storey") == h.get("storey") and inside(o["position"]["x"], o["position"]["y"])]
+    return {"box": [x - r, y - r, x + r, y + r], "pipes": pipes[:300], "hangers": hangers[:200],
+            "references": [l for l in (s.settings or {}).get("references") or []
+                           if not l.get("storey") or l["storey"] == h.get("storey")]}
+
+
+class RefsIn(BaseModel):
+    references: list[dict[str, Any]]
+
+
+@router.post("/api/hanger-sets/{set_id}/references")
+def set_references(set_id: str, body: RefsIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Väggar och gridlinjer som referensmåtten mäts från: [{"name": "Grid 3", "axis": "x", "value": 12000,
+    "storey": "Plan 2" (valfritt)}]. Varje hängares referensmått räknas om."""
+    s = _set(db, user, set_id)
+    refs = []
+    for r in body.references:
+        if r.get("axis") not in ("x", "y"):
+            raise HTTPException(422, "En referenslinje har axeln x (linje i y-led) eller y (linje i x-led)")
+        try:
+            v = float(r.get("value"))
+        except (TypeError, ValueError):
+            raise HTTPException(422, "En referenslinje behöver ett läge i mm")
+        refs.append({"name": str(r.get("name") or "")[:40], "axis": r["axis"], "value": v,
+                     **({"storey": r["storey"]} if r.get("storey") else {})})
+    s.settings = {**(s.settings or {}), "references": refs}
+    HG.apply_references(s.hangers or [], refs)
+    _log(s, user, "referenslinjer", n=len(refs))
+    _touch(s)
+    db.commit()
+    return _out(s)
 
 
 @router.patch("/api/hanger-sets/{set_id}/hangers/{hid}")
@@ -599,8 +647,15 @@ def _xlsx(s: HangerSet) -> bytes:
             w4.append([f"{it['text']}: {it['n_bars']} längder, {it['pieces']} bitar, spill {it['waste_pct']} %"])
     w5 = wb.create_sheet("Packlista")
     w5.append(["Kolli", "Våning", "Zon", "Vikt kg", "Hängare (i montageordning)"])
-    for k in HG.pack(hs, r):
+    kollin = HG.pack(hs, r)
+    for k in kollin:
         w5.append([k["no"], k["storey"], k.get("zone"), k["kg"], ", ".join(k["hangers"])])
+    w6 = wb.create_sheet("Material per kolli")
+    w6.append(["Kolli", "Benämning", "Längd mm", "Antal"])
+    by_id = {h["id"]: h for h in hs}
+    for k in kollin:
+        for b in HG.bom_total([by_id[i] for i in k["hangers"] if i in by_id]):
+            w6.append([k["no"], b["text"], b["length_mm"], b["qty"]])
     b = io.BytesIO()
     wb.save(b)
     return b.getvalue()

@@ -201,6 +201,8 @@ export const api = {
   hangersFromDrawing: (projectId: string, body: any) =>
     req(`/api/projects/${projectId}/hangers/from-drawing`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   reviseHangerSet: (id: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/hanger-sets/${id}/revise`, { method: "POST", body: fd }); },
+  hangerReferences: (id: string, references: any[]) =>
+    req(`/api/hanger-sets/${id}/references`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ references }) }),
   regenerateHangerSet: (id: string, heights: Record<string, string>) =>
     req(`/api/hanger-sets/${id}/regenerate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ heights }) }),
   deleteHangerSet: (id: string) => req(`/api/hanger-sets/${id}`, { method: "DELETE" }),
