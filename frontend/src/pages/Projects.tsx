@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import SharedHangerSets from "../components/SharedHangerSets";
 import { t as tr, locale } from "../i18n";
 import { Link } from "react-router-dom";
 import { api } from "../api";
@@ -49,6 +50,7 @@ export default function Projects() {
         </div>
         <button onClick={() => setOpen(!open)}>{open ? tr("Avbryt") : tr("+ Nytt projekt")}</button>
       </div>
+      <SharedHangerSets />
 
       {open && (
         <form className="card" style={{ marginTop: 28, maxWidth: 560 }} onSubmit={create}>

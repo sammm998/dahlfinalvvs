@@ -23,6 +23,8 @@ from ..ifc.reader import _args, _decode, _records, _ref
 
 PIPES = ("IFCPIPESEGMENT", "IFCFLOWSEGMENT")
 FITTINGS = ("IFCPIPEFITTING", "IFCFLOWFITTING", "IFCVALVE", "IFCFLOWCONTROLLER")
+# det rören hängs i: bjälklag, tak och undertak (takhöjden vid hängaren läses ur deras undersida)
+CEILINGS = ("IFCSLAB", "IFCSLABSTANDARDCASE", "IFCROOF", "IFCCOVERING")
 
 
 class Model:
@@ -116,6 +118,26 @@ class Model:
         m[:3, 0], m[:3, 1], m[:3, 2], m[:3, 3] = x * s, y * s, z * s, o
         return m
 
+    def profile_points(self, prof) -> np.ndarray | None:
+        """Hörnen i en rektangel- eller polylinjeprofil, i profilens plan (z = 0)."""
+        c, pa = self.cls(prof), self.a(prof)
+        if c == "IFCRECTANGLEPROFILEDEF" and len(pa) > 4 and isinstance(pa[3], float) and isinstance(pa[4], float):
+            P = self.axis2(pa[2]) if len(pa) > 2 else np.eye(4)
+            x, y = pa[3] * self.unit / 2, pa[4] * self.unit / 2
+            pts = np.array([[-x, -y, 0, 1], [x, -y, 0, 1], [x, y, 0, 1], [-x, y, 0, 1]], dtype=float)
+            return (pts @ P.T)[:, :3]
+        if c == "IFCARBITRARYCLOSEDPROFILEDEF" and len(pa) > 2:
+            curve = _ref(pa[2])
+            ca = self.a(curve)
+            if self.cls(curve) == "IFCPOLYLINE" and ca and isinstance(ca[0], list):
+                return np.array([self.point(p) for p in ca[0]])
+            if self.cls(curve) == "IFCINDEXEDPOLYCURVE" and ca:
+                pl = self.a(_ref(ca[0]))
+                if pl and isinstance(pl[0], list):
+                    pts = [[float(v) for v in p[:2]] + [0.0] for p in pl[0]]
+                    return np.array(pts) * self.unit
+        return None
+
     # ------------------------------------------------------------ kroppen
     def body(self, rep_id, T: np.ndarray, out: dict) -> None:
         """Samlar axlar (exakt) och punkter (för huvudriktning) ur en representation."""
@@ -148,6 +170,11 @@ class Model:
             dirw = P[:3, :3] @ d
             dirw = dirw / (np.linalg.norm(dirw) or 1)
             out["axes"].append((start, start + dirw * depth_, r))
+            # en platta (rektangel eller sluten polylinje): hörnen nere och uppe, för utbredning och höjd
+            corners = self.profile_points(prof)
+            if corners is not None and out.get("want_profile"):
+                base = (np.c_[corners, np.ones(len(corners))] @ P.T)[:, :3]
+                out["points"].append(np.vstack([base, base + dirw * depth_]))
         elif c in ("IFCBOOLEANCLIPPINGRESULT", "IFCBOOLEANRESULT"):
             self.item(_ref(a[1]), T, out, depth + 1)
         elif c in ("IFCTRIANGULATEDFACESET", "IFCPOLYGONALFACESET"):
@@ -231,13 +258,13 @@ def pipes(text_or_lines) -> dict[str, Any]:
                         out.setdefault("qto:" + str(qa[0]).lower(), qa[3])
         return out
 
-    found, fittings, skipped = [], [], []
+    found, fittings, skipped, ceilings = [], [], [], []
     for i, (c, _) in R.items():
-        if c not in PIPES and c not in FITTINGS:
+        if c not in PIPES and c not in FITTINGS and c not in CEILINGS:
             continue
         a = M.a(i)
         T = M.placement(a[5]) if len(a) > 5 else np.eye(4)
-        out = {"axes": [], "points": []}
+        out = {"axes": [], "points": [], "want_profile": c in CEILINGS}
         pds = M.a(_ref(a[6])) if len(a) > 6 else []
         for rep in (pds[2] if len(pds) > 2 and isinstance(pds[2], list) else []):
             ra = M.a(_ref(rep))
@@ -245,6 +272,15 @@ def pipes(text_or_lines) -> dict[str, Any]:
                 M.body(_ref(rep), T, out)
         name = a[2] if len(a) > 2 and isinstance(a[2], str) and a[2] != "$" else ""
         st = storey_of(where.get(i))
+        if c in CEILINGS:
+            if out["points"]:
+                P = np.vstack(out["points"])
+                ceilings.append({"id": a[0], "kind": c[3:].lower(), "name": _decode(name)[:60],
+                                 "storey": (storeys.get(st) or {}).get("name"),
+                                 "zmin": round(float(P[:, 2].min()), 1), "zmax": round(float(P[:, 2].max()), 1),
+                                 "xy": [round(float(P[:, 0].min())), round(float(P[:, 1].min())),
+                                        round(float(P[:, 0].max())), round(float(P[:, 1].max()))]})
+            continue
         if c in FITTINGS:
             pts = [np.array(s) for s, e, r in out["axes"]] + [p.mean(axis=0) for p in out["points"]]
             if pts:
@@ -288,4 +324,4 @@ def pipes(text_or_lines) -> dict[str, Any]:
     return {"pipes": found, "fittings": fittings,
             "storeys": sorted(({"name": v["name"], "elevation": v["elevation"]} for v in storeys.values()),
                               key=lambda s: (s["elevation"] is None, s["elevation"] or 0)),
-            "skipped": skipped, "unit_to_mm": M.unit}
+            "skipped": skipped, "unit_to_mm": M.unit, "ceilings": ceilings}

@@ -99,6 +99,7 @@ export default function HangerPage() {
   if (err && !d) return <main className="container"><p className="error">{err}</p></main>;
   if (!d) return <main className="container"><p className="muted">{tr("Laddar…")}</p></main>;
   const h = d.hanger;
+  const can = (...r: string[]) => (d.my_roles || []).some((x: string) => r.includes(x));
   const allChecked = CHECKS.every((c) => checks[c]);
   return (
     <main className="container" style={{ maxWidth: 720 }}>
@@ -116,7 +117,7 @@ export default function HangerPage() {
           <span className="muted small">{trf("{0} av {1}", d.index, d.of)} · {d.set.name} · {tr("revision")} {h.revision}</span>
         </div>
         <div style={{ fontSize: 17, marginTop: 6 }}>
-          <b>{h.storey}</b> · {h.zone} · {tr(h.kind)}{h.pack ? ` · ${trf("kolli {0}, nr {1}", h.pack.kolli, h.pack.seq)}` : ""}
+          <b>{h.storey}</b> · {h.zone} · {tr(h.kind)}{h.pack ? ` · ${trf("kolli {0}, nr {1}", h.pack.kolli, h.pack.seq)}${h.pack.etapp ? ` · ${h.pack.etapp}` : ""}` : ""}
         </div>
         <div className="small" style={{ marginTop: 4 }}>
           {tr("Läge i modellen")}: X {h.position.x} · Y {h.position.y} · {h.reference?.text}<br />
@@ -146,11 +147,14 @@ export default function HangerPage() {
       {err && <p className="error">{err}</p>}
       <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 6 }}>
         {prod ? <>
-          <button disabled={busy || !allChecked} onClick={async () => { await act({ status: "producerad", comment: `${tr("egenkontroll")}: ${CHECKS.length}/${CHECKS.length}` }); await label(); }}>{tr("Klar + etikett")}</button>
-          {["paus", "materialbrist", "avvikelse", "omarbete"].map((x) => <button key={x} className="secondary" disabled={busy} onClick={() => act({ deviation: x })}>{tr(x)}</button>)}
+          {!can("produktion") && <p className="muted small">{tr("Din roll får inte markera produktion här.")}</p>}
+          <button disabled={busy || !allChecked || !can("produktion")} onClick={async () => { await act({ status: "producerad", comment: `${tr("egenkontroll")}: ${CHECKS.length}/${CHECKS.length}` }); await label(); }}>{tr("Klar + etikett")}</button>
+          {["paus", "materialbrist", "avvikelse", "omarbete"].map((x) => <button key={x} className="secondary" disabled={busy || !can("produktion", "lager", "granskare")} onClick={() => act({ deviation: x })}>{tr(x)}</button>)}
+          {can("lager") && <>{["packad", "levererad"].map((x) => <button key={x} className="secondary" disabled={busy} onClick={() => act({ status: x }, true)}>{trf("Markera {0}", tr(x))}</button>)}</>}
         </> : <>
-          <button disabled={busy} onClick={() => act({ status: "monterad" }, true)} style={{ background: "#1f9d55" }}>{tr("Monterad → nästa")}</button>
-          {["ej möjlig", "avvikelse", "omarbete"].map((x) => <button key={x} className="secondary" disabled={busy} onClick={() => act({ deviation: x })}>{tr(x)}</button>)}
+          {!can("montor") && <p className="muted small">{tr("Din roll får inte kvittera montage här.")}</p>}
+          <button disabled={busy || !can("montor")} onClick={() => act({ status: "monterad" }, true)} style={{ background: "#1f9d55" }}>{tr("Monterad → nästa")}</button>
+          {["ej möjlig", "avvikelse", "omarbete"].map((x) => <button key={x} className="secondary" disabled={busy || !can("montor", "granskare")} onClick={() => act({ deviation: x })}>{tr(x)}</button>)}
           <input type="file" accept="image/*" capture="environment" id="h-photo" className="file" ref={photo} onChange={upload} />
           <label className="pick" htmlFor="h-photo">{tr("Foto")}</label>
         </>}

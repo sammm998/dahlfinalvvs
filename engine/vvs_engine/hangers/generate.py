@@ -283,6 +283,15 @@ def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_
         ods = [x[2].od for x in pipes_]
         centre_xy = h["o"] + h["u"] * h["t"] + h["v"] * ((min(w) + max(w)) / 2)
         bottoms = [x[1][2] - x[2].od / 2 for x in pipes_]
+        if c.get("source") != "manuell":
+            # takhöjden ur modellen: undersidan av det bjälklag eller undertak som ligger över hängaren
+            top = max(x[1][2] + x[2].od / 2 for x in pipes_)
+            over = [s_ for s_ in model.get("ceilings") or []
+                    if s_["xy"][0] - 50 <= centre_xy[0] <= s_["xy"][2] + 50 and s_["xy"][1] - 50 <= centre_xy[1] <= s_["xy"][3] + 50
+                    and s_["zmin"] > top + 20]
+            if over:
+                s_ = min(over, key=lambda x: x["zmin"])
+                c = {"z": float(s_["zmin"]), "source": f"modell: {s_['kind']} {s_.get('name') or s_['id']}".strip()}
         n_rods = 1 if len(pipes_) == 1 else 2
         load_kg = sum(x[2].kgm * trib.get((h["k"], x[2].id), x[2].spacing) / 1000.0 for x in pipes_)
         load_kn = round(load_kg * 9.81 / 1000.0, 3)
@@ -478,23 +487,53 @@ def weight_kg(h: dict[str, Any]) -> float:
     return round(kg, 2)
 
 
-def pack(hangers: list[dict[str, Any]], rules: dict[str, Any] | None = None, by: str = "montage") -> list[dict[str, Any]]:
-    """Kollin i montageordning: per våning och stråk, högst N hängare och M kg per kolli. Varje hängare får sin
-    packsekvens (kolli-nummer/plats)."""
+def volume_l(h: dict[str, Any]) -> float:
+    """Hängarens volym packad (liter): takjärnet som en låda 50 x 50 mm, gängstängerna buntade, smådelarna."""
+    v = 0.2
+    for b in h.get("bom") or []:
+        if b["part"] == "takjärn":
+            v += b["length_mm"] / 1000 * 0.05 * 0.05 * 1000
+        elif b["part"] == "gängstång" and b.get("length_mm"):
+            v += b["qty"] * b["length_mm"] / 1000 * 0.015 * 0.015 * 1000
+    return round(v, 2)
+
+
+def etapp_of(h: dict[str, Any], etapper: dict[str, str] | None) -> str:
+    """Leveransetappen för en hängare: angiven för "våning|zon" eller för våningen, annars ingen."""
+    e = etapper or {}
+    return e.get(f"{h.get('storey')}|{h.get('zone')}") or e.get(h.get("storey") or "") or ""
+
+
+def pack(hangers: list[dict[str, Any]], rules: dict[str, Any] | None = None, by: str = "montage",
+         etapper: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """Kollin: per leveransetapp, våning och område (stråk), i montageordning, högst N hängare, M kg och V liter
+    per kolli. Varje hängare får sin packsekvens (kolli-nummer, plats i kollit och etapp).
+
+    by: "montage" (stråk och läge längs stråket, så att kollit tas ur i den ordning det monteras) eller "id"."""
     rules = RL.merged(rules)
     P = rules["packing"]
-    order = sorted(hangers, key=lambda h: (h["storey"] or "", h.get("run", 0), h.get("station_mm", 0))) if by == "montage" \
-        else sorted(hangers, key=lambda h: (h["storey"] or "", h["id"]))
+    etapper = etapper or {}
+    keys = sorted({etapp_of(h, etapper) for h in hangers}, key=lambda x: (x == "", x))
+    rank = {k: i for i, k in enumerate(keys)}
+    if by == "montage":
+        order = sorted(hangers, key=lambda h: (rank[etapp_of(h, etapper)], h["storey"] or "", h.get("run", 0),
+                                               h.get("station_mm", 0)))
+    else:
+        order = sorted(hangers, key=lambda h: (rank[etapp_of(h, etapper)], h["storey"] or "", h["id"]))
     kollin: list[dict[str, Any]] = []
+    max_l = float(P.get("max_volume_l_per_kolli") or 1e9)
     for h in order:
-        kg = weight_kg(h)
+        kg, vol, et = weight_kg(h), volume_l(h), etapp_of(h, etapper)
         k = kollin[-1] if kollin else None
-        if not k or k["storey"] != h["storey"] or len(k["hangers"]) >= P["max_per_kolli"] or k["kg"] + kg > P["max_kg_per_kolli"]:
-            k = {"no": len(kollin) + 1, "storey": h["storey"], "zone": h.get("zone"), "hangers": [], "kg": 0.0}
+        if (not k or k["etapp"] != et or k["storey"] != h["storey"] or len(k["hangers"]) >= P["max_per_kolli"]
+                or k["kg"] + kg > P["max_kg_per_kolli"] or k["l"] + vol > max_l):
+            k = {"no": len(kollin) + 1, "etapp": et, "storey": h["storey"], "zone": h.get("zone"), "hangers": [],
+                 "kg": 0.0, "l": 0.0}
             kollin.append(k)
         k["hangers"].append(h["id"])
         k["kg"] = round(k["kg"] + kg, 2)
-        h["pack"] = {"kolli": k["no"], "seq": len(k["hangers"])}
+        k["l"] = round(k["l"] + vol, 2)
+        h["pack"] = {"kolli": k["no"], "seq": len(k["hangers"]), "etapp": et}
     return kollin
 
 
