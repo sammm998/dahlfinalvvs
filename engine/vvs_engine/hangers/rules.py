@@ -90,7 +90,7 @@ DEFAULT: dict[str, Any] = {
                               "source": "Bevego Upphängningssystem NP-101-2024 (enligt sökresultat - kontrollera mot katalogen)"},
     },
     "hot_systems": ["VV", "VVC", "VS", "VP", "VÄRME", "KYL"],
-    "packing": {"max_per_kolli": 20, "max_kg_per_kolli": 25.0},
+    "packing": {"max_per_kolli": 20, "max_kg_per_kolli": 25.0, "max_volume_l_per_kolli": 60.0},
 }
 
 

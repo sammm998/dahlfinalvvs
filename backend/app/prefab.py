@@ -95,12 +95,46 @@ def _project(db: Session, user: User, pid: str) -> Project:
     return p
 
 
-def _set(db: Session, user: User, sid: str) -> HangerSet:
+# Rollerna ur systembeskrivningen. Projektets ägare och en systemadministratör har alla; andra konton bjuds in
+# till en uppsättning med de roller de behöver.
+ROLES = {
+    "projektadmin": "Projektadministratör - modeller, revisioner, roller och produktionsfrisläppning",
+    "granskare": "BIM-/konstruktionsgranskare - geometri, regler, avsteg och godkänd konstruktion",
+    "kalkyl": "Sälj/kalkyl - kalkyl och offert",
+    "produktion": "Produktionsoperatör - produktion, egenkontroll och avvikelser",
+    "lager": "Lager/pack - plock, packning, märkning och leverans",
+    "montor": "Montör - montageguide och kvittering",
+}
+
+
+def _roles(s: HangerSet, db: Session, user: User) -> set[str] | None:
+    """Rollerna användaren har i uppsättningen, eller None om hen inte får se den."""
+    p = db.get(Project, s.project_id)
+    if p is not None and p.owner_id == user.id or (user.role or "") == "admin":
+        return set(ROLES)
+    got = ((s.settings or {}).get("members") or {}).get((user.email or "").lower())
+    return set(got) if got else None
+
+
+def _set(db: Session, user: User, sid: str, need: tuple[str, ...] | str | None = None) -> HangerSet:
+    """Uppsättningen, om användaren får se den - och, med need, har någon av de rollerna."""
     s = db.get(HangerSet, sid)
     if s is None:
         raise HTTPException(404, "Hängaruppsättningen finns inte")
-    _project(db, user, s.project_id)
+    have = _roles(s, db, user)
+    if have is None:
+        raise HTTPException(404, "Hängaruppsättningen finns inte")
+    if need:
+        need = (need,) if isinstance(need, str) else need
+        if not have & set(need):
+            raise HTTPException(403, "Kräver rollen " + " eller ".join(ROLES[n].split(" - ")[0] for n in need))
     return s
+
+
+def _need(s: HangerSet, db: Session, user: User, *need: str) -> None:
+    have = _roles(s, db, user) or set()
+    if not have & set(need):
+        raise HTTPException(403, "Kräver rollen " + " eller ".join(ROLES[n].split(" - ")[0] for n in need))
 
 
 def _touch(s: HangerSet) -> None:
@@ -152,13 +186,21 @@ def _read_ifc(file: UploadFile, data: bytes) -> dict[str, Any]:
 def _generate(s: HangerSet, model: dict[str, Any], heights: dict[str, float]) -> dict[str, Any]:
     r = rules()
     res = HG.generate(model, r, heights, project=s.name, revision=s.revision)
-    HG.pack(res["hangers"], r)
+    _pack(s, res["hangers"], r)
     HG.apply_references(res["hangers"], (s.settings or {}).get("references"))
     s.settings = {**(s.settings or {}), "manual_heights": heights, "rules_version": r.get("version"),
                   "rules_verified": bool(r.get("verified")), "ceilings": res["ceilings"]}
     s.pipes = {"pipes": model["pipes"], "fittings": model["fittings"], "storeys": model["storeys"], "skipped": res["skipped"],
-               "source": model.get("source")}
+               "source": model.get("source"), "ceilings": model.get("ceilings") or []}
     return res
+
+
+def _pack(s: HangerSet, hangers: list[dict[str, Any]], r: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Kollin med uppsättningens egna gränser och leveransetapper, annars reglernas."""
+    r = HR.merged(r or rules())
+    pk = (s.settings or {}).get("packing") or {}
+    r["packing"] = {**r["packing"], **{k: v for k, v in pk.items() if k in r["packing"] and v not in (None, "")}}
+    return HG.pack(hangers, r, by=pk.get("by") or "montage", etapper=pk.get("etapper") or {})
 
 
 def _heights(raw: str | None) -> dict[str, float]:
@@ -258,12 +300,52 @@ def list_sets(project_id: str, user: User = Depends(current_user), db: Session =
 
 @router.get("/api/hanger-sets/{set_id}")
 def get_set(set_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    return _out(_set(db, user, set_id))
+    s = _set(db, user, set_id)
+    return {**_out(s), "my_roles": sorted(_roles(s, db, user) or []), "roles": ROLES}
+
+
+class MembersIn(BaseModel):
+    members: dict[str, list[str]]
+
+
+@router.put("/api/hanger-sets/{set_id}/members")
+def set_members(set_id: str, body: MembersIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Vilka andra konton som får arbeta i uppsättningen, och med vilka roller: {"e-post": ["montor", ...]}."""
+    s = _set(db, user, set_id, "projektadmin")
+    out = {}
+    for email, roles in body.members.items():
+        e = (email or "").strip().lower()
+        if not e or "@" not in e:
+            raise HTTPException(422, f"Ogiltig e-postadress: {email}")
+        bad = [r for r in roles if r not in ROLES]
+        if bad:
+            raise HTTPException(422, f"Okänd roll: {', '.join(bad)}. Roller: {', '.join(ROLES)}")
+        if roles:
+            out[e] = sorted(set(roles))
+    s.settings = {**(s.settings or {}), "members": out}
+    _log(s, user, "roller", members={k: v for k, v in out.items()})
+    _touch(s)
+    db.commit()
+    return {"members": out, "roles": ROLES}
+
+
+@router.get("/api/hanger-sets-shared")
+def shared_sets(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Uppsättningar i andras projekt där användaren har en roll: montören, lagret och produktionen hittar sina."""
+    me = (user.email or "").lower()
+    out = []
+    for s in db.query(HangerSet).order_by(HangerSet.updated_at.desc()).limit(500).all():
+        roles = ((s.settings or {}).get("members") or {}).get(me)
+        if roles:
+            p = db.get(Project, s.project_id)
+            out.append({**_out(s, full=False), "project_name": p.name if p else "", "my_roles": roles,
+                        "first": (s.hangers or [{}])[0].get("id")})
+    return out
 
 
 @router.delete("/api/hanger-sets/{set_id}")
 def delete_set(set_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    s = _set(db, user, set_id)
+    s = _set(db, user, set_id, "projektadmin")
     db.delete(s)
     db.commit()
     return {"ok": True}
@@ -272,11 +354,11 @@ def delete_set(set_id: str, user: User = Depends(current_user), db: Session = De
 @router.post("/api/hanger-sets/{set_id}/regenerate")
 def regenerate(set_id: str, body: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Räkna om med nya takhöjder eller nya regler. Går inte när något redan är producerat."""
-    s = _set(db, user, set_id)
+    s = _set(db, user, set_id, ("projektadmin", "granskare"))
     if any(h.get("status") in ("producerad", "packad", "levererad", "monterad") for h in s.hangers or []):
         raise HTTPException(409, "Hängare är redan producerade - gör en ny revision i stället")
     heights = {str(k): float(v) for k, v in (body.get("heights") or {}).items() if v not in (None, "")}
-    model = {k: (s.pipes or {}).get(k) or [] for k in ("pipes", "fittings", "storeys")}
+    model = {k: (s.pipes or {}).get(k) or [] for k in ("pipes", "fittings", "storeys", "ceilings")}
     model["source"] = (s.pipes or {}).get("source")
     if model["source"] == "2D-ritning":
         # ritningens rör har ingen egen höjd: underkanten flyttas med den nya takhöjden
@@ -306,7 +388,7 @@ def _next_rev(r: str) -> str:
 async def revise(set_id: str, file: UploadFile = File(...), user: User = Depends(current_user), db: Session = Depends(get_db)):
     """En ny revision av modellen. Hängare vars rör inte ändrats behåller status och historik; de berörda står i
     jämförelsen, och de som redan är producerade, packade, levererade eller monterade är kritiska."""
-    s = _set(db, user, set_id)
+    s = _set(db, user, set_id, "projektadmin")
     data = await file.read()
     model = _read_ifc(file, data)
     old_h = s.hangers or []
@@ -363,7 +445,7 @@ def get_hanger(set_id: str, hid: str, user: User = Depends(current_user), db: Se
     i = hs.index(h)
     nxt = next((x["id"] for x in hs[i + 1:] if x.get("status") not in ("monterad",)), None)
     return {"set": _out(s, full=False), "hanger": h, "next": nxt, "prev": hs[i - 1]["id"] if i else None,
-            "index": i + 1, "of": len(hs), "nearby": _nearby(s, h)}
+            "index": i + 1, "of": len(hs), "nearby": _nearby(s, h), "my_roles": sorted(_roles(s, db, user) or [])}
 
 
 def _nearby(s: HangerSet, h: dict[str, Any], r: float = 5000.0) -> dict[str, Any]:
@@ -386,6 +468,34 @@ def _nearby(s: HangerSet, h: dict[str, Any], r: float = 5000.0) -> dict[str, Any
                            if not l.get("storey") or l["storey"] == h.get("storey")]}
 
 
+class PackingIn(BaseModel):
+    max_per_kolli: int | None = None
+    max_kg_per_kolli: float | None = None
+    max_volume_l_per_kolli: float | None = None
+    by: str = "montage"
+    etapper: dict[str, str] = {}             # "Plan 2" eller "Plan 2|stråk 3" -> "Etapp 1"
+
+
+@router.post("/api/hanger-sets/{set_id}/packing")
+def set_packing(set_id: str, body: PackingIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Packningen: högst antal, vikt och volym per kolli, ordningen (montage eller ID) och leveransetapp per våning
+    eller per våning och stråk. Kollin och packsekvenser räknas om; det som redan är packat behåller sin plats."""
+    s = _set(db, user, set_id, ("projektadmin", "lager"))
+    if body.by not in ("montage", "id"):
+        raise HTTPException(422, "Ordningen är montage eller id")
+    s.settings = {**(s.settings or {}), "packing": body.model_dump()}
+    hs = s.hangers or []
+    fixed = {h["id"]: h.get("pack") for h in hs if h.get("status") in ("packad", "levererad", "monterad")}
+    kollin = _pack(s, hs)
+    for h in hs:
+        if h["id"] in fixed and fixed[h["id"]]:
+            h["pack"] = fixed[h["id"]]
+    _log(s, user, "packning", kollin=len(kollin))
+    _touch(s)
+    db.commit()
+    return {**_out(s), "kollin": kollin}
+
+
 class RefsIn(BaseModel):
     references: list[dict[str, Any]]
 
@@ -394,7 +504,7 @@ class RefsIn(BaseModel):
 def set_references(set_id: str, body: RefsIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Väggar och gridlinjer som referensmåtten mäts från: [{"name": "Grid 3", "axis": "x", "value": 12000,
     "storey": "Plan 2" (valfritt)}]. Varje hängares referensmått räknas om."""
-    s = _set(db, user, set_id)
+    s = _set(db, user, set_id, ("projektadmin", "granskare"))
     refs = []
     for r in body.references:
         if r.get("axis") not in ("x", "y"):
@@ -419,6 +529,18 @@ def patch_hanger(set_id: str, hid: str, body: HangerPatch, user: User = Depends(
     h = _find(s, hid)
     ap = s.approvals or {}
     ev: dict[str, Any] = {"at": _now(), "user": user.email}
+    # vem får göra vad: granskaren ändrar geometrin, produktionen producerar, lagret packar och levererar,
+    # montören kvitterar montaget; en kommentar får alla som ser uppsättningen skriva
+    if body.position or body.rod_length_mm is not None or body.takjarn_length_mm is not None or body.clear_flags:
+        _need(s, db, user, "granskare")
+    if body.status:
+        _need(s, db, user, *{"föreslagen": ("granskare",), "granskad": ("granskare",), "godkänd": ("granskare",),
+                             "producerad": ("produktion",), "packad": ("lager",), "levererad": ("lager",),
+                             "monterad": ("montor",)}.get(body.status, ("granskare",)))
+    if body.deviation:
+        _need(s, db, user, *{"paus": ("produktion",), "materialbrist": ("produktion", "lager"),
+                             "ej möjlig": ("montor",), "avvikelse": ("produktion", "lager", "montor", "granskare"),
+                             "omarbete": ("produktion", "montor", "granskare")}.get(body.deviation, ("granskare",)))
     if body.status:
         if body.status not in HG.STATUSES:
             raise HTTPException(422, f"Status är en av: {', '.join(HG.STATUSES)}")
@@ -511,7 +633,7 @@ class NewHanger(BaseModel):
 @router.post("/api/hanger-sets/{set_id}/hangers")
 def add_hanger(set_id: str, body: NewHanger, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """En hängare för hand: rören den bär och var. Mått räknas ur modellen och reglerna som för de andra."""
-    s = _set(db, user, set_id)
+    s = _set(db, user, set_id, "granskare")
     pipes = {p["id"]: p for p in (s.pipes or {}).get("pipes") or []}
     sel = [pipes[i] for i in body.pipe_ids if i in pipes]
     if not sel:
@@ -548,7 +670,7 @@ def add_hanger(set_id: str, body: NewHanger, user: User = Depends(current_user),
 
 @router.delete("/api/hanger-sets/{set_id}/hangers/{hid}")
 def delete_hanger(set_id: str, hid: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    s = _set(db, user, set_id)
+    s = _set(db, user, set_id, "granskare")
     h = _find(s, hid)
     if h.get("status") in ("producerad", "packad", "levererad", "monterad"):
         raise HTTPException(409, "Hängaren är redan producerad - den tas bort i en ny revision")
@@ -568,6 +690,8 @@ def approve(set_id: str, body: dict[str, Any], user: User = Depends(current_user
     kind = body.get("kind")
     if kind not in APPROVALS:
         raise HTTPException(422, "Godkännandet är offert, konstruktion eller produktion")
+    _need(s, db, user, *{"offert": ("kalkyl", "projektadmin"), "konstruktion": ("granskare",),
+                         "produktion": ("projektadmin",)}[kind])
     ap = dict(s.approvals or {})
     hs = s.hangers or []
     if kind == "konstruktion":
@@ -646,10 +770,10 @@ def _xlsx(s: HangerSet) -> bytes:
                 w4.append([it["text"], it["stock_mm"], i, ", ".join(f"{c['mm']}: {c['hanger']}" for c in b["cuts"]), b["left"]])
             w4.append([f"{it['text']}: {it['n_bars']} längder, {it['pieces']} bitar, spill {it['waste_pct']} %"])
     w5 = wb.create_sheet("Packlista")
-    w5.append(["Kolli", "Våning", "Zon", "Vikt kg", "Hängare (i montageordning)"])
-    kollin = HG.pack(hs, r)
+    w5.append(["Kolli", "Etapp", "Våning", "Zon", "Vikt kg", "Volym l", "Hängare (i den ordning de tas ur)"])
+    kollin = _pack(s, hs, r)
     for k in kollin:
-        w5.append([k["no"], k["storey"], k.get("zone"), k["kg"], ", ".join(k["hangers"])])
+        w5.append([k["no"], k.get("etapp") or "", k["storey"], k.get("zone"), k["kg"], k.get("l"), ", ".join(k["hangers"])])
     w6 = wb.create_sheet("Material per kolli")
     w6.append(["Kolli", "Benämning", "Längd mm", "Antal"])
     by_id = {h["id"]: h for h in hs}
@@ -684,7 +808,7 @@ def _labels_pdf(s: HangerSet, base: str, only: list[str] | None = None) -> bytes
         page.insert_text((4 * mm, 14 * mm), h["id"], fontsize=24, fontname="hebo")
         pk = h.get("pack") or {}
         lines = [s.name[:34], f"{h['storey']} · {h.get('zone') or ''}", f"Revision {h.get('revision') or s.revision} · {h['kind']}",
-                 f"Kolli {pk.get('kolli', '-')} · nr {pk.get('seq', '-')}",
+                 f"Kolli {pk.get('kolli', '-')} · nr {pk.get('seq', '-')}" + (f" · {pk['etapp']}" if pk.get("etapp") else ""),
                  f"Pendel {(h.get('rods') or [{}])[0].get('length_mm') or '-'} mm" + (f" · takjärn {h['takjarn']['length_mm']} mm" if h.get("takjarn") else "")]
         for i, t in enumerate(lines):
             page.insert_text((4 * mm, (21 + i * 5.5) * mm), t, fontsize=8, fontname="helv")
@@ -721,7 +845,7 @@ def qr_svg(set_id: str, hid: str, request: Request, user: User = Depends(current
 @router.post("/api/hanger-sets/{set_id}/calc")
 def calc(set_id: str, body: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Lönsamhetskalkylen med uppsättningens antal som utgångspunkt; antagandena sparas på uppsättningen."""
-    s = _set(db, user, set_id)
+    s = _set(db, user, set_id, ("kalkyl", "projektadmin"))
     inp = {k: float(v) for k, v in (body or {}).items() if k in HC.EXAMPLE and k != "label" and v not in (None, "")}
     inp.setdefault("antal", float(len(s.hangers or [])) or HC.EXAMPLE["antal"])
     res = HC.compute(inp)

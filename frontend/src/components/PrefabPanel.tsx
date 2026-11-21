@@ -22,6 +22,8 @@ const CALC_FIELDS: [string, string][] = [
   ["material_trad_kr", "Material traditionellt (kr/st)"], ["material_prefab_kr", "Material prefab (kr/st)"],
   ["uppstart_kr", "Uppstart (kr)"], ["styckpris_kr", "Styckpris extern prefab (kr/st)"], ["frakt_kr", "Frakt (kr)"], ["paslag_pct", "Påslag %"],
 ];
+const ROLE_KEYS: [string, string][] = [["projektadmin", "Projektadministratör"], ["granskare", "Granskare"], ["kalkyl", "Sälj/kalkyl"],
+  ["produktion", "Produktion"], ["lager", "Lager/pack"], ["montor", "Montör"]];
 const kr = (v: number | null | undefined) => v == null ? "–" : Math.round(v).toLocaleString(locale());
 
 function PlanView({ set, storey, sel, onSel }: { set: any; storey: string; sel: string; onSel: (id: string) => void }) {
@@ -185,6 +187,45 @@ export default function PrefabPanel({ project }: { project: any }) {
           </details>
 
           <details className="settings" style={{ marginTop: 10 }}>
+            <summary>{trf("Roller ({0} inbjudna)", Object.keys(open.settings?.members || {}).length)}</summary>
+            <p className="muted small">{tr("Du som äger projektet har alla roller. Bjud in andra konton med de roller de behöver; de hittar uppsättningen under Projekt → Delade med mig, eller via QR-koden.")}</p>
+            <table className="qty small"><thead><tr><th>{tr("Konto")}</th>{ROLE_KEYS.map(([k, n]) => <th key={k} title={open.roles?.[k]}>{tr(n)}</th>)}<th></th></tr></thead>
+              <tbody>{Object.entries(open.settings?.members || {}).map(([email, roles]: [string, any]) => (
+                <tr key={email}><td>{email}</td>{ROLE_KEYS.map(([k]) => <td key={k}><input type="checkbox" checked={roles.includes(k)}
+                  onChange={(e) => run(async () => { await api.hangerMembers(open.id, { ...open.settings.members, [email]: e.target.checked ? [...roles, k] : roles.filter((x: string) => x !== k) }); return api.hangerSet(open.id); })} /></td>)}
+                  <td><button className="secondary small" onClick={() => run(async () => { const m = { ...open.settings.members }; delete m[email]; await api.hangerMembers(open.id, m); return api.hangerSet(open.id); })}>{tr("Ta bort")}</button></td></tr>))}
+              </tbody></table>
+            <form className="row small" style={{ gap: 6, marginTop: 6 }} onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget);
+              const email = String(f.get("email") || "").trim().toLowerCase(); const role = String(f.get("role"));
+              run(async () => { await api.hangerMembers(open.id, { ...(open.settings?.members || {}), [email]: [role] }); return api.hangerSet(open.id); }); }}>
+              <input name="email" type="email" placeholder={tr("e-post")} required style={{ width: 200 }} />
+              <select name="role">{ROLE_KEYS.map(([k, n]) => <option key={k} value={k}>{tr(n)}</option>)}</select>
+              <button className="small">{tr("Bjud in")}</button>
+            </form>
+          </details>
+
+          <details className="settings" style={{ marginTop: 10 }}>
+            <summary>{tr("Packning och leveransetapper")}</summary>
+            <p className="muted small">{tr("Kollin packas per etapp, våning och stråk i montageordning, med tak för antal, vikt och volym. Ange etapp per våning (eller per våning och stråk).")}</p>
+            <form className="small" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); const et: Record<string, string> = {};
+              storeys.forEach((st: any) => { const v = String(f.get(`et-${st.name}`) || "").trim(); if (v) et[st.name] = v; });
+              run(() => api.hangerPacking(open.id, { max_per_kolli: Number(f.get("n")) || null, max_kg_per_kolli: Number(f.get("kg")) || null,
+                max_volume_l_per_kolli: Number(f.get("l")) || null, by: String(f.get("by")), etapper: { ...(open.settings?.packing?.etapper || {}), ...et } })); }}>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <label>{tr("Högst antal")}<br /><input name="n" style={{ width: 70 }} defaultValue={open.settings?.packing?.max_per_kolli ?? 20} /></label>
+                <label>{tr("Högst kg")}<br /><input name="kg" style={{ width: 70 }} defaultValue={open.settings?.packing?.max_kg_per_kolli ?? 25} /></label>
+                <label>{tr("Högst liter")}<br /><input name="l" style={{ width: 70 }} defaultValue={open.settings?.packing?.max_volume_l_per_kolli ?? 60} /></label>
+                <label>{tr("Ordning")}<br /><select name="by" defaultValue={open.settings?.packing?.by || "montage"}><option value="montage">{tr("montageordning")}</option><option value="id">{tr("ID")}</option></select></label>
+              </div>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+                {storeys.filter((st: any) => open.hangers.some((h: any) => h.storey === st.name)).map((st: any) => (
+                  <label key={st.name}>{st.name}<br /><input name={`et-${st.name}`} placeholder={tr("t.ex. Etapp 1")} style={{ width: 110 }} defaultValue={open.settings?.packing?.etapper?.[st.name] || ""} /></label>))}
+              </div>
+              <button className="small" style={{ marginTop: 6 }}>{tr("Packa om")}</button>
+            </form>
+          </details>
+
+          <details className="settings" style={{ marginTop: 10 }}>
             <summary>{tr("Takhöjder per våning")}</summary>
             <p className="muted small">{tr("Tom ruta: höjden räknas ur nästa våning minus bjälklaget. Absolut höjd i mm i modellens koordinater.")}</p>
             {storeys.map((s: any) => (
@@ -230,7 +271,7 @@ export default function PrefabPanel({ project }: { project: any }) {
                     <td className="num">{h.rods?.[0]?.length_mm ?? "–"} {h.rods?.[0]?.size}</td>
                     <td className="num">{h.takjarn?.length_mm ?? "–"}</td>
                     <td className="small">{tr(h.height_source)}</td>
-                    <td>{h.pack ? `${h.pack.kolli}/${h.pack.seq}` : "–"}</td>
+                    <td>{h.pack ? `${h.pack.kolli}/${h.pack.seq}${h.pack.etapp ? ` · ${h.pack.etapp}` : ""}` : "–"}</td>
                     <td><span className="badge small" style={{ borderLeft: `4px solid ${statusColor(h.status, h.deviation)}` }}>{tr(h.status)}{h.deviation ? ` · ${tr(h.deviation)}` : ""}</span></td>
                     <td className="small">{h.flags?.length ? <span className="badge small warn">{h.flags.length}</span> : ""}</td>
                   </tr>))}

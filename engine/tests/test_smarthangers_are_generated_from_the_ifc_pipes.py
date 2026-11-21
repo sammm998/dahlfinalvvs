@@ -13,7 +13,7 @@ from vvs_engine.hangers import rules as RL
 from vvs_engine.hangers.geometry import pipes
 
 
-def _ifc(extra_valve: bool = True, mapped: bool = True, moved: float = 0.0) -> str:
+def _ifc(extra_valve: bool = True, mapped: bool = True, moved: float = 0.0, slab: bool = False) -> str:
     """Två parallella kopparrör 22 mm, 6 m långa, 300 mm isär på 2,7 m höjd. Det ena som en mappad representation
     (Revits typexport), det andra som en vanlig extrudering. En ventil på det första röret."""
     L = []
@@ -67,6 +67,16 @@ def _ifc(extra_valve: bool = True, mapped: bool = True, moved: float = 0.0) -> s
         pl = a(f"IFCLOCALPLACEMENT(#{site},#{world})")
         els.append(a(f"IFCVALVE('V',$,'Avstängningsventil',$,$,#{pl},#{pds},$,$)"))
         del bx
+    if slab:
+        # ett undertak 3100-3150 över rören (1000-7000 x -1000-1300), som rektangel extruderad uppåt
+        p2 = a("IFCCARTESIANPOINT((0.,0.))")
+        ax2 = a(f"IFCAXIS2PLACEMENT2D(#{p2},$)")
+        prof = a(f"IFCRECTANGLEPROFILEDEF(.AREA.,$,#{ax2},6000.,2300.)")
+        sol = a(f"IFCEXTRUDEDAREASOLID(#{prof},#{world},#{z},50.)")
+        body = a(f"IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#{sol}))")
+        pds = a(f"IFCPRODUCTDEFINITIONSHAPE($,$,(#{body}))")
+        lp = a(f"IFCAXIS2PLACEMENT3D(#{a('IFCCARTESIANPOINT((4000.,150.,3100.))')},#{z},#{x})")
+        els.append(a(f"IFCCOVERING('U',$,'Undertak',$,$,#{a(f'IFCLOCALPLACEMENT(#{site},#{lp})')},#{pds},$,.CEILING.)"))
     a(f"IFCRELCONTAINEDINSPATIALSTRUCTURE('c',$,$,$,({','.join('#%d' % e for e in els)}),#{s0})")
     a(f"IFCRELAGGREGATES('ag',$,$,$,#{site},(#{s0},#{s1}))")
     return "ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n" + "\n".join(L) + "\nENDSEC;\nEND-ISO-10303-21;\n"
@@ -345,3 +355,52 @@ def test_the_service_makes_hangers_from_a_project_drawing(client, tmp_path):
     rod = s["hangers"][0]["rods"][0]["length_mm"]
     s2 = client.post(f"/api/hanger-sets/{s['id']}/regenerate", json={"heights": {"Blad 1": 3000}, "drop_mm": 500}, headers=H).json()
     assert s2["hangers"][0]["rods"][0]["length_mm"] == rod + 200                       # 500 mm under taket i stället för 300
+
+
+
+def test_the_ceiling_height_is_read_from_the_slab_or_ceiling_in_the_model():
+    m = pipes(_ifc(slab=True))
+    assert m["ceilings"] and m["ceilings"][0]["zmin"] == 3100.0 and m["ceilings"][0]["kind"] == "covering"
+    hs = G.generate(m)["hangers"]
+    assert all(h["ceiling_z"] == 3100 and h["height_source"].startswith("modell: covering") for h in hs)
+    assert hs[0]["rods"][0]["length_mm"] == 680 - 150                                 # 150 mm lägre tak än beräknat
+    man = G.generate(m, None, {"Plan 10": 3300})["hangers"]                           # inmatat går före modellen
+    assert all(h["height_source"] == "manuell" for h in man)
+
+
+def test_packing_follows_the_delivery_stage_and_the_volume():
+    hs = G.generate(pipes(_ifc()))["hangers"]
+    for h in hs[:2]:
+        h["zone"] = "stråk A"
+    k = G.pack(hs, {"packing": {"max_per_kolli": 50, "max_kg_per_kolli": 100.0, "max_volume_l_per_kolli": 1e6}},
+               etapper={"Plan 10|stråk A": "Etapp 1", "Plan 10": "Etapp 2"})
+    assert [x["etapp"] for x in k] == ["Etapp 1", "Etapp 2"] and len(k[0]["hangers"]) == 2
+    assert hs[0]["pack"]["etapp"] == "Etapp 1"
+    small = G.pack(hs, {"packing": {"max_per_kolli": 50, "max_kg_per_kolli": 100.0,
+                                    "max_volume_l_per_kolli": G.volume_l(hs[0]) * 2 + 0.01}})
+    assert all(len(x["hangers"]) <= 2 for x in small) and all(x["l"] <= G.volume_l(hs[0]) * 2 + 0.01 for x in small)
+
+
+def test_roles_decide_who_may_do_what(client):
+    owner = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "agare@dahl.se", "password": "hemligt1"}).json()["access_token"]}
+    fitter = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "montor2@dahl.se", "password": "hemligt1"}).json()["access_token"]}
+    p = client.post("/api/projects", json={"name": "Roller", "contract_form": "ABT06"}, headers=owner).json()
+    s = client.post(f"/api/projects/{p['id']}/hangers", files={"file": ("vs.ifc", _ifc().encode(), "application/octet-stream")},
+                    data={"heights": "{}"}, headers=owner).json()
+    sid, hid = s["id"], s["hangers"][0]["id"]
+    assert client.get(f"/api/hanger-sets/{sid}", headers=fitter).status_code == 404          # inte inbjuden
+    assert client.put(f"/api/hanger-sets/{sid}/members", json={"members": {"x@dahl.se": ["chef"]}}, headers=owner).status_code == 422
+    assert client.put(f"/api/hanger-sets/{sid}/members", json={"members": {"Montor2@dahl.se": ["montor"]}}, headers=owner).json()["members"] == {"montor2@dahl.se": ["montor"]}
+    got = client.get(f"/api/hanger-sets/{sid}/hangers/{hid}", headers=fitter).json()
+    assert got["my_roles"] == ["montor"]
+    assert [x["id"] for x in client.get("/api/hanger-sets-shared", headers=fitter).json()] == [sid]
+    no = client.patch(f"/api/hanger-sets/{sid}/hangers/{hid}", json={"position": {"x": 1}}, headers=fitter)
+    assert no.status_code == 403 and "granskare" in no.json()["detail"].lower()
+    assert client.post(f"/api/hanger-sets/{sid}/approve", json={"kind": "konstruktion"}, headers=fitter).status_code == 403
+    assert client.patch(f"/api/hanger-sets/{sid}/hangers/{hid}", json={"status": "producerad"}, headers=fitter).status_code == 403
+    ok = client.patch(f"/api/hanger-sets/{sid}/hangers/{hid}", json={"status": "monterad", "comment": "klar"}, headers=fitter)
+    assert ok.status_code == 200 and ok.json()["hanger"]["history"][-1]["user"] == "montor2@dahl.se"
+    assert client.patch(f"/api/hanger-sets/{sid}/hangers/{hid}", json={"deviation": "ej möjlig"}, headers=fitter).status_code == 200
+    assert client.delete(f"/api/hanger-sets/{sid}", headers=fitter).status_code == 403
+    pk = client.post(f"/api/hanger-sets/{sid}/packing", json={"max_per_kolli": 2, "etapper": {"Plan 10": "Etapp 1"}}, headers=owner).json()
+    assert all(len(k["hangers"]) <= 2 and k["etapp"] == "Etapp 1" for k in pk["kollin"])
