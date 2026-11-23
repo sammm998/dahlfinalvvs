@@ -68,7 +68,7 @@ def _ifc(extra_valve: bool = True, mapped: bool = True, moved: float = 0.0, slab
         els.append(a(f"IFCVALVE('V',$,'Avstängningsventil',$,$,#{pl},#{pds},$,$)"))
         del bx
     if slab:
-        # ett undertak 3100-3150 över rören (1000-7000 x -1000-1300), som rektangel extruderad uppåt
+        # ett bjälklag (HD/F) med underkant 3100 över rören (1000-7000 x -1000-1300), som rektangel extruderad uppåt
         p2 = a("IFCCARTESIANPOINT((0.,0.))")
         ax2 = a(f"IFCAXIS2PLACEMENT2D(#{p2},$)")
         prof = a(f"IFCRECTANGLEPROFILEDEF(.AREA.,$,#{ax2},6000.,2300.)")
@@ -76,7 +76,7 @@ def _ifc(extra_valve: bool = True, mapped: bool = True, moved: float = 0.0, slab
         body = a(f"IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#{sol}))")
         pds = a(f"IFCPRODUCTDEFINITIONSHAPE($,$,(#{body}))")
         lp = a(f"IFCAXIS2PLACEMENT3D(#{a('IFCCARTESIANPOINT((4000.,150.,3100.))')},#{z},#{x})")
-        els.append(a(f"IFCCOVERING('U',$,'Undertak',$,$,#{a(f'IFCLOCALPLACEMENT(#{site},#{lp})')},#{pds},$,.CEILING.)"))
+        els.append(a(f"IFCSLAB('U',$,'HD/F 265',$,$,#{a(f'IFCLOCALPLACEMENT(#{site},#{lp})')},#{pds},$,.FLOOR.)"))
     a(f"IFCRELCONTAINEDINSPATIALSTRUCTURE('c',$,$,$,({','.join('#%d' % e for e in els)}),#{s0})")
     a(f"IFCRELAGGREGATES('ag',$,$,$,#{site},(#{s0},#{s1}))")
     return "ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n" + "\n".join(L) + "\nENDSEC;\nEND-ISO-10303-21;\n"
@@ -116,7 +116,7 @@ def test_a_valve_gets_a_hanger_close_by_and_heights_can_be_set_by_hand():
     assert any(h["placed_because"] == "nära ventil/rördel" for h in r["hangers"])
     assert all(h["height_source"] == "manuell" and h["ceiling_z"] == 3000 for h in r["hangers"])
     no = G.generate({"pipes": pipes(_ifc())["pipes"], "storeys": [{"name": "Plan 10", "elevation": 0.0}]})
-    assert all("takhöjd saknas - ange takhöjd för våningen" in h["flags"] for h in no["hangers"])
+    assert all("takhöjd saknas - ange underkant bjälklag för våningen/zonen" in h["flags"] for h in no["hangers"])
 
 
 def test_cut_plan_packing_and_project_bom():
@@ -167,11 +167,11 @@ def test_the_ifc_export_reads_back_with_ids_and_status():
     hs = G.generate(pipes(_ifc()))["hangers"]
     hs[1]["status"] = "monterad"
     text = X.export(hs, "Test", "B")
-    assert text.startswith("ISO-10303-21;") and text.count("IFCBUILDINGELEMENTPROXY(") == len(hs)
+    assert text.startswith("ISO-10303-21;") and text.count("IFCDISCRETEACCESSORY(") == len(hs)
     assert "'Pset_SmartHanger'" in text and f"'{hs[0]['id']}'" in text and "IFCLABEL('monterad')" in text
     from vvs_engine.ifc.reader import _records
     R = _records(text.splitlines())
-    assert sum(1 for c, _ in R.values() if c == "IFCBUILDINGELEMENTPROXY") == len(hs)
+    assert sum(1 for c, _ in R.values() if c == "IFCDISCRETEACCESSORY") == len(hs)
     assert X.guid("a") == X.guid("a") and len(X.guid("a")) == 22
 
 
@@ -253,12 +253,16 @@ def test_the_prefab_flow_from_ifc_to_mounted(client):
     doc = pymupdf.open(stream=pdf, filetype="pdf")
     assert doc.page_count == s["n"] and hid in doc[0].get_text()
     ifc = client.get(f"/api/hanger-sets/{sid}/export.ifc", headers=H).text
-    assert ifc.count("IFCBUILDINGELEMENTPROXY(") == s["n"]
+    assert ifc.count("IFCDISCRETEACCESSORY(") == s["n"]
     assert client.get(f"/api/hanger-sets/{sid}/qr/{hid}.svg", headers=H).text.startswith("<svg")
     cv2 = pytest.importorskip("cv2")
-    pix = doc[0].get_pixmap(dpi=300)
-    img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-    url = cv2.QRCodeDetector().detectAndDecode(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY))[0]
+    url = ""
+    for dpi in (300, 200, 400, 250):                                  # avläsningen är känslig för upplösningen
+        pix = doc[0].get_pixmap(dpi=dpi)
+        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+        url = cv2.QRCodeDetector().detectAndDecode(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY))[0] or url
+        if url:
+            break
     assert url.endswith(f"/montage/{sid}/{hid}")                                     # etiketten öppnar hängaren
     # ny revision: rören flyttade - den monterade hängaren är kritisk
     rv = client.post(f"/api/hanger-sets/{sid}/revise", files={"file": ("vs.ifc", _ifc(moved=150.0).encode(), "application/octet-stream")}, headers=H).json()
@@ -360,12 +364,13 @@ def test_the_service_makes_hangers_from_a_project_drawing(client, tmp_path):
 
 def test_the_ceiling_height_is_read_from_the_slab_or_ceiling_in_the_model():
     m = pipes(_ifc(slab=True))
-    assert m["ceilings"] and m["ceilings"][0]["zmin"] == 3100.0 and m["ceilings"][0]["kind"] == "covering"
+    assert m["ceilings"] and m["ceilings"][0]["zmin"] == 3100.0 and m["ceilings"][0]["kind"] == "slab"
+    assert m["ceilings"][0]["slab_type"] == "HD/F"
     hs = G.generate(m)["hangers"]
-    assert all(h["ceiling_z"] == 3100 and h["height_source"].startswith("modell: covering") for h in hs)
+    assert all(h["ceiling_z"] == 3100 and h["height_source"].startswith("modell: slab") for h in hs)
     assert hs[0]["rods"][0]["length_mm"] == 680 - 150                                 # 150 mm lägre tak än beräknat
     man = G.generate(m, None, {"Plan 10": 3300})["hangers"]                           # inmatat går före modellen
-    assert all(h["height_source"] == "manuell" for h in man)
+    assert all(h["height_source"].startswith("manuell") for h in man)
 
 
 def test_packing_follows_the_delivery_stage_and_the_volume():
@@ -404,3 +409,87 @@ def test_roles_decide_who_may_do_what(client):
     assert client.delete(f"/api/hanger-sets/{sid}", headers=fitter).status_code == 403
     pk = client.post(f"/api/hanger-sets/{sid}/packing", json={"max_per_kolli": 2, "etapper": {"Plan 10": "Etapp 1"}}, headers=owner).json()
     assert all(len(k["hangers"]) <= 2 and k["etapp"] == "Etapp 1" for k in pk["kollin"])
+
+
+def test_a_model_package_is_read_validated_and_calculated_in_the_background(client):
+    import io
+    import os
+    import time
+    import zipfile
+
+    import openpyxl
+    os.environ["VVS_HANGERS_INLINE"] = "1"
+    try:
+        H = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "paket@dahl.se", "password": "hemligt1"}).json()["access_token"]}
+        p = client.post("/api/projects", json={"name": "Paket", "contract_form": "ABT06"}, headers=H).json()
+        # bara VS: inget bjälklag och ingen höjd - Stopp, inga hängare
+        r = client.post(f"/api/projects/{p['id']}/hanger-packages",
+                        files=[("files", ("4075-V-50-V-1.ifc", _ifc(slab=False).encode(), "application/octet-stream"))], headers=H)
+        assert r.status_code == 200, r.text
+        st = client.get(f"/api/hanger-sets/{r.json()['id']}/package", headers=H).json()
+        assert st["job"]["state"] == "stoppad" and st["n"] == 0 and any(f["rule"] == "V6" and f["level"] == "stopp" for f in st["validation"])
+        # en uppskattad höjd släpper beräkningen, märkt som uppskattad
+        st2 = client.post(f"/api/hanger-sets/{st['id']}/package-settings", json={"estimate_above": 400}, headers=H).json()
+        pk = client.get(f"/api/hanger-sets/{st2['id']}/package", headers=H).json()
+        assert pk["job"]["state"] == "klar" and pk["n"] > 0
+        assert client.post(f"/api/hanger-sets/{st['id']}/package-settings", json={"zone_slab_types": {"x": "Lera"}}, headers=H).status_code == 422
+        # VS + K: bjälklaget ur K-modellen, ankare ur bjälklagstypen
+        r = client.post(f"/api/projects/{p['id']}/hanger-packages",
+                        files=[("files", ("4075-V-50-V-1.ifc", _ifc(slab=False).encode(), "application/octet-stream")),
+                               ("files", ("4075-K-50-K-1.ifc", _ifc(slab=True).encode(), "application/octet-stream"))], headers=H)
+        sid = r.json()["id"]
+        pk = client.get(f"/api/hanger-sets/{sid}/package", headers=H).json()
+        assert [f["discipline"] for f in pk["files"]] == ["VS", "K"] and pk["job"]["state"] == "klar" and pk["has"]["K"]
+        s = client.get(f"/api/hanger-sets/{sid}", headers=H).json()
+        h = s["hangers"][0]
+        assert h["height_source"].startswith("modell: slab") and h["slab"]["type"] == "HD/F" and "HD/F" in h["anchor"]
+        csv_ = client.get(f"/api/hanger-sets/{sid}/export.csv", headers=H).content.decode("utf-8-sig")
+        assert csv_.splitlines()[0].startswith("ID;Våning;Zon") and len(csv_.splitlines()) == len(s["hangers"]) + 1
+        assert client.get(f"/api/hanger-sets/{sid}/export.dxf", headers=H).text.rstrip().endswith("EOF")
+        z = zipfile.ZipFile(io.BytesIO(client.get(f"/api/hanger-sets/{sid}/export.bcf", headers=H).content))
+        assert "bcf.version" in z.namelist()
+        assert client.get(f"/api/hanger-sets/{sid}/export.rapport", headers=H).content[:4] == b"%PDF"
+        wb = openpyxl.load_workbook(io.BytesIO(client.get(f"/api/hanger-sets/{sid}/export.artiklar", headers=H).content))
+        assert wb.sheetnames == ["Artiklar per zon", "Summa per zon"] and wb.active.max_row > 2
+        wb2 = openpyxl.load_workbook(io.BytesIO(client.get(f"/api/hanger-sets/{sid}/export.xlsx", headers=H).content))
+        assert "Punktlista" in wb2.sheetnames
+        tj = next((h for h in s["hangers"] if h["kind"] == "takjärn"), None)
+        if tj:
+            client.post(f"/api/hanger-sets/{sid}/groups", json={"split": [tj["id"]]}, headers=H)
+            s2 = client.get(f"/api/hanger-sets/{sid}", headers=H).json()
+            assert s2["settings"]["groups"]["split"] and not any(h["kind"] == "takjärn" and {p["id"] for p in h["pipes"]} & set(s2["settings"]["groups"]["split"]) for h in s2["hangers"])
+            assert client.post(f"/api/hanger-sets/{sid}/groups", json={"reset": True}, headers=H).status_code == 200
+        a = client.get(f"/api/hanger-sets/{sid}/articles", headers=H).json()
+        assert a["rows"] and "total" in a["totals"]
+    finally:
+        os.environ.pop("VVS_HANGERS_INLINE", None)
+
+
+def test_the_discipline_is_read_from_the_file_name():
+    import os
+    import sys
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "backend")))
+    from app.prefab_package import guess_discipline
+    assert guess_discipline("4075-V-50-V-30001.ifc") == "VS" and guess_discipline("4075-K-40-K-1001.ifc") == "K"
+    assert guess_discipline("Proj_A_Plan2.ifc") == "A" and guess_discipline("4075-E-60-E-1.ifc") == "Ö"
+
+
+def test_hanger_parts_get_dahl_articles_and_prices_from_the_price_list(client, monkeypatch):
+    from app import offers as O
+    from app import prefab_package as PP
+    price = [{"rsk": "T1001", "namn": "GÄNGSTÅNG M10X1000 FZB NOVIPRO", "pris": 100.0, "grupp": "G1", "enhet": "STK"},
+             {"rsk": "T1002", "namn": "GÄNGSTÅNG M10X2000 8.8 FZV", "pris": 90.0, "grupp": "G1", "enhet": "STK"},
+             {"rsk": "T1003", "namn": "BRICKA BRB M10X20 A4 2343", "pris": 5.0, "grupp": "G2", "enhet": "STK"},
+             {"rsk": "T1004", "namn": "BRICKA BRB M10X22 FZB A", "pris": 3.0, "grupp": "G2", "enhet": "STK"},
+             {"rsk": "T1005", "namn": "RÖRKLAMMER KSB2 GUMMI 20-23MM", "pris": 10.0, "grupp": "G3", "enhet": "STK"},
+             {"rsk": "T1006", "namn": "20,5-22 TUDEL KLAMMA DK22 FZV", "pris": 10.0, "grupp": "G3", "enhet": "PAR"},
+             {"rsk": "T1007", "namn": "STRUTSKENA 41X41X1,5 3M FFZV", "pris": 300.0, "grupp": "G4", "enhet": "STK"}]
+    monkeypatch.setattr(O, "data", lambda kind: price if kind == "prislista" else [{"grupp": "G1", "pct": 25.0}])
+    rod = PP.hanger_article({"part": "gängstång", "text": "Gängstång M10 förzinkad"})
+    assert rod["a"] == "T1001" and rod["e"] == "m" and rod["brutto"] == 100.0 and rod["netto"] == 75.0   # Novipro, 25 % grundrabatt
+    assert PP.hanger_article({"part": "bricka", "text": "Bricka M10"})["a"] == "T1004"                    # förzinkad, inte A4
+    assert PP.hanger_article({"part": "rörklammer", "text": "Rörklammer 22 mm med gummiinlägg M8-anslutning"})["a"] == "T1005"
+    assert PP.hanger_article({"part": "rörklammer", "text": "Rörklammer 160 mm M10-anslutning"}) is None       # inget i måttet
+    rail = PP.hanger_article({"part": "takjärn", "text": "Takjärn 41x41 (U-profil)"})
+    assert rail["a"] == "T1007" and abs(rail["brutto"] - 300 / 3) < 0.01                                    # kr per meter
+    assert PP.hanger_article({"part": "infästning", "text": "Träskruv med gängad hylsa M8"}) is None

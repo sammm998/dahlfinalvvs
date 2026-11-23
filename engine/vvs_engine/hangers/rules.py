@@ -74,6 +74,28 @@ DEFAULT: dict[str, Any] = {
                                                           "Ute": "Varmförzinkat / rostfritt"}},
     "tolerance": {"position_mm": 10, "height_mm": 10},
     "stock": {"profile_mm": 3000, "rod_mm": 2000, "kerf_mm": 3},
+    # kravunderlaget: gränsvärdena för V1 och V2 är förslag som stäms av med en BIM-samordnare
+    "validation": {"origin_mm": 10, "storey_mm": 5, "zone_model_share": 0.6, "zone_model_min_run": 20},
+    # gängstångens formel: L = Z_UK - Z_CL - D/2 - t_iso - h_klammer - h_ankare, kapad till L + justermarginal
+    "formula": {
+        "clamp_height": [[22, 30], [54, 40], [110, 55], [200, 70], [9999, 90]],   # [största ytterdiameter, mm]
+        "adjust_margin_mm": 20,
+        "max_rod_by_size": {"M8": 1500, "M10": 2000, "M12": 2500, "M16": 3000},
+        "konsol_text": "Väggkonsol/profil i stället för gängstång",
+    },
+    # ankare per bjälklagstyp (K-modellen eller valt per zon): artikel, bärförmåga och höjd - EXEMPEL
+    "anchors": {
+        "Platsgjutet": {"text": "Expanderankare {size} för betong", "capacity_kn": 2.0, "height_mm": 15},
+        "HD/F": {"text": "HD/F-ankare {size} (borras mellan kanaler)", "capacity_kn": 1.5, "height_mm": 15,
+                 "note": "HD/F: borra endast mellan kanalerna - kontrollera läget mot elementritningen"},
+        "KL-trä": {"text": "Träskruv med gängad hylsa {size}", "capacity_kn": 1.2, "height_mm": 20},
+        "Trapetsplåt": {"text": "Trapetsplåtfäste {size}", "capacity_kn": 0.8, "height_mm": 25},
+        "Stålbalk": {"text": "Balkklammer {size}", "capacity_kn": 1.5, "height_mm": 30},
+    },
+    "default_slab_type": "Platsgjutet",
+    # punktlaster (kg) från ventiler och armaturer per dimension, när modellen inte anger vikt - EXEMPEL
+    "point_loads": {"ventil": [[25, 1.5], [50, 5.0], [80, 12.0], [150, 30.0], [9999, 60.0]]},
+    "clearances": {"opening_mm": 100, "beam_edge_mm": 100, "channel_snap_mm": 300, "collision_mm": 10},
     "sources": {
         "plast_kv": "Walraven datablad Klammeravstånd för plaströr enligt DIN EN 806-4:2010-06, bild A, kallvatten "
                     "(https://files.walraven.com/repository/rnd/documents/Fixing-Distances-Plastic-Pipes-Datasheet-SE.pdf)",
@@ -111,10 +133,13 @@ def merged(rules: dict[str, Any] | None) -> dict[str, Any]:
 
 def material_key(text: str | None) -> str:
     t = (text or "").lower()
-    for key, words in (("rostfritt", ("rostfri", "inox", "syrafast", "rf ")), ("koppar", ("koppar", "copper", "cu ")),
-                       ("plast", ("pex", "pp", "pe ", "pe-", "pvc", "plast", "abs", "pb ", "alupex", "polyeten")),
-                       ("gjutjärn", ("gjutjärn", "sml", "cast iron")),
-                       ("stål", ("stål", "steel", "galv", "förzinkat", "svart", "press"))):
+    for key, words in (("rostfritt", ("rostfri", "inox", "syrafast", "rf ", "1.4301", "1.4306", "1.4401", "1.4404", "316l", "304l")),
+                       ("koppar", ("koppar", "copper", "cu ", "en 1057", "en1057", "r290", "r250", "r220")),
+                       ("plast", ("pex", "pp", "pe ", "pe-", "pvc", "plast", "abs", "pb ", "alupex", "polyeten", "lk pal",
+                                  " pal ", "rir", "universalrör", "markavlopp", "pe-xa", "pe100", "pe80")),
+                       ("gjutjärn", ("gjutjärn", "sml", "cast iron", "ma,", "ma-rör")),
+                       ("stål", ("stål", "steel", "galv", "förzinkat", "svart", "press", "tuber", "en10296", "en 10296",
+                                 "en10255", "en 10255", "en10220", "gänga"))):
         if any(w in t + " " for w in words):
             return key
     return "okänt"
@@ -159,3 +184,20 @@ def rod_size(rules: dict[str, Any], load_kn: float) -> str | None:
         if cap >= need:
             return size
     return None
+
+
+def table(rows: list, value: float | None, default=None):
+    """Värdet ur en tabell [[största, värde], ...] för ett mått."""
+    if value is None:
+        return default
+    for top, v in rows or []:
+        if value <= top:
+            return v
+    return rows[-1][1] if rows else default
+
+
+def anchor_for(rules: dict[str, Any], slab: str | None, size: str) -> dict[str, Any]:
+    st = slab or rules.get("default_slab_type") or "Platsgjutet"
+    a = (rules.get("anchors") or {}).get(st) or (rules.get("anchors") or {}).get("Platsgjutet") or {}
+    return {"slab_type": st, "text": str(a.get("text") or "Takinfästning {size}").replace("{size}", size),
+            "capacity_kn": a.get("capacity_kn"), "height_mm": float(a.get("height_mm") or 0), "note": a.get("note")}

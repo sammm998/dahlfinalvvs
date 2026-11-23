@@ -78,10 +78,16 @@ class _P:
         self.material = RL.material_key(" ".join([p.get("material") or "", p.get("name") or ""]))
         self.dn = p.get("dn")
         self.od = float(p.get("od") or p.get("dn") or 22.0)
+        self.ins = float(p.get("insulation_mm") or 0.0)
+        self.od_eff = self.od + 2 * self.ins            # ytterdiameter med isolering: klammer och avstånd räknas på den
         self.system = p.get("system") or ""
         self.storey = p.get("storey") or "?"
         self.spacing, self.spacing_rule = RL.spacing(rules, self.material, self.dn, self.system, p.get("od"))
         self.kgm = RL.kg_per_m(rules, self.material, self.od, self.system)
+        if self.ins:
+            # isoleringens vikt efter tjockleken (mineralull/cellgummi ~ 60 kg/m3) i stället för schablonen
+            self.kgm = round(self.kgm - rules["load"]["insulation_kg_m"] * (self.kgm > 0)
+                             + 3.1416 * (self.od + self.ins) * self.ins * 60e-6, 3)
 
     def at(self, u: np.ndarray, o: np.ndarray, t: float) -> np.ndarray:
         a, b = float(np.dot(self.s[:2] - o, u)), float(np.dot(self.e[:2] - o, u))
@@ -89,8 +95,15 @@ class _P:
         return self.s + self.vec * min(1.0, max(0.0, lam))
 
 
-def _runs(ps: list[_P], rules: dict[str, Any]) -> list[list[_P]]:
-    """Rörstråk: parallella rör nära varandra i sidled med överlappande sträckor (union-find per våning)."""
+def _runs(ps: list[_P], rules: dict[str, Any], groups: dict[str, Any] | None = None) -> list[list[_P]]:
+    """Rörstråk: parallella rör nära varandra i sidled med överlappande sträckor (union-find per våning).
+
+    groups är granskarens ändringar av trapetsgrupperingen: "split" är rör som hängs var för sig (eget stråk,
+    egna pendlar), "merge" är grupper av rör som ska dela takjärn även om regelns sidavstånd inte räcker - så
+    länge de är parallella och överlappar."""
+    groups = groups or {}
+    apart = {str(x) for x in groups.get("split") or []}
+    together = [{str(x) for x in g} for g in groups.get("merge") or [] if len(g) > 1]
     pl = rules["placement"]
     cos_tol = math.cos(math.radians(pl["parallel_angle_deg"]))
     out = []
@@ -120,7 +133,15 @@ def _runs(ps: list[_P], rules: dict[str, Any]) -> list[list[_P]]:
             lo, hi = np.minimum(ps_, pe_), np.maximum(ps_, pe_)
             overlap = (np.minimum(hi, a1) - np.maximum(lo, a0)) > -50
             ok = (cos >= cos_tol) & (lat <= pl["run_max_width"]) & overlap
+            if together:
+                mates = set().union(*[g for g in together if p.id in g]) if any(p.id in g for g in together) else set()
+                if mates:
+                    ok = ok | ((cos >= cos_tol) & overlap & np.array([q.id in mates for q in group]))
+            if p.id in apart:
+                continue
             for j in np.nonzero(ok)[0]:
+                if group[int(j)].id in apart:
+                    continue
                 if j > i:
                     ri, rj = find(i), find(int(j))
                     if ri != rj:
@@ -174,7 +195,12 @@ def _stations(run: list[_P], u: np.ndarray, o: np.ndarray, fittings: list[np.nda
                     k = math.ceil((y - x) / p.spacing)
                     need += [(x + (y - x) * i / k, "klamringsavstånd") for i in range(1, k)]
             # ventiler och rördelar på röret
-            for f in fittings:
+            near = fittings
+            if len(fittings) > 50:
+                F = np.asarray(fittings)
+                lo_, hi_ = np.minimum(p.s, p.e) - 300, np.maximum(p.s, p.e) + 300
+                near = F[np.all((F >= lo_) & (F <= hi_), axis=1)]
+            for f in near:
                 rel = f[:2] - p.s[:2]
                 along = float(np.dot(rel, p.dir))
                 lat = abs(float(p.dir[0] * rel[1] - p.dir[1] * rel[0]))
@@ -196,26 +222,144 @@ def _stations(run: list[_P], u: np.ndarray, o: np.ndarray, fittings: list[np.nda
     return sorted(set(round(t, 1) for t in st)), iv, why
 
 
+class _Grid:
+    """Ett rutnät över planet: vilka objekt (med bbox [x0, y0, z0, x1, y1, z1]) som ligger nära en punkt."""
+
+    def __init__(self, items: list[dict[str, Any]], cell: float = 2000.0):
+        self.cell, self.items, self.map = cell, items, defaultdict(list)
+        for i, it in enumerate(items):
+            b = it["bbox"]
+            for cx in range(int(b[0] // cell), int(b[3] // cell) + 1):
+                for cy in range(int(b[1] // cell), int(b[4] // cell) + 1):
+                    self.map[(cx, cy)].append(i)
+
+    def near(self, x: float, y: float, r: float = 0.0) -> list[dict[str, Any]]:
+        out = set()
+        for cx in range(int((x - r) // self.cell), int((x + r) // self.cell) + 1):
+            for cy in range(int((y - r) // self.cell), int((y + r) // self.cell) + 1):
+                out.update(self.map.get((cx, cy), ()))
+        return [self.items[i] for i in out]
+
+
+def _inside(b: list[float], x: float, y: float, m: float = 0.0) -> bool:
+    return b[0] - m <= x <= b[3] + m and b[1] - m <= y <= b[4] + m
+
+
+def _seg_dist(p: np.ndarray, a: np.ndarray, b: np.ndarray) -> float:
+    d = b - a
+    t = float(np.clip(np.dot(p - a, d) / (np.dot(d, d) or 1.0), 0.0, 1.0))
+    return float(np.linalg.norm(p - (a + d * t)))
+
+
+def _beam_slab_type(c: dict[str, Any]) -> str | None:
+    if c.get("kind") == "beam":
+        return "Stålbalk" if re.search(r"stål|steel|\bhe[ab]\b|\bipe\b|\bvkr\b|\bkkr\b|\bupe\b", c.get("type_text") or "", re.I) \
+            else (c.get("slab_type") or "Platsgjutet")
+    return c.get("slab_type")
+
+
+def _adjust(t: float, point_at, grids: dict, rules: dict[str, Any], spacing: float) -> tuple[float, str | None, str | None]:
+    """Flytta en upphängningspunkt bort från håltagningar och balkkanter (K-modellen), eller till en
+    ingjutningsskena. Returnerar (t, varför den flyttades, flagga om den inte gick att flytta)."""
+    cl = rules.get("clearances") or {}
+    m_open, m_beam, snap = float(cl.get("opening_mm", 100)), float(cl.get("beam_edge_mm", 100)), float(cl.get("channel_snap_mm", 300))
+
+    def blocked(tt):
+        x, y = point_at(tt)[:2]
+        for o in grids["openings"].near(x, y, m_open):
+            if _inside(o["bbox"], x, y, m_open):
+                return f"håltagning {o['id']}"
+        for c in grids["beams"].near(x, y, m_beam):
+            b = c["bbox"]
+            inner = _inside(b, x, y, -m_beam)
+            if _inside(b, x, y, m_beam) and not inner:
+                return f"balkkant {c['id']}"
+        return None
+
+    x, y = point_at(t)[:2]
+    for ch in grids["channels"].near(x, y, snap):
+        a_, b_ = np.array(ch["start"][:2]), np.array(ch["end"][:2])
+        # skärningen mellan skenan och stråkets linje, inom snäppavståndet
+        p0, p1 = np.array(point_at(t - 1000)[:2]), np.array(point_at(t + 1000)[:2])
+        d1, d2 = p1 - p0, b_ - a_
+        den = d1[0] * d2[1] - d1[1] * d2[0]
+        if abs(den) < 1e-9:
+            continue
+        s_ = ((a_[0] - p0[0]) * d2[1] - (a_[1] - p0[1]) * d2[0]) / den
+        u_ = ((a_[0] - p0[0]) * d1[1] - (a_[1] - p0[1]) * d1[0]) / den
+        tc = t - 1000 + s_ * 2000
+        if 0 <= u_ <= 1 and abs(tc - t) <= snap:
+            return tc, f"snäppt till ingjutningsskena {ch['id']}", None
+    why = blocked(t)
+    if not why:
+        return t, None, None
+    for step in (50, 100, 150, 200, 300, 400, 500):
+        if step > spacing / 3:
+            break
+        for tt in (t - step, t + step):
+            if not blocked(tt):
+                return tt, f"flyttad {step} mm från {why}", None
+    return t, None, f"upphängning vid {why} - gick inte att flytta inom c/c, kontrollera"
+
+
 def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_heights: dict[str, float] | None = None,
-             project: str = "", revision: str = "A") -> dict[str, Any]:
-    """Hängarna för en modell (vvs_engine.hangers.geometry.pipes)."""
+             project: str = "", revision: str = "A", zone_slab_types: dict[str, str] | None = None,
+             estimate_above: float | None = None, groups: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Upphängningarna för ett beräkningspaket (package.combine) eller en enskild modell (geometry.read_model).
+
+    Per rörstråk: punkterna längs röret (c/c ur regeltabellen, extra punkt vid böj, T-rör, ventil och anslutning,
+    bort från håltagningar och balkkanter, till ingjutningsskenor), geometrin per punkt (gängstången enligt
+    L = Z_UK - Z_CL - D/2 - t_iso - h_klammer - h_ankare, avstånd till vägg och undertak), lasten (rör, fyllt medium,
+    isolering och punktlaster) mot gängstångens och ankarets tillåtna last, infästningen per bjälklagstyp, och
+    delade bärverk (takjärn) för parallella rör på liknande höjd. Vertikala rör får fixpunkt och styrning."""
     rules = RL.merged(rules)
-    pl, g = rules["placement"], rules["geometry"]
+    pl, g, fm = rules["placement"], rules["geometry"], rules["formula"]
     ceil = ceilings(model.get("storeys") or [], manual_heights, rules)
     storey_index = {s["name"]: i for i, s in enumerate(model.get("storeys") or [])}
-    hor, skipped = [], []
+    zone_slab_types = zone_slab_types or {}
+    has_k = bool((model.get("has") or {}).get("K")) or any(c.get("kind") in ("slab", "beam") for c in model.get("ceilings") or [])
+    hor, risers, skipped, findings = [], [], [], []
     for p in model.get("pipes") or []:
+        miss = [k for k, ok in (("system", p.get("system")), ("dimension", p.get("dn") or p.get("od")),
+                                ("material", p.get("material") or p.get("code"))) if not ok]
+        if miss and model.get("source") != "2D-ritning" and (model.get("has") or {}).get("VS"):
+            skipped.append({"pipe": p["id"], "name": p.get("name"), "why": f"V4: saknar {', '.join(miss)}"})
+            continue
         P = _P(p, rules)
         dz = abs(P.vec[2])
         if P.len < pl["min_pipe_length"]:
             skipped.append({"pipe": P.id, "name": p.get("name"), "why": f"kort rör ({P.len:.0f} mm) - hängs av grannrören"})
         elif dz / (P.len or 1) > pl["vertical_ratio"]:
-            skipped.append({"pipe": P.id, "name": p.get("name"), "why": "stigare/lutande - väggfäste, inte takhängare"})
+            (risers if dz > 1000 and dz / (P.len or 1) > 0.9 else skipped).append(
+                P if dz > 1000 and dz / (P.len or 1) > 0.9 else
+                {"pipe": P.id, "name": p.get("name"), "why": "lutande rör - hängs av grannrören"})
         else:
             hor.append(P)
-    fittings = [np.array(f["at"], float) for f in model.get("fittings") or []]
+    fit_all = model.get("fittings") or []
+    fittings = [np.array(f["at"], float) for f in fit_all]
+    valves = [f for f in fit_all if f.get("kind") == "ventil"]
+    mk = lambda key: _Grid([dict(it, bbox=it["bbox"]) for it in model.get(key) or [] if it.get("bbox")])
+    grids = {"openings": mk("openings"), "channels": _Grid([dict(c, bbox=[min(c["start"][0], c["end"][0]), min(c["start"][1], c["end"][1]), 0,
+                                                                          max(c["start"][0], c["end"][0]), max(c["start"][1], c["end"][1]), 0])
+                                                              for c in model.get("channels") or []]),
+             "beams": _Grid([c for c in model.get("ceilings") or [] if c.get("kind") == "beam" and c.get("bbox")]),
+             "ceilings": _Grid([dict(c, bbox=c.get("bbox") or [c["xy"][0], c["xy"][1], c["zmin"], c["xy"][2], c["xy"][3], c.get("zmax", c["zmin"])])
+                                for c in model.get("ceilings") or [] if c.get("xy")]),
+             "walls": _Grid([w for w in model.get("walls") or [] if w.get("bbox")]),
+             "suspended": _Grid([c for c in model.get("suspended") or [] if c.get("bbox")]),
+             "obstacles": _Grid([o for o in model.get("obstacles") or [] if o.get("bbox")]),
+             "pipes": _Grid([{"id": p["id"], "s": p["start"], "e": p["end"], "r": (p.get("od") or 0) / 2 + (p.get("insulation_mm") or 0),
+                              "storey": p.get("storey"),
+                              "bbox": [min(p["start"][0], p["end"][0]) - (p.get("od") or 0) / 2,
+                                                       min(p["start"][1], p["end"][1]) - (p.get("od") or 0) / 2,
+                                                       min(p["start"][2], p["end"][2]) - (p.get("od") or 0) / 2,
+                                                       max(p["start"][0], p["end"][0]) + (p.get("od") or 0) / 2,
+                                                       max(p["start"][1], p["end"][1]) + (p.get("od") or 0) / 2,
+                                                       max(p["start"][2], p["end"][2]) + (p.get("od") or 0) / 2]}
+                             for p in model.get("pipes") or []])}
     raw: list[dict[str, Any]] = []
-    for ri, run in enumerate(_runs(hor, rules)):
+    merge_sets = [{str(x) for x in g} for g in (groups or {}).get("merge") or [] if len(g) > 1]
+    for ri, run in enumerate(_runs(hor, rules, groups)):
         longest = max(run, key=lambda p: p.len)
         u = longest.dir
         v = np.array([-u[1], u[0]])
@@ -223,6 +367,14 @@ def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_
         lo = min(min(np.dot(p.s[:2] - o, u), np.dot(p.e[:2] - o, u)) for p in run)
         o = o + u * lo
         st, iv, why = _stations(run, u, o, fittings, rules)
+        smin = min(p.spacing for p in run)
+        lat0 = float(np.dot(longest.s[:2] - o, v))
+        point_at = lambda tt, o=o, u=u, v=v, lat0=lat0: o + u * tt + v * lat0
+        moved = {}
+        for t in st:
+            t2, w2, fl = _adjust(t, point_at, grids, rules, smin)
+            moved[round(t2, 1)] = (w2 or why.get(t), fl)
+        st = sorted(moved)
         for t in st:
             here = []
             for p in run:
@@ -230,7 +382,6 @@ def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_
                 if a - 1 <= t <= b + 1:
                     pt = p.at(u, o, t)
                     here.append((float(np.dot(pt[:2] - o, v)), pt, p))
-            # nivåer, sedan bredd
             here.sort(key=lambda x: x[1][2])
             levels, cur = [], []
             for h in here:
@@ -244,13 +395,13 @@ def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_
                 lev.sort(key=lambda x: x[0])
                 grp: list = []
                 for h in lev:
-                    if grp and h[0] - grp[0][0] > pl["run_max_width"]:
-                        raw.append({"run": ri, "t": t, "pipes": grp, "u": u, "v": v, "o": o, "why": why.get(t)})
+                    forced = bool(merge_sets) and any({h[2].id, grp[0][2].id} <= m for m in merge_sets) if grp else False
+                    if grp and h[0] - grp[0][0] > pl["run_max_width"] and not forced:
+                        raw.append({"run": ri, "t": t, "pipes": grp, "u": u, "v": v, "o": o, "why": moved[t][0], "adj": moved[t][1]})
                         grp = []
                     grp.append(h)
                 if grp:
-                    raw.append({"run": ri, "t": t, "pipes": grp, "u": u, "v": v, "o": o, "why": why.get(t)})
-    # upphängd längd per rör och punkt: halva avståndet till grannpunkterna (och ända ut till rörets ände)
+                    raw.append({"run": ri, "t": t, "pipes": grp, "u": u, "v": v, "o": o, "why": moved[t][0], "adj": moved[t][1]})
     per_pipe: dict[str, list[tuple[float, int]]] = defaultdict(list)
     for k, h in enumerate(raw):
         h["k"] = k
@@ -261,97 +412,190 @@ def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_
         pts = sorted(per_pipe.get(p.id, []))
         if not pts:
             continue
-        o_ = next(raw[k] for _, k in pts)
+        o_ = raw[pts[0][1]]
         a, b = sorted((float(np.dot(p.s[:2] - o_["o"], o_["u"])), float(np.dot(p.e[:2] - o_["o"], o_["u"]))))
         ts = [t for t, _ in pts]
         for i, (t, k) in enumerate(pts):
             left = (t - ts[i - 1]) / 2 if i else t - a
             right = (ts[i + 1] - t) / 2 if i + 1 < len(ts) else b - t
             trib[(k, p.id)] = max(0.0, left) + max(0.0, right)
+    # punktlaster: varje ventil på närmaste upphängning av sitt rör
+    point_kg: dict[int, float] = defaultdict(float)
+    by_pipe_pts = {pid: sorted(v_) for pid, v_ in per_pipe.items()}
+    pipe_obj = {p.id: p for p in hor}
+    pg = _Grid([{"id": p.id, "bbox": [min(p.s[0], p.e[0]) - 300, min(p.s[1], p.e[1]) - 300, 0,
+                                      max(p.s[0], p.e[0]) + 300, max(p.s[1], p.e[1]) + 300, 0]} for p in hor])
+    for vlv in valves:
+        x, y, z = vlv["at"]
+        best = None
+        for c in pg.near(x, y):
+            p = pipe_obj[c["id"]]
+            d = _seg_dist(np.array([x, y, z]), p.s, p.e)
+            if d < p.od / 2 + 200 and (best is None or d < best[0]):
+                best = (d, p)
+        if not best or best[1].id not in by_pipe_pts:
+            continue
+        p = best[1]
+        o_ = raw[by_pipe_pts[p.id][0][1]]
+        tv = float(np.dot(np.array([x, y]) - o_["o"], o_["u"]))
+        t_, k_ = min(by_pipe_pts[p.id], key=lambda q: abs(q[0] - tv))
+        point_kg[k_] += float(vlv.get("mass_kg") or RL.table(rules["point_loads"]["ventil"], vlv.get("dn") or p.dn or 25, 5.0))
     hangers = []
     counters: dict[str, int] = defaultdict(int)
     raw.sort(key=lambda h: (storey_index.get(h["pipes"][0][2].storey, 99), h["run"], h["t"]))
-    for k, h in enumerate(raw):
+    max_size = max(fm["max_rod_by_size"].values()) if fm.get("max_rod_by_size") else g["max_rod"]
+    for h in raw:
         pipes_ = h["pipes"]
         storey = pipes_[0][2].storey
         code = storey_code(storey, storey_index.get(storey, 0))
         counters[code] += 1
         hid = f"{code}-{counters[code]:03d}"
-        c = ceil.get(storey) or {"z": None, "source": "saknas"}
-        flags = []
+        zone = f"stråk {h['run'] + 1}"
+        flags: list[str] = []
+        if h.get("adj"):
+            flags.append(h["adj"])
         w = [x[0] for x in pipes_]
-        ods = [x[2].od for x in pipes_]
+        ods = [x[2].od_eff for x in pipes_]
         centre_xy = h["o"] + h["u"] * h["t"] + h["v"] * ((min(w) + max(w)) / 2)
-        bottoms = [x[1][2] - x[2].od / 2 for x in pipes_]
-        if c.get("source") != "manuell":
-            # takhöjden ur modellen: undersidan av det bjälklag eller undertak som ligger över hängaren
-            top = max(x[1][2] + x[2].od / 2 for x in pipes_)
-            over = [s_ for s_ in model.get("ceilings") or []
-                    if s_["xy"][0] - 50 <= centre_xy[0] <= s_["xy"][2] + 50 and s_["xy"][1] - 50 <= centre_xy[1] <= s_["xy"][3] + 50
-                    and s_["zmin"] > top + 20]
-            if over:
-                s_ = min(over, key=lambda x: x["zmin"])
-                c = {"z": float(s_["zmin"]), "source": f"modell: {s_['kind']} {s_.get('name') or s_['id']}".strip()}
+        cx, cy = float(centre_xy[0]), float(centre_xy[1])
+        bottoms = [x[1][2] - x[2].od_eff / 2 for x in pipes_]
+        top = max(x[1][2] + x[2].od_eff / 2 for x in pipes_)
+        # Z_UK: underkant på närmaste bjälklag eller balk lodrätt ovanför (K-modellen), inom största gängstångslängd
+        c = ceil.get(storey) or {"z": None, "source": "saknas"}
+        manual = (manual_heights or {}).get(f"{storey}|{zone}", (manual_heights or {}).get(storey))
+        slab = None
+        over = [s_ for s_ in grids["ceilings"].near(cx, cy) if _inside(s_["bbox"], cx, cy) and s_["zmin"] > top + 20]
+        if over:
+            slab = min(over, key=lambda x: x["zmin"])
+        if slab is not None and manual in (None, ""):
+            c = {"z": float(slab["zmin"]), "source": f"modell: {slab.get('kind')} {slab.get('name') or slab['id']}".strip()}
+        elif manual not in (None, ""):
+            c = {"z": float(manual), "source": "manuell" if not has_k else "manuell (över K-modellen)"}
+        elif has_k:
+            c = {"z": None, "source": "saknas"}
+            flags.append("V6: inget bjälklag eller balk ovanför punkten i K-modellen")
+        elif estimate_above is not None:
+            # uppskattad lokalt (anbudsskede utan K-modell): högsta röret på samma våning inom 2 m, plus ett avstånd
+            near = [ob for ob in grids["pipes"].near(cx, cy, 2000) if ob.get("storey") == storey]
+            tops = [max(ob["s"][2], ob["e"][2]) + ob["r"] for ob in near
+                    if abs(ob["s"][2] - ob["e"][2]) < 300 and _inside(ob["bbox"], cx, cy, 2000)]
+            zt = max([top] + [t_ for t_ in tops if t_ < top + 1500])
+            c = {"z": float(zt + estimate_above), "source": "uppskattad (högsta röret inom 2 m + avstånd) - ej K-modell"}
+        slab_kind = (_beam_slab_type(slab) if slab else None) or zone_slab_types.get(f"{storey}|{zone}") \
+            or zone_slab_types.get(storey) or rules.get("default_slab_type")
         n_rods = 1 if len(pipes_) == 1 else 2
-        load_kg = sum(x[2].kgm * trib.get((h["k"], x[2].id), x[2].spacing) / 1000.0 for x in pipes_)
+        load_kg = sum(x[2].kgm * trib.get((h["k"], x[2].id), x[2].spacing) / 1000.0 for x in pipes_) + point_kg.get(h["k"], 0.0)
         load_kn = round(load_kg * 9.81 / 1000.0, 3)
         rod = RL.rod_size(rules, load_kn / n_rods)
         if rod is None:
             flags.append(f"lasten {load_kn} kN överstiger gängstångens bärförmåga - konstruktören avgör")
-            rod = max(rules["load"]["rod_capacity_kn"], key=lambda s: rules["load"]["rod_capacity_kn"][s])
-        takjarn = None
-        clamps = []
+            rod = max(rules["load"]["rod_capacity_kn"], key=lambda s_: rules["load"]["rod_capacity_kn"][s_])
+        anchor = RL.anchor_for(rules, slab_kind, rod)
+        if anchor.get("capacity_kn") and load_kn / n_rods * rules["load"]["safety_factor"] > anchor["capacity_kn"]:
+            flags.append(f"lasten {load_kn / n_rods:.2f} kN per ankare över ankarets {anchor['capacity_kn']} kN i {anchor['slab_type']}")
+        if anchor.get("note"):
+            flags.append(anchor["note"])
+        takjarn, clamps = None, []
         if n_rods == 1:
-            p = pipes_[0]
-            top = p[1][2] + p[2].od / 2 + g["clamp_base"]
-            rod_len = (c["z"] - top) if c["z"] is not None else None
-            kind = "pendel"
-            z_hang = top
+            x = pipes_[0]
+            h_kl = float(RL.table(fm["clamp_height"], x[2].od_eff, g["clamp_base"]))
+            # L = Z_UK - Z_CL - D/2 - t_iso - h_klammer - h_ankare
+            L = (c["z"] - x[1][2] - x[2].od_eff / 2 - h_kl - anchor["height_mm"]) if c["z"] is not None else None
+            kind, z_hang = "pendel", x[1][2] + x[2].od_eff / 2 + h_kl
         else:
             kind = "takjärn"
+            h_kl = max(float(RL.table(fm["clamp_height"], x[2].od_eff, g["clamp_base"])) for x in pipes_)
             ptop = min(bottoms) - g["clamp_base"]
             pbot = ptop - g["profile_height"]
             length = _up((max(w) - min(w)) + max(ods) + 2 * g["overhang"], g["length_step"])
             x0 = (min(w) + max(w)) / 2 - length / 2
             for (wi, pt, p), b in zip(pipes_, bottoms):
                 rise = round(b - g["clamp_base"] - ptop)
-                clamps.append({"pipe": p.id, "at_mm": int(round((wi - x0) / g["hole_step"]) * g["hole_step"]), "rise_mm": rise if rise > 10 else 0,
-                               "dn": p.dn, "od": p.od})
-                if rise > 10:
-                    flags.append(f"rör {p.dn or p.od} ligger {rise} mm högre - distans/förhöjning på klammern")
+                clamps.append({"pipe": p.id, "at_mm": int(round((wi - x0) / g["hole_step"]) * g["hole_step"]),
+                               "rise_mm": rise if rise > 10 else 0, "dn": p.dn, "od": p.od, "insulation_mm": p.ins})
+                if rise > 100:
+                    flags.append(f"rör {p.dn or p.od} ligger {rise} mm högre än de andra på takjärnet - egen nivå eller förhöjning")
             takjarn = {"profile": g["profile"], "length_mm": length, "rod_holes_mm": [25, length - 25],
                        "clamps": clamps, "top_z": round(ptop, 1)}
-            rod_len = (c["z"] - pbot + g["rod_allowance"]) if c["z"] is not None else None
+            L = (c["z"] - pbot - anchor["height_mm"] + g["rod_allowance"]) if c["z"] is not None else None
             z_hang = pbot
             if load_kn > rules["load"]["profile_capacity_kn"] / rules["load"]["safety_factor"]:
                 flags.append(f"lasten {load_kn} kN på takjärnet över tillåten - kraftigare profil")
-        if rod_len is None:
-            flags.append("takhöjd saknas - ange takhöjd för våningen")
+        rod_len = cut = None
+        if L is None:
+            if not has_k:
+                flags.append("takhöjd saknas - ange underkant bjälklag för våningen/zonen")
         else:
-            rod_len = _up(max(rod_len, 0), g["rod_step"])
-            if rod_len < g["min_rod"]:
-                flags.append(f"röret ligger för nära taket ({rod_len} mm pendel) - annan infästning")
-            if rod_len > g["max_rod"]:
-                flags.append(f"lång pendel ({rod_len} mm) - stagning bedöms")
+            rod_len = round(L)
+            cut = _up(max(L, 0) + float(fm.get("adjust_margin_mm") or 0), g["rod_step"])
+            if L < g["min_rod"]:
+                flags.append(f"röret ligger för nära bjälklaget ({rod_len} mm gängstång) - annan infästning")
+            lim = (fm.get("max_rod_by_size") or {}).get(rod, g["max_rod"])
+            if L > lim:
+                kind = "konsol" if L > max_size else kind
+                flags.append(f"gängstång {rod_len} mm över tillåtna {lim} mm för {rod} - {fm.get('konsol_text')}")
         if c["z"] is not None and z_hang > c["z"]:
-            flags.append("röret ligger över taket i modellen - kontrollera takhöjden")
-        rods = [{"size": rod, "length_mm": rod_len, "at_mm": (25 if i == 0 else (takjarn or {}).get("length_mm", 50) - 25) if takjarn else 0}
-                for i in range(n_rods)]
+            flags.append("röret ligger över bjälklaget i modellen - kontrollera höjden")
+        rods = [{"size": rod, "length_mm": cut, "calc_mm": rod_len,
+                 "at_mm": (25 if i == 0 else (takjarn or {}).get("length_mm", 50) - 25) if takjarn else 0} for i in range(n_rods)]
+        # avstånd till vägg (A-modellen) och till undertaket
+        wall = None
+        for wl in grids["walls"].near(cx, cy, 3000):
+            if not wl.get("segment"):
+                continue
+            d = _seg_dist(np.array([cx, cy]), np.array(wl["segment"][0]), np.array(wl["segment"][1])) - (wl.get("thickness") or 0) / 2
+            if wall is None or d < wall["mm"]:
+                wall = {"mm": max(0, round(d)), "id": wl["id"], "name": wl.get("name") or ""}
+        under = None
+        for sc in grids["suspended"].near(cx, cy):
+            if _inside(sc["bbox"], cx, cy) and sc["bbox"][5] < top + 500:
+                d = round(min(bottoms) - sc["bbox"][5])
+                if under is None or d < under["mm"]:
+                    under = {"mm": d, "id": sc["id"]}
+        if under and under["mm"] < 0:
+            flags.append(f"röret går {abs(under['mm'])} mm ner i undertaket {under['id']}")
+        # V9: gängstängerna mot andra objekt i modellerna
+        rod_xy = [(cx, cy)] if n_rods == 1 else [tuple(centre_xy + h["v"] * (r_["at_mm"] - takjarn["length_mm"] / 2)) for r_ in rods]
+        carried = {x[2].id for x in pipes_}
+        collisions = []
+        m_col = float((rules.get("clearances") or {}).get("collision_mm", 10))
+        if c["z"] is not None:
+            for rx, ry in rod_xy:
+                for grid_name in ("obstacles", "pipes"):
+                    for ob in grids[grid_name].near(rx, ry, m_col):
+                        if ob["id"] in carried:
+                            continue
+                        b = ob["bbox"]
+                        if not (_inside(b, rx, ry, m_col) and b[5] > z_hang and b[2] < c["z"]):
+                            continue
+                        if grid_name == "pipes":
+                            # ett rör: verkligt avstånd från gängstången till rörets axel, och rörets höjd just där
+                            ps_, pe_ = np.array(ob["s"]), np.array(ob["e"])
+                            d2 = pe_[:2] - ps_[:2]
+                            lam = float(np.clip(np.dot(np.array([rx, ry]) - ps_[:2], d2) / (np.dot(d2, d2) or 1.0), 0, 1))
+                            q = ps_ + (pe_ - ps_) * lam
+                            if np.linalg.norm(q[:2] - np.array([rx, ry])) > ob["r"] + m_col or not (z_hang < q[2] < c["z"]):
+                                continue
+                        collisions.append(ob["id"])
+        if collisions:
+            flags.append(f"V9: gängstången kolliderar med {len(set(collisions))} objekt ({', '.join(sorted(set(collisions))[:3])})")
         hanger = {
-            "id": hid, "project": project, "revision": revision, "storey": storey, "zone": f"stråk {h['run'] + 1}",
+            "id": hid, "project": project, "revision": revision, "storey": storey, "zone": zone,
             "run": h["run"], "station_mm": round(h["t"]), "kind": kind,
-            "position": {"x": round(float(centre_xy[0])), "y": round(float(centre_xy[1])),
-                         "z": round(c["z"]) if c["z"] is not None else None},
+            "position": {"x": round(cx), "y": round(cy), "z": round(c["z"]) if c["z"] is not None else None},
             "reference": {"run_start": [round(float(x)) for x in h["o"]], "along_run_mm": round(h["t"]),
-                          "text": f"{round(h['t'])} mm längs stråk {h['run'] + 1} från dess början"},
-            "pipes": [{"id": p.id, "dn": p.dn, "od": p.od, "material": p.material, "system": p.system,
+                          "text": (f"{wall['mm']} mm från vägg {wall['name'] or wall['id']}" if wall else
+                                   f"{round(h['t'])} mm längs stråk {h['run'] + 1} från dess början")},
+            "wall": wall, "ceiling_clearance": under,
+            "pipes": [{"id": p.id, "dn": p.dn, "od": p.od, "insulation_mm": p.ins, "material": p.material, "system": p.system,
                        "centre_z": round(float(pt[2])), "spacing_rule": p.spacing_rule,
                        "hung_length_mm": round(trib.get((h["k"], p.id), 0))} for _, pt, p in pipes_],
             "ceiling_z": round(c["z"]) if c["z"] is not None else None, "height_source": c["source"],
-            "takjarn": takjarn, "rods": rods, "load_kn": load_kn,
-            "anchor": rules["fixing"]["anchor"].get(rules["fixing"]["ceiling"], "Takinfästning"),
+            "slab": {"id": slab["id"], "type": slab_kind, "name": slab.get("name")} if slab else {"id": None, "type": slab_kind},
+            "takjarn": takjarn, "rods": rods, "load_kn": load_kn, "point_load_kg": round(point_kg.get(h["k"], 0.0), 1),
+            "anchor": anchor["text"], "anchor_info": anchor,
             "finish": rules["environment"]["finish"].get(rules["environment"]["default"], ""),
-            "placed_because": h.get("why") or "klamringsavstånd",
+            "placed_because": h.get("why") or "klamringsavstånd", "collisions": sorted(set(collisions))[:20],
             "flags": flags, "status": "föreslagen", "history": [], "approved": {},
         }
         unknown = [p for _, _, p in pipes_ if p.material == "okänt"]
@@ -359,15 +603,46 @@ def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_
             flags.append(f"materialet okänt för {', '.join(sorted({p.raw.get('name') or p.id for p in unknown}))[:80]} - "
                          f"försiktigt klamringsavstånd {rules['spacing']['okänt'][0][1]} mm")
         if model.get("source") == "2D-ritning":
-            # en planritning har ingen höjd: takhöjden och rörets avstånd under taket är inmatade antaganden
             hanger["height_source"] = ("antagen (2D-ritning)" if c["z"] is not None else "saknas")
             hanger["flags"].append("höjd ur 2D-ritning - mät på plats innan produktion")
         hanger["bom"] = bom(hanger, rules)
         hangers.append(hanger)
-    return {"hangers": hangers, "skipped": skipped + [dict(s, why=s.get("why")) for s in model.get("skipped") or []],
+    # vertikala rör: fixpunkt och styrning per våningsplan (ingen gängstång)
+    for P in risers:
+        code = storey_code(P.storey, storey_index.get(P.storey, 0))
+        counters[code] += 1
+        mid = (P.s + P.e) / 2
+        hr = {"id": f"{code}-{counters[code]:03d}", "project": project, "revision": revision, "storey": P.storey,
+              "zone": "stigare", "run": -1, "station_mm": 0, "kind": "stigare",
+              "position": {"x": round(float(mid[0])), "y": round(float(mid[1])), "z": round(float(mid[2]))},
+              "reference": {"text": f"stigare {P.system} DN{P.dn or round(P.od)}, mitt på {abs(P.vec[2]):.0f} mm lodrätt rör"},
+              "pipes": [{"id": P.id, "dn": P.dn, "od": P.od, "insulation_mm": P.ins, "material": P.material, "system": P.system,
+                         "centre_z": round(float(mid[2])), "spacing_rule": "stigare: fixpunkt och styrning per våningsplan",
+                         "hung_length_mm": round(P.len)}],
+              "ceiling_z": None, "height_source": "stigare", "takjarn": None, "rods": [],
+              "load_kn": round(P.kgm * P.len / 1000 * 9.81 / 1000, 3), "anchor": "Väggfäste/konsol mot schaktvägg",
+              "finish": rules["environment"]["finish"].get(rules["environment"]["default"], ""),
+              "placed_because": "vertikalt rör: fixpunkt per våningsplan", "collisions": [],
+              "flags": ["stigare: fixpunkt och styrning - välj väggkonsol efter schaktet"], "status": "föreslagen",
+              "history": [], "approved": {}, "slab": {"id": None, "type": None}, "wall": None, "ceiling_clearance": None}
+        hr["bom"] = bom(hr, rules)
+        hangers.append(hr)
+    # kontrollrapportens V6 och V9 efter beräkningen
+    from .package import finding
+    v6 = [p["id"] for hh in hangers if any(f.startswith("V6") for f in hh["flags"]) for p in hh["pipes"]]
+    if v6:
+        findings.append(finding("V6", "stopp", "Bjälklag saknas ovanför",
+                                f"{len(set(v6))} rör har upphängningspunkter utan bjälklag eller balk ovanför i K-modellen.",
+                                sorted(set(v6)), per_pipe=True))
+    v9 = [hh["id"] for hh in hangers if hh.get("collisions")]
+    if v9:
+        findings.append(finding("V9", "varning", "Kollision", f"{len(v9)} upphängningar kolliderar med andra objekt "
+                                "(gängstång genom rör, kanal, balk eller pelare).",
+                                sorted({c_ for hh in hangers for c_ in hh.get("collisions") or []}), hangers=v9[:200]))
+    return {"hangers": hangers, "skipped": skipped + [dict(s_, why=s_.get("why")) for s_ in model.get("skipped") or []],
             "ceilings": ceil, "rules_version": rules.get("version"), "rules_verified": bool(rules.get("verified")),
-            "n_pipes": len(model.get("pipes") or []), "n_hung_pipes": len(hor),
-            "runs": len({h["run"] for h in hangers}), "summary": summary(hangers, rules)}
+            "n_pipes": len(model.get("pipes") or []), "n_hung_pipes": len(hor), "n_risers": len(risers),
+            "runs": len({h["run"] for h in hangers if h["run"] >= 0}), "summary": summary(hangers, rules), "findings": findings}
 
 
 def bom(h: dict[str, Any], rules: dict[str, Any]) -> list[dict[str, Any]]:
@@ -390,12 +665,27 @@ def bom(h: dict[str, Any], rules: dict[str, Any]) -> list[dict[str, Any]]:
                     "stock": f"gängstång {sz} {rules['stock']['rod_mm']}"})
         if ln and ln > rules["stock"]["rod_mm"]:
             out.append({"part": "skarvmutter", "text": f"Skarvmutter {sz}", "qty": q, "length_mm": None})
+    if h.get("kind") == "stigare":
+        for p in h["pipes"]:
+            od = round((p["od"] or 0) + 2 * (p.get("insulation_mm") or 0))
+            out.append({"part": "fixpunkt", "text": f"Rörklammer {od} mm med fixpunkt", "qty": 1, "length_mm": None, "pipe": p["id"]})
+            out.append({"part": "styrning", "text": f"Rörklammer {od} mm glidande (styrning)", "qty": 1, "length_mm": None, "pipe": p["id"]})
+        out.append({"part": "konsol", "text": "Väggkonsol för stigare", "qty": 2, "length_mm": None})
+        return _articles(out, rules)
+    if h.get("kind") == "konsol":
+        out.append({"part": "konsol", "text": (rules.get("formula") or {}).get("konsol_text") or "Konsol", "qty": 1, "length_mm": None})
     anchor = re.sub(r"\bM\d+\b", size, h.get("anchor") or "Takinfästning")
     out.append({"part": "infästning", "text": anchor, "qty": len(rods), "length_mm": None})
     out.append({"part": "mutter", "text": f"Mutter {size}", "qty": nuts, "length_mm": None})
     out.append({"part": "bricka", "text": f"Bricka {size}", "qty": 2 * len(rods), "length_mm": None})
+    for cl in (h.get("takjarn") or {}).get("clamps") or []:
+        if cl.get("rise_mm"):
+            out.append({"part": "distans", "text": f"Distans/förhöjning {size} {cl['rise_mm']} mm under klammer", "qty": 1,
+                        "length_mm": cl["rise_mm"], "pipe": cl["pipe"]})
     for p in h["pipes"]:
-        out.append({"part": "rörklammer", "text": f"Rörklammer {round(p['od'] or 0)} mm {('med gummiinlägg ' if p['material'] != 'plast' else '')}{size}-anslutning".replace("  ", " "),
+        # klammern väljs på ytterdiametern med isolering (V5: utan isolertjocklek på rördimensionen)
+        od = round((p["od"] or 0) + 2 * (p.get("insulation_mm") or 0))
+        out.append({"part": "rörklammer", "text": f"Rörklammer {od} mm {('med gummiinlägg ' if p['material'] != 'plast' else '')}{size}-anslutning".replace("  ", " "),
                     "qty": 1, "length_mm": None, "pipe": p["id"]})
     return _articles(out, rules)
 
@@ -583,3 +873,17 @@ def apply_references(hangers: list[dict[str, Any]], refs: list[dict[str, Any]] |
         ref["lines"] = lines
         along = f"{ref.get('along_run_mm', h.get('station_mm', 0))} mm längs {h.get('zone') or 'stråket'} från dess början"
         ref["text"] = ", ".join(f"{l['mm']:,} mm från {l['name']}".replace(",", " ") for l in lines) or along
+
+
+def estimate_heights(model: dict[str, Any], above_mm: float = 100.0) -> dict[str, float]:
+    """Underkant bjälklag uppskattad per våning ur rörens högsta läge (för anbudsskedet, när K-modellen saknas):
+    det högsta horisontella röret med isolering plus ett avstånd. Ett antagande - märks så och ersätts av K-modellen
+    eller av uppmätt höjd."""
+    tops: dict[str, list[float]] = defaultdict(list)
+    for p in model.get("pipes") or []:
+        s, e = np.array(p["start"]), np.array(p["end"])
+        L = float(np.linalg.norm(e - s))
+        if L < 300 or abs(e[2] - s[2]) / L > 0.15:
+            continue
+        tops[p.get("storey") or "?"].append(max(s[2], e[2]) + (p.get("od") or 0) / 2 + (p.get("insulation_mm") or 0))
+    return {k: float(np.percentile(v, 98) + above_mm) for k, v in tops.items() if v}

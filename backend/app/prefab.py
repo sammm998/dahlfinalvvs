@@ -752,6 +752,11 @@ def _xlsx(s: HangerSet) -> bytes:
                    h.get("status"), (h.get("pack") or {}).get("kolli"), (h.get("pack") or {}).get("seq"), "; ".join(h.get("flags") or [])])
     for c in ws[2]:
         c.font = Font(bold=True)
+    from vvs_engine.hangers import outputs as HO
+    wp = wb.create_sheet("Punktlista")
+    wp.append(HO.POINT_COLUMNS)
+    for row in HO.point_rows(hs, s.name):
+        wp.append(row)
     w2 = wb.create_sheet("Material per hängare")
     w2.append(["Hängare", "Del", "Benämning", "Antal", "Längd mm"])
     for h in hs:
@@ -832,7 +837,12 @@ def export(set_id: str, fmt: str, request: Request, ids: str = "", user: User = 
     if fmt == "ifc":
         return Response(HX.export(s.hangers or [], s.name, s.revision), media_type="application/x-step",
                         headers={"Content-Disposition": f'attachment; filename="{fname}.ifc"'})
-    raise HTTPException(400, "Format: xlsx (material, kapplan, packlista), pdf (etiketter) eller ifc")
+    from .prefab_package import export_more
+    more = export_more(s, fmt)
+    if more is not None:
+        return more
+    raise HTTPException(400, "Format: xlsx (material, kapplan, packlista), pdf (etiketter), ifc, csv (punktlista), "
+                             "dxf (ritunderlag), bcf, rapport (kontrollrapport PDF) eller artiklar (artikellista per zon)")
 
 
 @router.get("/api/hanger-sets/{set_id}/qr/{hid}.svg")

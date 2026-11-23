@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { t as tr, trf, locale } from "../i18n";
+import { PackageStatus, PackageUpload } from "./HangerPackage";
 
 /* SmartHangers (Novipro prefab): rören i IFC-modellen blir prefabricerade upphängningar.
  *
@@ -102,7 +103,8 @@ export default function PrefabPanel({ project }: { project: any }) {
   const download = async (fmt: string, ids = "") => {
     const b: Blob = await (api as any).fetchBlob(`/api/hanger-sets/${open.id}/export.${fmt}${ids ? `?ids=${encodeURIComponent(ids)}` : ""}`);
     const a = document.createElement("a"); a.href = URL.createObjectURL(b);
-    a.download = `smarthangers-rev${open.revision}${fmt === "pdf" ? "-etiketter" : ""}.${fmt}`; a.click();
+    const ext: Record<string, string> = { pdf: "-etiketter.pdf", rapport: "-kontrollrapport.pdf", artiklar: "-artiklar.xlsx", bcf: ".bcfzip", csv: "-punktlista.csv" };
+    a.download = `smarthangers-rev${open.revision}${ext[fmt] || `.${fmt}`}`; a.click();
   };
   const loadCalc = async (body?: any) => { const r = await api.hangerCalc(open.id, body); setCalc(r); };
 
@@ -121,12 +123,13 @@ export default function PrefabPanel({ project }: { project: any }) {
 
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
         <input type="file" accept=".ifc,.zip,.ifczip" id="prefab-ifc" className="file" ref={file} onChange={create} />
-        <label className="pick" htmlFor="prefab-ifc">{busy ? tr("Läser modellen…") : tr("Ny uppsättning från IFC")}</label>
+        <label className="pick" htmlFor="prefab-ifc">{busy ? tr("Läser modellen…") : tr("Snabbt: bara VS-modellen")}</label>
         {sets.map((s) => (
           <button key={s.id} className={`chip${open?.id === s.id ? " on" : ""}`} onClick={() => run(() => api.hangerSet(s.id))}>
             {s.name} · rev {s.revision} · {trf("{0} hängare", s.n)}{s.flagged ? ` · ${trf("{0} flaggade", s.flagged)}` : ""}
           </button>))}
       </div>
+      <PackageUpload projectId={project.id} onCreated={(s) => { show(s); load(); }} />
       {drawings.length > 0 && (
         <details className="settings" style={{ marginTop: 10 }}>
           <summary>{tr("Ingen IFC? Hängare ur de analyserade VS-ritningarna (PDF)")}</summary>
@@ -162,6 +165,8 @@ export default function PrefabPanel({ project }: { project: any }) {
             <button className="secondary small" disabled={!open.hangers?.length} onClick={() => nav(`/montage/${open.id}/${open.hangers[0].id}?läge=produktion`)}>{tr("Produktionsvy")}</button>
             <button className="secondary small" disabled={!open.hangers?.length} onClick={() => nav(`/montage/${open.id}/${open.hangers[0].id}`)}>{tr("Montageguide")}</button>
           </div>
+
+          {open.settings?.files?.length > 0 && <PackageStatus setId={open.id} download={download} onDone={() => run(() => api.hangerSet(open.id))} />}
 
           <div className="row small" style={{ gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
             <b>{tr("Godkännanden")}:</b>
@@ -254,6 +259,10 @@ export default function PrefabPanel({ project }: { project: any }) {
                 {cur.takjarn && <label>{tr("Takjärn mm")} <input style={{ width: 70 }} defaultValue={cur.takjarn.length_mm} onBlur={(e) => Number(e.target.value) !== cur.takjarn.length_mm && patch(cur.id, { takjarn_length_mm: Number(e.target.value) })} /></label>}
                 <select value={cur.status} onChange={(e) => patch(cur.id, { status: e.target.value })}>{STATUSES.map((s) => <option key={s} value={s}>{tr(s)}</option>)}</select>
                 {cur.flags?.length > 0 && <button className="secondary small" onClick={() => patch(cur.id, { clear_flags: true, status: "granskad", comment: tr("flaggor granskade") })}>{tr("Granskad – kvittera flaggor")}</button>}
+                {open.settings?.files?.length > 0 && cur.kind === "takjärn" && <button className="secondary small" disabled={busy} title={tr("Rören på takjärnet hängs var för sig med egna pendlar; gäller vid varje omräkning")}
+                  onClick={() => run(() => api.hangerGroups(open.id, { split: [cur.id] }))}>{tr("Dela upp i pendlar")}</button>}
+                {open.settings?.files?.length > 0 && <button className="secondary small" disabled={busy} title={tr("Rören på de valda hängarna läggs på samma takjärn")}
+                  onClick={() => { const other = prompt(tr("Slå ihop med hängare (ID, kommaseparerade):")); if (other) run(() => api.hangerGroups(open.id, { merge: [cur.id, ...other.split(",").map((x) => x.trim()).filter(Boolean)] })); }}>{tr("Slå ihop till takjärn")}</button>}
                 <button className="secondary small" onClick={() => { if (confirm(tr("Ta bort hängaren?"))) run(async () => { await api.deleteHanger(open.id, cur.id); setSel(""); return api.hangerSet(open.id); }); }}>{tr("Ta bort")}</button>
               </div>
               {cur.flags?.map((f: string) => <div key={f} className="badge small warn" style={{ marginTop: 4, marginRight: 4 }}>{tr(f)}</div>)}
