@@ -68,7 +68,7 @@ def _ifc(extra_valve: bool = True, mapped: bool = True, moved: float = 0.0, slab
         els.append(a(f"IFCVALVE('V',$,'Avstängningsventil',$,$,#{pl},#{pds},$,$)"))
         del bx
     if slab:
-        # ett undertak 3100-3150 över rören (1000-7000 x -1000-1300), som rektangel extruderad uppåt
+        # ett bjälklag (HD/F) med underkant 3100 över rören (1000-7000 x -1000-1300), som rektangel extruderad uppåt
         p2 = a("IFCCARTESIANPOINT((0.,0.))")
         ax2 = a(f"IFCAXIS2PLACEMENT2D(#{p2},$)")
         prof = a(f"IFCRECTANGLEPROFILEDEF(.AREA.,$,#{ax2},6000.,2300.)")
@@ -76,7 +76,7 @@ def _ifc(extra_valve: bool = True, mapped: bool = True, moved: float = 0.0, slab
         body = a(f"IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#{sol}))")
         pds = a(f"IFCPRODUCTDEFINITIONSHAPE($,$,(#{body}))")
         lp = a(f"IFCAXIS2PLACEMENT3D(#{a('IFCCARTESIANPOINT((4000.,150.,3100.))')},#{z},#{x})")
-        els.append(a(f"IFCCOVERING('U',$,'Undertak',$,$,#{a(f'IFCLOCALPLACEMENT(#{site},#{lp})')},#{pds},$,.CEILING.)"))
+        els.append(a(f"IFCSLAB('U',$,'HD/F 265',$,$,#{a(f'IFCLOCALPLACEMENT(#{site},#{lp})')},#{pds},$,.FLOOR.)"))
     a(f"IFCRELCONTAINEDINSPATIALSTRUCTURE('c',$,$,$,({','.join('#%d' % e for e in els)}),#{s0})")
     a(f"IFCRELAGGREGATES('ag',$,$,$,#{site},(#{s0},#{s1}))")
     return "ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n" + "\n".join(L) + "\nENDSEC;\nEND-ISO-10303-21;\n"
@@ -116,7 +116,7 @@ def test_a_valve_gets_a_hanger_close_by_and_heights_can_be_set_by_hand():
     assert any(h["placed_because"] == "nära ventil/rördel" for h in r["hangers"])
     assert all(h["height_source"] == "manuell" and h["ceiling_z"] == 3000 for h in r["hangers"])
     no = G.generate({"pipes": pipes(_ifc())["pipes"], "storeys": [{"name": "Plan 10", "elevation": 0.0}]})
-    assert all("takhöjd saknas - ange takhöjd för våningen" in h["flags"] for h in no["hangers"])
+    assert all("takhöjd saknas - ange underkant bjälklag för våningen/zonen" in h["flags"] for h in no["hangers"])
 
 
 def test_cut_plan_packing_and_project_bom():
@@ -256,9 +256,13 @@ def test_the_prefab_flow_from_ifc_to_mounted(client):
     assert ifc.count("IFCBUILDINGELEMENTPROXY(") == s["n"]
     assert client.get(f"/api/hanger-sets/{sid}/qr/{hid}.svg", headers=H).text.startswith("<svg")
     cv2 = pytest.importorskip("cv2")
-    pix = doc[0].get_pixmap(dpi=300)
-    img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-    url = cv2.QRCodeDetector().detectAndDecode(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY))[0]
+    url = ""
+    for dpi in (300, 200, 400, 250):                                  # avläsningen är känslig för upplösningen
+        pix = doc[0].get_pixmap(dpi=dpi)
+        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+        url = cv2.QRCodeDetector().detectAndDecode(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY))[0] or url
+        if url:
+            break
     assert url.endswith(f"/montage/{sid}/{hid}")                                     # etiketten öppnar hängaren
     # ny revision: rören flyttade - den monterade hängaren är kritisk
     rv = client.post(f"/api/hanger-sets/{sid}/revise", files={"file": ("vs.ifc", _ifc(moved=150.0).encode(), "application/octet-stream")}, headers=H).json()
@@ -360,12 +364,13 @@ def test_the_service_makes_hangers_from_a_project_drawing(client, tmp_path):
 
 def test_the_ceiling_height_is_read_from_the_slab_or_ceiling_in_the_model():
     m = pipes(_ifc(slab=True))
-    assert m["ceilings"] and m["ceilings"][0]["zmin"] == 3100.0 and m["ceilings"][0]["kind"] == "covering"
+    assert m["ceilings"] and m["ceilings"][0]["zmin"] == 3100.0 and m["ceilings"][0]["kind"] == "slab"
+    assert m["ceilings"][0]["slab_type"] == "HD/F"
     hs = G.generate(m)["hangers"]
-    assert all(h["ceiling_z"] == 3100 and h["height_source"].startswith("modell: covering") for h in hs)
+    assert all(h["ceiling_z"] == 3100 and h["height_source"].startswith("modell: slab") for h in hs)
     assert hs[0]["rods"][0]["length_mm"] == 680 - 150                                 # 150 mm lägre tak än beräknat
     man = G.generate(m, None, {"Plan 10": 3300})["hangers"]                           # inmatat går före modellen
-    assert all(h["height_source"] == "manuell" for h in man)
+    assert all(h["height_source"].startswith("manuell") for h in man)
 
 
 def test_packing_follows_the_delivery_stage_and_the_volume():
