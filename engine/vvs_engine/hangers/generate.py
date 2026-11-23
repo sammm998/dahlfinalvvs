@@ -95,8 +95,15 @@ class _P:
         return self.s + self.vec * min(1.0, max(0.0, lam))
 
 
-def _runs(ps: list[_P], rules: dict[str, Any]) -> list[list[_P]]:
-    """Rörstråk: parallella rör nära varandra i sidled med överlappande sträckor (union-find per våning)."""
+def _runs(ps: list[_P], rules: dict[str, Any], groups: dict[str, Any] | None = None) -> list[list[_P]]:
+    """Rörstråk: parallella rör nära varandra i sidled med överlappande sträckor (union-find per våning).
+
+    groups är granskarens ändringar av trapetsgrupperingen: "split" är rör som hängs var för sig (eget stråk,
+    egna pendlar), "merge" är grupper av rör som ska dela takjärn även om regelns sidavstånd inte räcker - så
+    länge de är parallella och överlappar."""
+    groups = groups or {}
+    apart = {str(x) for x in groups.get("split") or []}
+    together = [{str(x) for x in g} for g in groups.get("merge") or [] if len(g) > 1]
     pl = rules["placement"]
     cos_tol = math.cos(math.radians(pl["parallel_angle_deg"]))
     out = []
@@ -126,7 +133,15 @@ def _runs(ps: list[_P], rules: dict[str, Any]) -> list[list[_P]]:
             lo, hi = np.minimum(ps_, pe_), np.maximum(ps_, pe_)
             overlap = (np.minimum(hi, a1) - np.maximum(lo, a0)) > -50
             ok = (cos >= cos_tol) & (lat <= pl["run_max_width"]) & overlap
+            if together:
+                mates = set().union(*[g for g in together if p.id in g]) if any(p.id in g for g in together) else set()
+                if mates:
+                    ok = ok | ((cos >= cos_tol) & overlap & np.array([q.id in mates for q in group]))
+            if p.id in apart:
+                continue
             for j in np.nonzero(ok)[0]:
+                if group[int(j)].id in apart:
+                    continue
                 if j > i:
                     ri, rj = find(i), find(int(j))
                     if ri != rj:
@@ -289,7 +304,7 @@ def _adjust(t: float, point_at, grids: dict, rules: dict[str, Any], spacing: flo
 
 def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_heights: dict[str, float] | None = None,
              project: str = "", revision: str = "A", zone_slab_types: dict[str, str] | None = None,
-             estimate_above: float | None = None) -> dict[str, Any]:
+             estimate_above: float | None = None, groups: dict[str, Any] | None = None) -> dict[str, Any]:
     """Upphängningarna för ett beräkningspaket (package.combine) eller en enskild modell (geometry.read_model).
 
     Per rörstråk: punkterna längs röret (c/c ur regeltabellen, extra punkt vid böj, T-rör, ventil och anslutning,
@@ -343,7 +358,8 @@ def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_
                                                        max(p["start"][2], p["end"][2]) + (p.get("od") or 0) / 2]}
                              for p in model.get("pipes") or []])}
     raw: list[dict[str, Any]] = []
-    for ri, run in enumerate(_runs(hor, rules)):
+    merge_sets = [{str(x) for x in g} for g in (groups or {}).get("merge") or [] if len(g) > 1]
+    for ri, run in enumerate(_runs(hor, rules, groups)):
         longest = max(run, key=lambda p: p.len)
         u = longest.dir
         v = np.array([-u[1], u[0]])
@@ -379,7 +395,8 @@ def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_
                 lev.sort(key=lambda x: x[0])
                 grp: list = []
                 for h in lev:
-                    if grp and h[0] - grp[0][0] > pl["run_max_width"]:
+                    forced = bool(merge_sets) and any({h[2].id, grp[0][2].id} <= m for m in merge_sets) if grp else False
+                    if grp and h[0] - grp[0][0] > pl["run_max_width"] and not forced:
                         raw.append({"run": ri, "t": t, "pipes": grp, "u": u, "v": v, "o": o, "why": moved[t][0], "adj": moved[t][1]})
                         grp = []
                     grp.append(h)

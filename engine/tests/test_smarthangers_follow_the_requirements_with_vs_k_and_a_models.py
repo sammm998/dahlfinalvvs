@@ -128,3 +128,55 @@ def test_slab_types_are_read_from_names_and_materials():
     assert slab_type("HD/F 120/27") == "HD/F" and slab_type("Bjälklag KL-trä 240") == "KL-trä"
     assert slab_type("TRP 45 trapetsplåt") == "Trapetsplåt" and slab_type("Platsgjuten betong 250") == "Platsgjutet"
     assert slab_type("Golv") is None
+
+
+def test_outputs_point_list_articles_ifc_bcf_report_and_dxf():
+    import io
+    import zipfile
+
+    from vvs_engine.hangers import ifc_export as HX
+    from vvs_engine.hangers import outputs as O
+    vs = _vs()
+    vs["pipes"][0]["id"] = "2O2Fr$t4X7Zf8NOew3FLOH"
+    r = G.generate(PK.combine([vs, _k(), _a()]), project="P1")
+    hs = r["hangers"]
+    ifc = HX.export(hs, "P1", "A")
+    assert ifc.count("IFCDISCRETEACCESSORY(") == len(hs) and "'Ror_GlobalId'" in ifc and "2O2Fr$t4X7Zf8NOew3FLOH" in ifc
+    assert "'Infastning'" in ifc and "'Beraknad_langd_mm'" in ifc
+    csv_ = O.point_csv(hs, "P1")
+    head, first = csv_.lstrip("﻿").splitlines()[:2]
+    assert head.split(";")[:3] == ["ID", "Våning", "Zon"] and first.split(";")[0] == hs[0]["id"]
+    assert str(hs[0]["rods"][0]["length_mm"]) in first.split(";") and "2O2Fr$t4X7Zf8NOew3FLOH" in first
+    # artikellistan: priset kommer ur uppslaget, och en del utan träff står kvar utan pris
+    look = lambda d: {"a": "51721010", "n": "Gängstång M10 2 m", "e": "m", "netto": 20.0} if d["part"] == "gängstång" else None
+    rows = O.article_list(hs, look)
+    rod = next(x for x in rows if x["part"] == "gängstång")
+    assert rod["article"] == "51721010" and rod["unit"] == "m" and rod["sum"] == round(rod["amount"] * 20.0, 2)
+    assert any(x["article_source"] == "artikel saknas" and x["sum"] is None for x in rows)
+    tot = O.article_totals(rows)
+    assert tot["total"] > 0 and tot["rows_without_price"] > 0
+    rep = PK.validate([vs, _k()], PK.combine([vs, _k()]))
+    z = zipfile.ZipFile(io.BytesIO(O.bcf_zip("P1", "A", rep, r["findings"], hs)))
+    names = z.namelist()
+    assert "bcf.version" in names and any(n.endswith("markup.bcf") for n in names)
+    vp = [z.read(n).decode() for n in names if n.endswith(".bcfv")]
+    assert any('IfcGuid="' in v for v in vp)
+    pdf = O.report_pdf("P1", "A", rep, r["findings"], hs, G.summary(hs, RL.default()))
+    assert pdf[:4] == b"%PDF"
+    d = O.dxf(hs, vs["pipes"])
+    assert d.count("CIRCLE") == len(hs) and hs[0]["id"] in d and d.rstrip().endswith("EOF")
+
+
+def test_trapeze_groups_can_be_split_and_merged_by_hand():
+    two = [{"id": f"P{i}", "start": [0, y, 2700], "end": [6000, y, 2700], "od": 28.0, "dn": 28, "material": "koppar",
+            "system": "VV1", "insulation_mm": 0.0, "storey": "Plan 1"} for i, y in ((1, 0), (2, 200))]
+    m = PK.combine([_vs(pipes=two), _k()])
+    kinds = lambda r: {h["kind"] for h in r["hangers"]}
+    assert kinds(G.generate(m)) == {"takjärn"}
+    split = G.generate(m, groups={"split": ["P2"]})
+    assert kinds(split) == {"pendel"} and {h["pipes"][0]["id"] for h in split["hangers"]} == {"P1", "P2"}
+    far = [dict(two[0]), dict(two[1], start=[0, 1800, 2700], end=[6000, 1800, 2700])]      # längre isär än regelns 1200
+    m2 = PK.combine([_vs(pipes=far), _k()])
+    assert kinds(G.generate(m2)) == {"pendel"}
+    merged = G.generate(m2, groups={"merge": [["P1", "P2"]]})
+    assert kinds(merged) == {"takjärn"} and all(h["takjarn"]["length_mm"] >= 1800 for h in merged["hangers"])

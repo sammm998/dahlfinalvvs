@@ -174,6 +174,8 @@ from . import offers as offers_api  # noqa: E402
 app.include_router(offers_api.router)
 from . import prefab as prefab_api  # noqa: E402
 app.include_router(prefab_api.router)
+from . import prefab_package as prefab_package_api  # noqa: E402
+app.include_router(prefab_package_api.router)
 
 
 # ---------------------------------------------------------------- health / auth

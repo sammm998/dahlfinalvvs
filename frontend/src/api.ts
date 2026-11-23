@@ -197,6 +197,18 @@ export const api = {
     const fd = new FormData(); fd.append("file", file); fd.append("heights", JSON.stringify(heights));
     return req(`/api/projects/${projectId}/hangers`, { method: "POST", body: fd });
   },
+  createHangerPackage: (projectId: string, files: File[], disciplines: string[], heights: Record<string, string>, estimate: string) => {
+    const fd = new FormData(); files.forEach((f) => fd.append("files", f)); fd.append("disciplines", JSON.stringify(disciplines));
+    fd.append("heights", JSON.stringify(heights)); fd.append("estimate_above", estimate || "");
+    return req(`/api/projects/${projectId}/hanger-packages`, { method: "POST", body: fd });
+  },
+  hangerPackage: (id: string) => req(`/api/hanger-sets/${id}/package`),
+  hangerPackageSettings: (id: string, body: any) =>
+    req(`/api/hanger-sets/${id}/package-settings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  hangerPackageRerun: (id: string) => req(`/api/hanger-sets/${id}/package-rerun`, { method: "POST" }),
+  hangerArticles: (id: string) => req(`/api/hanger-sets/${id}/articles`),
+  hangerGroups: (id: string, body: any) =>
+    req(`/api/hanger-sets/${id}/groups`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   hangerDrawings: (projectId: string) => req(`/api/projects/${projectId}/hangers/drawings`),
   hangersFromDrawing: (projectId: string, body: any) =>
     req(`/api/projects/${projectId}/hangers/from-drawing`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),

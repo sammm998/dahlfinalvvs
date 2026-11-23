@@ -133,6 +133,11 @@ def validate(models: list[dict[str, Any]], merged: dict[str, Any], rules: dict[s
             out.append(finding("V6", "varning", "K-modell saknas - inmatad takhöjd",
                                "Ingen K-modell i paketet. Underkant bjälklag är inmatad per våning/zon och märks så på varje "
                                "upphängning; kontrollera mot konstruktionen."))
+        elif settings.get("estimate_above") not in (None, ""):
+            out.append(finding("V6", "varning", "K-modell saknas - takhöjd uppskattad",
+                               f"Ingen K-modell i paketet. Underkant bjälklag uppskattas till {settings['estimate_above']:.0f} mm "
+                               "över det högsta röret i närheten och märks 'uppskattad' på varje upphängning. Det är ett "
+                               "underlag för offert och mängd - inte för kapning. Ladda upp K-modellen före produktion."))
         elif not merged.get("ceilings"):
             out.append(finding("V6", "stopp", "K-modell saknas",
                                "Ingen K-modell och inget bjälklag i paketet: underkant bjälklag okänd. Ladda upp K-modellen "
