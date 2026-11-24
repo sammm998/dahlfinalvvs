@@ -101,6 +101,7 @@ export const api = {
   deleteProject: (id: string) => req(`/api/projects/${id}`, { method: "DELETE" }),
   upload: (projectId: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/drawings`, { method: "POST", body: fd }); },
   drawing: (id: string) => req(`/api/drawings/${id}`),
+  radiators: (id: string, temps = "55/45/20") => req(`/api/drawings/${id}/radiators?temps=${encodeURIComponent(temps)}`),
   deleteDrawing: (id: string) => req(`/api/drawings/${id}`, { method: "DELETE" }),
   /** scaleRatio: nämnaren i 1:N, för ett blad vars egen stämpel inte räckte. Utelämnad läser bladet självt. */
   /** aiModel: vilken språkmodell som läser - utelämnad frågas den som startar analysen (AiModelDialog). */

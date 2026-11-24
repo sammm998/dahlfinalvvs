@@ -61,4 +61,20 @@ def purge_project(db: Session, p: Project) -> None:
     q(TechSpec).filter(TechSpec.project_id == p.id).delete(synchronize_session=False)
     from .storage import storage
     storage.delete_prefix(f"techspecs/{p.id}")
+    # Allt annat som pekar på projektet (SmartHangers-uppsättningar, offerter, och det som läggs till senare):
+    # en rad som måste ha projektet tas bort, en som kan stå utan släpper det. Utan detta faller borttagningen
+    # på databasens främmande nyckel så fort projektet har något som inte står uppräknat ovan.
+    from sqlalchemy import delete as _delete, update as _update
+    from .db import Base, HangerSet
+    for hs in q(HangerSet).filter(HangerSet.project_id == p.id).all():
+        storage.delete_prefix(f"prefab/{hs.id}")
+    for table in reversed(Base.metadata.sorted_tables):
+        if table.name == "drawings":
+            continue                                   # ritningarna och deras analyser: purge_drawing ovan
+        for col in table.columns:
+            if any(fk.column.table.name == "projects" and fk.column.name == "id" for fk in col.foreign_keys):
+                if col.nullable:
+                    db.execute(_update(table).where(col == p.id).values({col.name: None}))
+                else:
+                    db.execute(_delete(table).where(col == p.id))
     db.flush()

@@ -27,6 +27,7 @@ import { InkIndex, pageInk } from "../cad/pagesnap";
 import { defaultSnaps } from "../cad/model";
 import LegendView from "../components/LegendView";
 import AllDesignations from "../components/AllDesignations";
+import RadiatorPanel from "../components/RadiatorPanel";
 import Reasoning from "../components/Reasoning";
 import { frontierColor, frontierText } from "../frontier";
 import AgentChat from "../components/AgentChat";
@@ -89,7 +90,7 @@ export default function AnalysisPage() {
   // The three things a reader comes here for, and they are not the same thing: what the drawing says its codes
   // mean, the sheet with the reading drawn on it, and how the reading got there. Each had to be dug out of the
   // side panel before; each is a view of its own now.
-  const [view, setView] = useState<"forklaring" | "analys" | "resonemang" | "alla">("analys");
+  const [view, setView] = useState<"forklaring" | "analys" | "resonemang" | "alla" | "radiatorer">("analys");
   const [selIdent, setSelIdent] = useState<string | null>(null);
   const lastSaid = useRef<string | null>(null);
   // Läsningens interna kontroller - täckning, oidentifierad geometri, annoteringar - är till för den som driver
@@ -432,6 +433,7 @@ export default function AnalysisPage() {
           {tr("Alla beteckningar")} ({result.all_designations.totals?.entries ?? result.all_designations.entries?.length ?? 0})
         </button>
       )}
+      <button className={view === "radiatorer" ? "active" : ""} onClick={() => setView("radiatorer")}>{tr("Radiatorer")}</button>
       <button className={view === "resonemang" ? "active" : ""} onClick={() => setView("resonemang")}>{tr("Agenternas resonemang")}</button>
       <span className="spacer" />
       <StatusBadge job={job} />
@@ -454,6 +456,14 @@ export default function AnalysisPage() {
     const attempt = () => { if (viewer.current?.zoomTo(bbox) || ++tries > 40) return; window.setTimeout(attempt, 100); };
     window.setTimeout(attempt, 60);
   };
+  if (view === "radiatorer" && job?.drawing_id) {
+    return (
+      <div className="workspace">
+        {viewtabs}
+        <RadiatorPanel drawingId={job.drawing_id} onZoom={(b) => { setView("analys"); zoomWhenShown(b); }} />
+      </div>
+    );
+  }
   if (view === "alla" && result.all_designations) {
     return (
       <div className="workspace">

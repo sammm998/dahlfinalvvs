@@ -428,6 +428,7 @@ def test_a_model_package_is_read_validated_and_calculated_in_the_background(clie
         assert r.status_code == 200, r.text
         st = client.get(f"/api/hanger-sets/{r.json()['id']}/package", headers=H).json()
         assert st["job"]["state"] == "stoppad" and st["n"] == 0 and any(f["rule"] == "V6" and f["level"] == "stopp" for f in st["validation"])
+        assert st["storeys"] == ["Plan 10"] and st["pipe_count"] > 0          # våningen att ange takhöjd för, trots stoppet
         # en uppskattad höjd släpper beräkningen, märkt som uppskattad
         st2 = client.post(f"/api/hanger-sets/{st['id']}/package-settings", json={"estimate_above": 400}, headers=H).json()
         pk = client.get(f"/api/hanger-sets/{st2['id']}/package", headers=H).json()
@@ -493,3 +494,14 @@ def test_hanger_parts_get_dahl_articles_and_prices_from_the_price_list(client, m
     rail = PP.hanger_article({"part": "takjärn", "text": "Takjärn 41x41 (U-profil)"})
     assert rail["a"] == "T1007" and abs(rail["brutto"] - 300 / 3) < 0.01                                    # kr per meter
     assert PP.hanger_article({"part": "infästning", "text": "Träskruv med gängad hylsa M8"}) is None
+
+
+def test_a_project_with_hangers_and_offers_can_be_deleted(client):
+    H = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "bort@dahl.se", "password": "hemligt1"}).json()["access_token"]}
+    p = client.post("/api/projects", json={"name": "Bort", "contract_form": "ABT06"}, headers=H).json()
+    s = client.post(f"/api/projects/{p['id']}/hangers", files={"file": ("vs.ifc", _ifc().encode(), "application/octet-stream")},
+                    data={"heights": "{}"}, headers=H)
+    assert s.status_code == 200
+    r = client.delete(f"/api/projects/{p['id']}", headers=H)
+    assert r.status_code == 200, r.text
+    assert client.get(f"/api/hanger-sets/{s.json()['id']}", headers=H).status_code == 404

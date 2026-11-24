@@ -19,4 +19,4 @@ vvs-takeoff = "vvs_engine.cli:main"
 include = ["vvs_engine*"]
 
 [tool.setuptools.package-data]
-vvs_engine = ["text/data/*.jhf", "text/data/NOTICE.txt", "profile/data/*.json", "profile/data/styles/*.json", "source_rules/data/*.json", "source_rules/data/styles/*.json", "source_rules/pipestudio/data/*.json", "source_rules/pipestudio/SOURCE.json", "disciplines/data/*.json"]
+vvs_engine = ["text/data/*.jhf", "text/data/NOTICE.txt", "profile/data/*.json", "profile/data/styles/*.json", "source_rules/data/*.json", "source_rules/data/styles/*.json", "source_rules/pipestudio/data/*.json", "source_rules/pipestudio/SOURCE.json", "disciplines/data/*.json", "radiators/*.json"]
