@@ -26,6 +26,8 @@ export default function ProjectPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [ifcKey, setIfcKey] = useState(0);
   const [disciplines, setDisciplines] = useState<Discipline[]>(FALLBACK_DISCIPLINES);
+  // vad nästa uppladdade ritning ska läsas som; tomt = projektets disciplin
+  const [readAs, setReadAs] = useState("");
   // changing the contract form or the discipline afterwards: chosen here, said back, and only then sent
   const [changing, setChanging] = useState<{ contract_form: string; discipline: string; tech_spec: boolean; abt_variant: string } | null>(null);
   useEffect(() => { api.disciplines().then((d) => d?.length && setDisciplines(d)).catch(() => { /* bara VVS */ }); }, []);
@@ -55,7 +57,7 @@ export default function ProjectPage() {
         // en IFC-modell är ingen ritning: den läses till material i IFC-panelen nedanför
         const ifc = /\.(ifc|ifczip|zip)$/i.test(f.name);
         const list = /\.(eml|txt|docx|xlsx|xlsm|csv)$/i.test(f.name);
-        try { const result = ifc ? await api.uploadIfc(id!, f) : list ? await api.uploadMaterialList(id!, f) : await api.upload(id!, f); if (result.duplicate) duplicates++; else uploaded++; if (ifc || list) setIfcKey((k) => k + 1); }
+        try { const result = ifc ? await api.uploadIfc(id!, f) : list ? await api.uploadMaterialList(id!, f) : await api.upload(id!, f, readAs || undefined); if (result.duplicate) duplicates++; else uploaded++; if (ifc || list) setIfcKey((k) => k + 1); }
         catch (ex: any) { failed.push(f); errors.push(`${f.name}: ${ex.message}`); }
       }
       // clearing the field is tidying up after a finished upload, not part of it: if the input is gone by now
@@ -91,6 +93,12 @@ export default function ProjectPage() {
       await load();
     } finally { setBusy(false); setProgress(""); }
   };
+  // en länk från Kom igång (#offert, #smarthangers ...) går till rätt del när sidan har laddat
+  useEffect(() => {
+    if (!project || !window.location.hash) return;
+    const el = document.getElementById(window.location.hash.slice(1));
+    if (el) { if (el.tagName === "DETAILS") (el as HTMLDetailsElement).open = true; window.setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 80); }
+  }, [!!project]);
   const canStart = (d: any) => !d.latest_job || ["COMPLETED", "FAILED"].includes(d.latest_job.status);
   if (!project) return <main>{err ? <p className="error">{err}</p> : "Laddar…"}</main>;
   // ABT 06 med bara teknisk beskrivning: inga ritningar att ladda upp eller läsa, bara beskrivningen
@@ -112,6 +120,11 @@ export default function ProjectPage() {
             title={tr("Vektor-PDF läses ur ritningens egna linjer. En skanning eller bild läses ur bildpunkterna och ska granskas. En IFC-modell (.ifc eller .zip) läses till VVS-material.")}
             onChange={(e) => { const files = e.target.files; setPicked(files?.length === 1 ? files[0].name : files?.length ? trf("{0} filer valda", files.length) : ""); }} />
           <label className="pick" htmlFor="pdf">{picked || tr("Välj PDF, bild eller IFC…")}</label>
+          <label className="small" title={tr("Vad ritningen ska läsas som. Ett projekt kan ha ritningar från flera discipliner.")}>{tr("Läs som")}{" "}
+            <select value={readAs} onChange={(e) => setReadAs(e.target.value)}>
+              <option value="">{trf("Projektets ({0})", tr(disciplines.find((x) => x.id === project.discipline)?.name || project.discipline || "VVS"))}</option>
+              {disciplines.filter((x) => x.status === "active" && x.id !== project.discipline).map((x) => <option key={x.id} value={x.id}>{tr(x.name)}</option>)}
+            </select></label>
           <button onClick={upload} disabled={busy || !picked}>{busy ? tr("Laddar upp…") : tr("Ladda upp")}</button>
           {/* En ritning i taget svarar med meter. Hela handlingen svarar med vad den består av. */}
           <Link to={`/projects/${project.id}/analys`}><button className="secondary">{tr("Analysera projektet")}</button></Link>
@@ -129,11 +142,23 @@ export default function ProjectPage() {
           </div>
         </div>
       )}
-      <TechSpecPanel project={project} />
-      <TechSpecPanel key={`ifc-${ifcKey}`} project={project} source="ifc" />
-      <OfferPanel project={project} />
-      <PrefabPanel project={project} />
-      {project.contract_form === "ABT06" && !specOnly && <AbtPanel project={project} />}
+      <nav className="row small" aria-label={tr("Projektets delar")} style={{ gap: 6, flexWrap: "wrap", marginTop: 14 }}>
+        <span className="muted">{tr("I projektet")}:</span>
+        {!specOnly && <a className="chip" href="#ritningar">{trf("Ritningar och analys ({0})", project.drawings.length)}</a>}
+        {!specOnly && <Link className="chip" to={`/projects/${project.id}/analys`}>{tr("Hela handlingen")}</Link>}
+        <a className="chip" href="#material">{tr("Teknisk beskrivning och material")}</a>
+        <a className="chip" href="#offert">{tr("Offert")}</a>
+        <a className="chip" href="#smarthangers">{tr("SmartHangers (IFC)")}</a>
+        {project.contract_form === "ABT06" && !specOnly && <a className="chip" href="#abt">{tr("ABT 06")}</a>}
+        <Link className="chip" to="/start">{tr("Vad kan jag göra?")}</Link>
+      </nav>
+      <div id="material" style={{ scrollMarginTop: 12 }}>
+        <TechSpecPanel project={project} />
+        <TechSpecPanel key={`ifc-${ifcKey}`} project={project} source="ifc" />
+      </div>
+      <div id="offert" style={{ scrollMarginTop: 12 }}><OfferPanel project={project} /></div>
+      <div id="smarthangers" style={{ scrollMarginTop: 12 }}><PrefabPanel project={project} /></div>
+      {project.contract_form === "ABT06" && !specOnly && <div id="abt" style={{ scrollMarginTop: 12 }}><AbtPanel project={project} /></div>}
       {progress && <p role="status" aria-live="polite">{progress}</p>}
       {notice && <p role="status">{notice}</p>}
       {err && <p className="error" style={{ marginTop: 18, whiteSpace: "pre-line" }}>{err}</p>}
@@ -145,7 +170,8 @@ export default function ProjectPage() {
         <span className="sub">{tr("Kontrollera att samma ritning inte väljs i flera revisioner.")}</span>
       </div>}
 
-      <div className="rule" />
+      <div className="rule" id="ritningar" style={{ scrollMarginTop: 12 }} />
+      <h2 style={{ margin: "6px 0" }}>{tr("Ritningar")}</h2>
       <div className="list">
         {project.drawings.map((d: any, i: number) => (
           <Tilted as="article" deg={2.4} lift={6} className="item" key={d.id}>
@@ -157,6 +183,7 @@ export default function ProjectPage() {
               <Link className="ttl" to={`/drawings/${d.id}`}>{d.filename.replace(/\.pdf$/i, "")}</Link>
               <div className="sub">
                 {d.n_pages} {d.n_pages === 1 ? tr("sida") : tr("sidor")} · {fileSize(d.size_bytes)}
+                {" · "}{tr("läses som")} {tr(disciplines.find((x) => x.id === (d.discipline || project.discipline))?.name || d.discipline || project.discipline)}
                 {d.latest_job && <> · {tr("senast")} <Link to={`/jobs/${d.latest_job.id}`}>{DATE.format(new Date(d.latest_job.created_at))}</Link></>}
               </div>
             </div>

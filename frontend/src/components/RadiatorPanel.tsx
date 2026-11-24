@@ -12,18 +12,19 @@ const STATUS_CLASS: Record<string, string> = { exakt: "ok", "närmaste": "warn",
 
 export default function RadiatorPanel({ drawingId, onZoom }: { drawingId: string; onZoom?: (bbox: number[]) => void }) {
   const [temps, setTemps] = useState("55/45/20");
+  const [prefer, setPrefer] = useState(() => { try { return localStorage.getItem("vvs.rad.prefer") || "length"; } catch { return "length"; } });
   const [res, setRes] = useState<any>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string>("");
 
-  const load = async (t = temps) => {
+  const load = async (t = temps, p = prefer) => {
     setBusy(true); setErr("");
-    try { setRes(await api.radiators(drawingId, t)); } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+    try { setRes(await api.radiators(drawingId, t, p)); } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
   useEffect(() => { load(); }, [drawingId]);
   const xlsx = async () => {
-    const b: Blob = await (api as any).fetchBlob(`/api/drawings/${drawingId}/radiators.xlsx?temps=${encodeURIComponent(temps)}`);
+    const b: Blob = await (api as any).fetchBlob(`/api/drawings/${drawingId}/radiators.xlsx?temps=${encodeURIComponent(temps)}&prefer=${prefer}`);
     const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "radiatorer.xlsx"; a.click();
   };
 
@@ -34,8 +35,13 @@ export default function RadiatorPanel({ drawingId, onZoom }: { drawingId: string
       <p className="muted small" style={{ maxWidth: 800 }}>{tr("Varje radiatoretikett på ritningen (t.ex. TPv4 22-218 med 650W-57l/h-Kv0,25) räknas per hus och korsas mot Altech. Finns samma typ, höjd och längd hos Altech och ger den den projekterade effekten är det en exakt motsvarighet; annars väljs närmaste modell som ger effekten – samma typ före kraftigare, samma höjd före närmaste, samma längd före närmaste, kortare före längre. Skillnaden i effekt, längd och höjd visas, liksom alternativen.")}</p>
       <div className="row small" style={{ gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
         <label>{tr("Temperaturer fram/retur/rum °C")}<br />
-          <select value={temps} onChange={(e) => { setTemps(e.target.value); load(e.target.value); }}>
+          <select value={temps} onChange={(e) => { setTemps(e.target.value); load(e.target.value, prefer); }}>
             {["55/45/20", "60/45/20", "50/40/20", "45/35/20", "70/40/20", "75/65/20"].map((t) => <option key={t} value={t}>{t}</option>)}
+          </select></label>
+        <label>{tr("Vid lucka i Altechs sortiment")}<br />
+          <select value={prefer} onChange={(e) => { const v = e.target.value; setPrefer(v); try { localStorage.setItem("vvs.rad.prefer", v); } catch { /* privat fönster */ } load(temps, v); }}>
+            <option value="length">{tr("Samma längd – högre radiator")}</option>
+            <option value="height">{tr("Samma höjd – längre radiator")}</option>
           </select></label>
         <button className="secondary small" disabled={!s?.total} onClick={xlsx}>{tr("Excel: sammanställning, detaljlista, korsning")}</button>
         {busy && <span className="muted">{tr("Läser ritningen…")}</span>}
