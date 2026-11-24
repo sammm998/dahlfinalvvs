@@ -14,6 +14,7 @@ import Docs from "./pages/Docs";
 import Projects from "./pages/Projects";
 import ProjectPage from "./pages/Project";
 import DrawingPage from "./pages/Drawing";
+import StartPage from "./pages/Start";
 import AnalysisPage from "./pages/Analysis";
 import { LangSwitch } from "./components/SiteHeader";
 import Boundary from "./components/Boundary";
@@ -41,6 +42,15 @@ import { DahlLogo, DahlMark } from "./components/DahlLogo";
 
 function Guard({ children }: { children: JSX.Element }) {
   return getToken() ? children : <Navigate to="/login" replace />;
+}
+
+function IconStart() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M7.4 6.2 12 9l-4.6 2.8V6.2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 function IconProjects() {
@@ -173,6 +183,7 @@ const ROUTES = (
     <Route path="/academy/:kurs" element={<Guard><AcademyCourse /></Guard>} />
     <Route path="/academy/:kurs/:modul/quiz" element={<Guard><QuizPage /></Guard>} />
     <Route path="/certifikat/:code" element={<Guard><CertificatePage /></Guard>} />
+    <Route path="/start" element={<Guard><StartPage /></Guard>} />
     <Route path="/projekt" element={<Guard><Projects /></Guard>} />
     <Route path="/projects/:id" element={<Guard><ProjectPage /></Guard>} />
     <Route path="/projects/:id/analys" element={<Guard><ProjectAnalysisPage /></Guard>} />
@@ -281,6 +292,9 @@ export default function App() {
           <div className="org wide" style={{ marginTop: 10 }}>{tr("Mängdning ur ren vektor")}</div>
         </div>
         <nav>
+          <Link to="/start" className={path.startsWith("/start") ? "on" : ""} title={tr("Allt du kan göra, och var det finns")}>
+            <IconStart /> <span className="wide">{tr("Kom igång")}</span>
+          </Link>
           <Link to="/projekt" className={path.startsWith("/projekt") || path.startsWith("/projects") ? "on" : ""}>
             <IconProjects /> <span className="wide">{tr("Projekt")}</span>
           </Link>

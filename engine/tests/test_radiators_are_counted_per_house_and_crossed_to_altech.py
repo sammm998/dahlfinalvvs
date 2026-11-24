@@ -70,12 +70,18 @@ def test_crossing_follows_the_rules():
     a = x["altech"]
     assert x["status"] == "närmaste" and (a["h"], a["l"], a["type"]) == (300, 1800, "22") and a["dh_mm"] == 100 and a["dl_mm"] == 0
     assert a["dw_need"] == 160 and any("högre" in n for n in a["notes"])
-    assert x["prescribed_w"] == 662 and a["dw_prescribed"] == 148                    # Purmo TPv4 22-218 662 W
+    pres, src = R.prescribed_effect(rad(200, 1800), R.DEFAULT_TEMPS)
+    assert abs(pres - 662) < 10 and "Purmo Thermopanel V4" in src                  # Purmos tabell, ~ Dahls 662 W
+    assert x["prescribed_w"] == pres and a["dw_prescribed"] == a["w"] - pres
     assert any(al["family"] == "KONV" for al in x["alternatives"])
     # samma storlek ger för lite: TPv4 22-316 (780 W) mot Altech D22 300x1600 (720 W) -> närmaste som räcker
     x = R.cross(rad(300, 1600), 780)
     assert x["status"] == "närmaste" and x["altech"]["w"] >= 780 and x["altech"]["notes"][0].startswith("samma storlek finns")
-    assert {al["why"] for al in x["alternatives"]} >= {"samma längd", "kraftigare typ, samma längd"}
+    assert (x["altech"]["h"], x["altech"]["l"]) == (400, 1600)                    # standard: samma längd, högre
+    y = R.cross(rad(300, 1600), 780, prefer="height")
+    assert (y["altech"]["h"], y["altech"]["l"]) == (300, 1800) and y["prefer"].startswith("samma höjd")   # samma höjd, längre
+    assert any(al["why"] == "kraftigare typ, samma längd" for al in x["alternatives"])
+    assert R.prescribed_effect(rad(600, 1200), R.DEFAULT_TEMPS)[0] > 900            # fler storlekar än 200/300 nu
     # kompakt mot typ K, och omräkning till andra temperaturer med n
     k = R.cross(rad(500, 1000, kind="kompakt", fam="C"), None)
     assert k["family"] == "K" and k["status"] == "exakt"

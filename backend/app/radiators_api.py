@@ -1,6 +1,8 @@
 """Radiatorerna på en ritning: mängdning per hus och korsning mot Altech, med Dahls priser.
 
-  GET /api/drawings/{id}/radiators?temps=55/45/20     läsningen, sammanställningen och korsningen
+  GET /api/drawings/{id}/radiators?temps=55/45/20&prefer=length|height
+                                                      läsningen, sammanställningen och korsningen; prefer avgör
+                                                      vad som väger tyngst vid en lucka i Altechs sortiment
   GET /api/drawings/{id}/radiators.xlsx               samma som Excel: sammanställning per hus, detaljlista,
                                                       Altech-korsning med skillnader och alternativ, källor
 
@@ -24,7 +26,7 @@ from .db import Drawing, User, get_db
 from .storage import storage
 
 router = APIRouter(tags=["radiatorer"])
-VERSION = 1
+VERSION = 2
 
 
 def _drawing(db: Session, user: User, did: str) -> Drawing:
@@ -73,15 +75,22 @@ def _prescribed_row(x: dict[str, Any], rows: list[dict]) -> dict | None:
     return min(hits, key=lambda r: float(r.get("pris") or 9e9)) if hits else None
 
 
-def compute(d: Drawing, temps: tuple[float, float, float]) -> dict[str, Any]:
-    key = f"radiators/{d.id}/{d.sha256[:16]}-{'-'.join(f'{t:g}' for t in temps)}-v{VERSION}.json"
+def _prefer(raw: str) -> str:
+    if raw not in RAD.PREFER:
+        raise HTTPException(422, "prefer är length (samma längd, högre radiator) eller height (samma höjd, längre radiator)")
+    return raw
+
+
+def compute(d: Drawing, temps: tuple[float, float, float], prefer: str = "length") -> dict[str, Any]:
+    key = f"radiators/{d.id}/{d.sha256[:16]}-{'-'.join(f'{t:g}' for t in temps)}-{prefer}-v{VERSION}.json"
     if storage.exists(key):
         with storage.open(key) as fh:
             res = json.load(fh)
     else:
         res = RAD.read_pdf(storage.path(d.storage_key))
-        res["cross"] = RAD.cross_all(res, temps)
+        res["cross"] = RAD.cross_all(res, temps, prefer)
         res["temps"] = "/".join(f"{t:g}" for t in temps)
+        res["prefer"] = prefer
         storage.put(key, io.BytesIO(json.dumps(res, ensure_ascii=False).encode("utf-8")))
     # priserna läggs på vid varje fråga: prisfilen kan ha bytts sedan läsningen
     by_rsk, rows, disc = _price_index()
@@ -110,8 +119,9 @@ def compute(d: Drawing, temps: tuple[float, float, float]) -> dict[str, Any]:
 
 
 @router.get("/api/drawings/{drawing_id}/radiators")
-def radiators(drawing_id: str, temps: str = "55/45/20", user: User = Depends(current_user), db: Session = Depends(get_db)):
-    return compute(_drawing(db, user, drawing_id), _temps(temps))
+def radiators(drawing_id: str, temps: str = "55/45/20", prefer: str = "length", user: User = Depends(current_user),
+              db: Session = Depends(get_db)):
+    return compute(_drawing(db, user, drawing_id), _temps(temps), _prefer(prefer))
 
 
 def to_xlsx(d: Drawing, res: dict[str, Any]) -> bytes:
@@ -190,14 +200,16 @@ def to_xlsx(d: Drawing, res: dict[str, Any]) -> bytes:
         "Korsningsregler (i ordning):",
         "1. Exakt: Altech har samma utförande (ventil/kompakt), typ, höjd och längd och den ger minst den projekterade effekten.",
         "2. Lucka: bland Altechs modeller som ger minst den projekterade effekten väljs samma typ före kraftigare typ, "
-        "samma höjd före närmaste höjd, samma längd före närmaste längd, kortare före längre, minsta överskott sist.",
+        "sedan enligt inställningen samma längd före samma höjd (radiatorn blir högre) eller samma höjd före samma "
+        "längd (radiatorn blir längre), kortare före längre, minsta överskott sist.",
+        f"Vald inställning: {RAD.PREFER.get(res.get('prefer') or 'length')}.",
         "3. Räcker ingen: den med högst effekt, flaggad.",
         "Ventilradiator (TPv4, CV, FCV, TP) korsas mot Altech typ D (integrerad ventil); kompakt (C, PC) mot Altech typ K.",
         "Vid föreskriven höjd 200 mm eller lägre visas Altechs låga konvektor som alternativ.",
         "Effekt vid andra temperaturer: Φ = Φ(55/45/20) · (ΔTln/ΔTln,ref)^n med radiatorns n ur Altechs katalog.",
         "",
         f"Altech: {res.get('source')}",
-        f"Föreskriven modells katalogeffekt: {RAD.purmo_reference()['source']}",
+        f"Föreskriven modells katalogeffekt (Purmo Thermopanel V4): {RAD.purmo_reference()['source']}",
         "Priser: Dahls uppladdade prisfil, netto efter grundrabatt per kalkylgrupp där sådan finns.",
     ]:
         w5.append([line])
@@ -214,9 +226,10 @@ def to_xlsx(d: Drawing, res: dict[str, Any]) -> bytes:
 
 
 @router.get("/api/drawings/{drawing_id}/radiators.xlsx")
-def radiators_xlsx(drawing_id: str, temps: str = "55/45/20", user: User = Depends(current_user), db: Session = Depends(get_db)):
+def radiators_xlsx(drawing_id: str, temps: str = "55/45/20", prefer: str = "length", user: User = Depends(current_user),
+                   db: Session = Depends(get_db)):
     d = _drawing(db, user, drawing_id)
-    res = compute(d, _temps(temps))
+    res = compute(d, _temps(temps), _prefer(prefer))
     base = re.sub(r"\.pdf$", "", d.filename or "ritning", flags=re.I)
     return Response(to_xlsx(d, res), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": f'attachment; filename="{base}-radiatorer.xlsx"'})

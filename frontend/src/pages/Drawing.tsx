@@ -77,7 +77,7 @@ export default function DrawingPage() {
         ))}
         {d.jobs.length === 0 && <div className="empty">{tr("Ingen analys körd ännu.")}</div>}
       </div>
-      <details className="settings" style={{ marginTop: 16 }}>
+      <details className="settings" style={{ marginTop: 16 }} id="radiatorer" open={window.location.hash === "#radiatorer"}>
         <summary>{tr("Radiatorer och Altech-korsning")}</summary>
         <RadiatorPanel drawingId={id!} />
       </details>

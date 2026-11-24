@@ -22,8 +22,9 @@ integrerad ventil, kompaktradiator (C, PC, K) mot Altech typ K. Reglerna, i ordn
 1. Exakt: samma typ (11, 21, 22, 33), höjd och längd finns hos Altech -> den.
 2. Lucka: Altech saknar storleken. Kandidaterna är Altechs modeller i samma utförande som ger minst den
    projekterade effekten (eller, utan projekterad effekt, minst den föreskrivna modellens katalogeffekt) vid
-   projektets temperaturer. Bland dem väljs, i ordning: samma typ före en kraftigare typ, samma höjd före
-   närmaste höjd, samma längd före närmaste längd, kortare före längre, och sist minsta överskott.
+   projektets temperaturer. Bland dem väljs, i ordning: samma typ före en kraftigare typ, sedan efter
+   inställningen antingen samma längd före samma höjd (standard: radiatorn ryms där den ska sitta, den blir
+   högre) eller samma höjd före samma längd (den blir längre), kortare före längre, och sist minsta överskott.
 3. Räcker ingen: den som kommer närmast i effekt, flaggad "effekten räcker inte".
 
 Varje korsning visar skillnaden i effekt (W och %), längd och höjd, och vad som ska kontrolleras (fönsterbänk vid
@@ -302,17 +303,20 @@ def effect_at(model: dict[str, Any], temps: tuple[float, float, float]) -> tuple
 
 
 def prescribed_effect(r: dict[str, Any], temps: tuple[float, float, float]) -> tuple[float | None, str]:
-    """Den föreskrivna modellens katalogeffekt där referensdata finns (Purmo typ 22 H200/H300 ur underlaget)."""
+    """Den föreskrivna modellens katalogeffekt: Purmo Thermopanel V4 (Standard; Plan för FTP/Plan) ur Purmos
+    beräkningsverktyg, W/m vid 75/65/20 och n per typ och höjd, omräknad till projektets temperaturer.
+    Andra fabrikat och serier (Compact, CV) har ingen referensdata än - då jämförs mot projekterad effekt."""
+    if r.get("kind") != "ventil" or (r.get("family") or "TPV4") not in ("TPV4", "TPV", "TP"):
+        return None, ""
     ref = purmo_reference()
-    key = f"{r['kind']}-{r['type']}-{r['h']}"
-    row = (ref.get("w_per_m_55_45") or {}).get(key)
+    series = "plan" if "PLAN" in str(r.get("series") or "").upper() else "standard"
+    row = (ref.get("series") or {}).get(series, {}).get(f"{int(r['type'])}-{int(r['h'])}")
     if row is None:
         return None, ""
-    w55 = row * r["l"] / 1000
-    if tuple(float(t) for t in temps) == DEFAULT_TEMPS:
-        return round(w55), ref["source"]
-    w = w55 * (lmtd(*temps) / lmtd(*DEFAULT_TEMPS)) ** float(ref.get("n", 1.3))
-    return round(w), ref["source"] + f", omräknad med n = {ref.get('n', 1.3)}"
+    w75 = float(row["w_per_m_75_65"]) * r["l"] / 1000
+    w = w75 * (lmtd(*temps) / lmtd(*ref["reference_temps"])) ** float(row["n"])
+    return round(w), (f"Purmo Thermopanel V4 {series}, {row['w_per_m_75_65']:g} W/m vid 75/65/20, n = {row['n']:g}, "
+                      f"omräknad till {'/'.join(f'{t:g}' for t in temps)}")
 
 
 # ---------------------------------------------------------------- korsningen
@@ -321,8 +325,11 @@ def _models(family: str) -> list[dict[str, Any]]:
     return [m for m in altech()["models"] if m["family"] == family]
 
 
+PREFER = {"length": "samma längd (högre radiator vid lucka)", "height": "samma höjd (längre radiator vid lucka)"}
+
+
 def cross(r: dict[str, Any], need_w: float | None = None, temps: tuple[float, float, float] = DEFAULT_TEMPS,
-          max_alternatives: int = 3) -> dict[str, Any]:
+          max_alternatives: int = 3, prefer: str = "length") -> dict[str, Any]:
     """Föreskriven radiator (beteckningens typ, höjd, längd, utförande) mot Altech.
 
     need_w: den effekt som ska uppnås (projekterad effekt ur ritningen, största för beteckningen). Saknas den
@@ -347,7 +354,10 @@ def cross(r: dict[str, Any], need_w: float | None = None, temps: tuple[float, fl
         m, w, _ = c
         dl = m["l"] - r["l"]
         h_rank = sorted(heights, key=lambda h: (abs(h - r["h"]), h < r["h"])).index(m["h"]) if m["h"] in heights else 99
-        return (m["type"] != r["type"], TYPE_ORDER.index(m["type"]), h_rank, abs(dl), dl > 0, w - (need or 0))
+        if prefer == "height":
+            return (m["type"] != r["type"], TYPE_ORDER.index(m["type"]), h_rank, abs(dl), dl > 0, w - (need or 0))
+        # samma längd först: radiatorn ryms under fönstret/på väggen, höjden får växa
+        return (m["type"] != r["type"], TYPE_ORDER.index(m["type"]), abs(dl), dl > 0, h_rank, w - (need or 0))
 
     ok = [c for c in cands if need is None or c[1] >= need - 0.5]
     status = "exakt" if exact and (need is None or exact[1] >= need - 0.5) else None
@@ -359,7 +369,7 @@ def cross(r: dict[str, Any], need_w: float | None = None, temps: tuple[float, fl
         best, status = max(cands, key=lambda c: (c[1], -abs(c[0]["l"] - r["l"]))), "räcker inte"
     else:
         return {"status": "saknas", "family": fam, "notes": ["Altech har inget i det utförandet"]}
-    out = {"status": status, "family": fam, "basis": basis, "need_w": round(need) if need else None,
+    out = {"status": status, "family": fam, "basis": basis, "prefer": PREFER.get(prefer, prefer), "need_w": round(need) if need else None,
            "temps": "/".join(f"{t:g}" for t in temps), "prescribed_w": pres_w, "prescribed_source": pres_src,
            "altech": _describe(best, r, need, pres_w, exact is not None and status != "exakt")}
     # alternativen, ett av varje slag så att valet syns: samma längd (närmaste höjd), samma höjd och längd i en
@@ -425,7 +435,7 @@ def _describe(c, r, need, pres_w, exact_too_weak: bool) -> dict[str, Any]:
     return out
 
 
-def cross_all(read: dict[str, Any], temps: tuple[float, float, float] = DEFAULT_TEMPS) -> list[dict[str, Any]]:
+def cross_all(read: dict[str, Any], temps: tuple[float, float, float] = DEFAULT_TEMPS, prefer: str = "length") -> list[dict[str, Any]]:
     """En korsning per föreskriven beteckning, mot den största projekterade effekten för den, och en kontroll
     av varje enskild radiator mot den valda Altechmodellen."""
     by: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -434,7 +444,7 @@ def cross_all(read: dict[str, Any], temps: tuple[float, float, float] = DEFAULT_
     out = []
     for des, rs in sorted(by.items(), key=lambda kv: (kv[1][0]["type"], kv[1][0]["h"], kv[1][0]["l"])):
         ws = [x["w"] for x in rs if x["w"] is not None]
-        x = cross(rs[0], max(ws) if ws else None, temps)
+        x = cross(rs[0], max(ws) if ws else None, temps, prefer=prefer)
         a = (x.get("altech") or {})
         under = [y["nr"] for y in rs if y["w"] is not None and a.get("w") is not None and a["w"] < y["w"] - 0.5]
         out.append({"designation": des, "maker": rs[0]["maker"], "series": rs[0]["series"], "kind": rs[0]["kind"],

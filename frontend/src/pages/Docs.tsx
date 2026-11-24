@@ -1,11 +1,44 @@
 import { useEffect, useMemo, useState } from "react";
 import { t as tr } from "../i18n";
 import SiteHeader from "../components/SiteHeader";
+import { Link } from "react-router-dom";
+import { GUIDE } from "../guide";
 
 
 type Sec = { id: string; h: string; body: JSX.Element };
 
+/* Guiden för den som använder tjänsten: varje funktion, var den finns och hur den går till. Samma lista som
+ * Kom igång-sidan i appen visar med knappar (src/guide.ts). */
+const GUIDE_SECTION: Sec = {
+  id: "guide",
+  h: "Guide: så hittar du allt",
+  body: (
+    <>
+      <p>
+        {tr("Efter inloggningen finns allt under")} <b>{tr("Kom igång")}</b> {tr("överst i menyn till vänster")} (<Link to="/start">/start</Link>).
+        {" "}{tr("Där väljer du vad du vill göra, vilket projekt och vilken fil – ritningen laddas upp med rätt disciplin och läsningen startar. I ett projekt finns en rad överst med projektets delar: ritningar och analys, hela handlingen, teknisk beskrivning och material, offert, SmartHangers och ABT 06. Vid uppladdningen väljer du vad ritningen ska läsas som (VVS, El, Ventilation, Sprinkler, Kyla, Bygg eller Alla), så kan ett projekt ha ritningar från flera discipliner.")}
+      </p>
+      {GUIDE.map((g) => (
+        <div key={g.id}>
+          <h3>{tr(g.title)}</h3>
+          <p className="muted">{tr(g.lede)}</p>
+          <dl className="lf-terms">
+            {g.tasks.map((t) => (
+              <div key={t.id}>
+                <dt>{tr(t.title)}</dt>
+                <dd>
+                  {tr(t.what)} <i>{tr("Du behöver")}:</i> {tr(t.need)} <i>{tr("Finns under")}:</i> {tr(t.where)}.
+                  <ol className="steps">{t.steps.map((x) => <li key={x}>{tr(x)}</li>)}</ol>
+                </dd>
+              </div>))}
+          </dl>
+        </div>))}
+    </>
+  ),
+};
+
 const SECTIONS: Sec[] = [
+  GUIDE_SECTION,
   {
     id: "principen",
     h: "Principen",

@@ -99,9 +99,11 @@ export const api = {
   putEstimate: (projectId: string, body: any) =>
     req(`/api/projects/${projectId}/estimate`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   deleteProject: (id: string) => req(`/api/projects/${id}`, { method: "DELETE" }),
-  upload: (projectId: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/drawings`, { method: "POST", body: fd }); },
+  // discipline: vad ritningen ska läsas som (vvs, el, ventilation ...); tomt = projektets disciplin
+  upload: (projectId: string, file: File, discipline?: string) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/drawings${discipline ? `?discipline=${encodeURIComponent(discipline)}` : ""}`, { method: "POST", body: fd }); },
   drawing: (id: string) => req(`/api/drawings/${id}`),
-  radiators: (id: string, temps = "55/45/20") => req(`/api/drawings/${id}/radiators?temps=${encodeURIComponent(temps)}`),
+  radiators: (id: string, temps = "55/45/20", prefer = "length") =>
+    req(`/api/drawings/${id}/radiators?temps=${encodeURIComponent(temps)}&prefer=${prefer}`),
   deleteDrawing: (id: string) => req(`/api/drawings/${id}`, { method: "DELETE" }),
   /** scaleRatio: nämnaren i 1:N, för ett blad vars egen stämpel inte räckte. Utelämnad läser bladet självt. */
   /** aiModel: vilken språkmodell som läser - utelämnad frågas den som startar analysen (AiModelDialog). */

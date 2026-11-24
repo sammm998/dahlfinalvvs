@@ -45,7 +45,8 @@ export default function Projects() {
       <p className="crumb">{tr("/ Projekt")}</p>
       <div className="head">
         <div>
-          <h1>Projekt</h1>
+          <h1>{tr("Projekt")}</h1>
+          <p className="small muted" style={{ margin: "2px 0 0" }}>{tr("Osäker på var något finns?")} <Link to="/start">{tr("Kom igång: allt du kan göra, steg för steg")}</Link></p>
           <p className="lead">{tr("Mängder ur ritningen, med belägg för varje meter")}</p>
         </div>
         <button onClick={() => setOpen(!open)}>{open ? tr("Avbryt") : tr("+ Nytt projekt")}</button>
@@ -101,7 +102,7 @@ export default function Projects() {
           </Tilted>
         ))}
         {shown.length === 0 && (
-          <div className="empty">{projects.length ? "Inget projekt matchar sökningen." : "Inga projekt ännu — skapa det första."}</div>
+          <div className="empty">{projects.length ? tr("Inget projekt matchar sökningen.") : <>{tr("Inga projekt ännu — skapa det första, eller")} <Link to="/start">{tr("börja på Kom igång")}</Link>.</>}</div>
         )}
       </div>
     </main>

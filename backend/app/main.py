@@ -533,6 +533,10 @@ async def upload_drawing(project_id: str, file: UploadFile = File(...), discipli
     digest = hashlib.sha256(data).hexdigest()
     existing = db.query(Drawing).filter(Drawing.project_id == p.id, Drawing.sha256 == digest).first()
     if existing is not None:
+        # samma fil igen, men vald att läsas som en annan disciplin: nästa läsning görs som den nya
+        if own_discipline and (existing.discipline or "") != own_discipline:
+            existing.discipline = own_discipline
+            db.commit()
         return {**_drawing_out(existing), "duplicate": True}
     d = Drawing(project_id=p.id, filename=filename, storage_key="", sha256=digest,
                 size_bytes=len(data), n_pages=n_pages, discipline=own_discipline or "")
