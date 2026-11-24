@@ -1,0 +1,9 @@
+{
+  "source": "Purmo Thermopanel V4-serien 2024 (tpv4serie2024_sept_web.pdf, purmo.com), typ 22 vid 55/45/20 °C, enligt Dahls underlag för Najaden 1 - verifiera mot aktuell katalog",
+  "n": 1.3,
+  "n_note": "antagen exponent för omräkning till andra temperaturer",
+  "w_per_m_55_45": {
+    "ventil-22-200": 368.0,
+    "ventil-22-300": 492.5
+  }
+}

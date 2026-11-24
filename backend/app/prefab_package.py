@@ -135,7 +135,10 @@ def _run(sid: str, reread: bool) -> None:
                            "ceilings": len(m.get("ceilings") or []), "walls": len(m.get("walls") or []),
                            "openings": len(m.get("openings") or [])} for m in models]
             s.settings = {**st, "validation": report[:400], "validation_summary": PK.summary(report), "files_read": files_info,
-                          "has": merged.get("has")}
+                          "has": merged.get("has"),
+                          # våningarna ur rören, så att en takhöjd kan anges även när kontrollen stoppat beräkningen
+                          "storeys_read": sorted({str(p_.get("storey")) for p_ in merged.get("pipes") or [] if p_.get("storey")}),
+                          "pipe_count": len(merged.get("pipes") or [])}
             _save_json(_key(sid, "validation.json.gz"), report)
             if stop:
                 s.hangers = []
@@ -305,7 +308,7 @@ def package_status(set_id: str, user: User = Depends(current_user), db: Session 
     job = dict(st.get("job") or {})
     if job and not job.get("done") and s.id not in _running:
         job.update(state="avbruten", step="tjänsten startades om under läsningen - kör om", done=True)
-    storeys = sorted({h.get("storey") for h in s.hangers or [] if h.get("storey")} |
+    storeys = sorted(set(st.get("storeys_read") or []) | {h.get("storey") for h in s.hangers or [] if h.get("storey")} |
                      {p.get("storey") for p in (s.pipes or {}).get("pipes") or [] if p.get("storey")})
     zones = sorted({f"{h.get('storey')}|{h.get('zone')}" for h in s.hangers or [] if h.get("zone") and h.get("kind") != "stigare"})
     return {"id": s.id, "job": job, "files": [{"name": f["name"], "discipline": f["discipline"]} for f in st.get("files") or []],
@@ -314,7 +317,8 @@ def package_status(set_id: str, user: User = Depends(current_user), db: Session 
             "findings": st.get("findings") or [], "findings_summary": st.get("findings_summary") or {},
             "manual_heights": st.get("manual_heights") or {}, "zone_slab_types": st.get("zone_slab_types") or {},
             "estimate_above": st.get("estimate_above"), "storeys": storeys, "zones": zones, "groups": st.get("groups") or {},
-            "slab_types": sorted((P.rules().get("anchors") or {}).keys()), "n": len(s.hangers or [])}
+            "slab_types": sorted((P.rules().get("anchors") or {}).keys()), "n": len(s.hangers or []),
+            "pipe_count": st.get("pipe_count")}
 
 
 @router.post("/api/hanger-sets/{set_id}/package-rerun")

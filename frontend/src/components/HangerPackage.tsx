@@ -131,6 +131,16 @@ export function PackageStatus({ setId, onDone, download }: { setId: string; onDo
           {pk.files_read.map((f: any) => <div key={f.file_name}>{f.discipline}: {f.file_name} · {f.application || ""} · {f.timestamp || ""} · {trf("{0} rör, {1} bjälklag/balkar, {2} väggar, {3} håltagningar", f.pipes, f.ceilings, f.walls, f.openings)}</div>)}
         </div>)}
 
+      {job.state === "stoppad" && (pk.validation || []).some((f: any) => f.rule === "V6" && f.level === "stopp") && (
+        <div className="card" style={{ marginTop: 8, padding: 10, borderLeft: "4px solid #c88a12" }}>
+          <b>{tr("Takhöjden saknas – ingen K-modell i paketet")}</b>
+          <p className="small" style={{ margin: "4px 0" }}>{trf("Rören är lästa ({0} st), men utan bjälklag ovanför kan gängstängerna inte räknas. Välj ett av:", pk.pipe_count ?? "–")}</p>
+          <div className="row small" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button className="small" onClick={() => save({ estimate_above: 150 })}>{tr("Uppskatta: bjälklaget 150 mm över de högsta rören, och räkna")}</button>
+            <span className="muted">{tr("eller ange underkant bjälklag per våning nedan, eller ladda upp K-modellen i ett nytt paket.")}</span>
+          </div>
+          <p className="muted small" style={{ margin: "4px 0 0" }}>{tr("En uppskattad höjd märks på varje hängare och duger för offert och mängd, inte för kapning.")}</p>
+        </div>)}
       {pk.validation?.length > 0 && (
         <details className="settings" style={{ marginTop: 8 }} open={job.state === "stoppad"}>
           <summary>{trf("Kontrollrapport V1–V11: {0} stopp, {1} varningar, {2} info", vs.stopp || 0, vs.varning || 0, vs.info || 0)}</summary>

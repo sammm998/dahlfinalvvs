@@ -97,7 +97,8 @@ export default function PrefabPanel({ project }: { project: any }) {
     try { const r = await f(); if (r && r.hangers) show(r); await load(); return r; }
     catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
-  const create = () => { const f = file.current?.files?.[0]; if (f) run(() => api.createHangerSet(project.id, f, heights)); };
+  // en enda IFC går samma väg som paketet: läses i bakgrunden, kontrolleras och visar vad som saknas (takhöjd)
+  const create = () => { const f = file.current?.files?.[0]; if (f) run(() => api.createHangerPackage(project.id, [f], ["VS"], {}, "")); };
   const revise = () => { const f = revFile.current?.files?.[0]; if (f && open) run(() => api.reviseHangerSet(open.id, f)); };
   const patch = (hid: string, body: any) => run(async () => { await api.patchHanger(open.id, hid, body); return api.hangerSet(open.id); });
   const download = async (fmt: string, ids = "") => {
@@ -166,6 +167,11 @@ export default function PrefabPanel({ project }: { project: any }) {
             <button className="secondary small" disabled={!open.hangers?.length} onClick={() => nav(`/montage/${open.id}/${open.hangers[0].id}`)}>{tr("Montageguide")}</button>
           </div>
 
+          {!open.settings?.files?.length && (() => {
+            const noHeight = (open.hangers || []).filter((h: any) => h.kind !== "stigare" && !h.rods?.[0]?.length_mm).length;
+            return noHeight > 0 ? <p className="badge warn" style={{ display: "block", marginTop: 8 }}>
+              {trf("{0} av {1} hängare saknar takhöjd och därmed gängstångslängd: ange underkant bjälklag per våning under \"Takhöjder per våning\" nedan, eller ladda upp modellen igen (med K-modellen om den finns) så kontrolleras den och kan uppskattas.", noHeight, open.n)}</p> : null;
+          })()}
           {open.settings?.files?.length > 0 && <PackageStatus setId={open.id} download={download} onDone={() => run(() => api.hangerSet(open.id))} />}
 
           <div className="row small" style={{ gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { t as tr, locale } from "../i18n";
 import { Link, useParams } from "react-router-dom";
+import RadiatorPanel from "../components/RadiatorPanel";
 import { api, fileSize } from "../api";
 import { StatusBadge, stageText } from "../components/Status";
 import Tilted from "../components/Tilted";
@@ -76,6 +77,10 @@ export default function DrawingPage() {
         ))}
         {d.jobs.length === 0 && <div className="empty">{tr("Ingen analys körd ännu.")}</div>}
       </div>
+      <details className="settings" style={{ marginTop: 16 }}>
+        <summary>{tr("Radiatorer och Altech-korsning")}</summary>
+        <RadiatorPanel drawingId={id!} />
+      </details>
     </main>
   );
 }
