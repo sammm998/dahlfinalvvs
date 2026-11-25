@@ -132,5 +132,11 @@ def test_the_service_reads_crosses_prices_and_exports(tmp_path_factory, monkeypa
         assert wb.sheetnames == ["Sammanställning", "Detaljlista", "Altech-korsning", "Alternativ", "Regler och källor"]
         rows = list(wb["Sammanställning"].iter_rows(values_only=True))
         assert rows[2][4:6] == ("Hus 1", "Hus 2") and rows[-4 if rows[-1][0] and "utan" in str(rows[-1][0]) else -3][6] == 7
+        # radiatorerna går in i offerten som Altech-rader med antal ur ritningen och pris ur prisfilen
+        o = c.post(f"/api/projects/{p['id']}/offers", json={"kind": "materialoffert"}, headers=H)
+        assert o.status_code == 200, o.text
+        rad = next(r for r in o.json()["rows"] if "TPv4 22-218" in r["text"])
+        assert rad["rsk"] == "6672288" and rad["antal"] == 2 and rad["netto"] == 800.0 and rad["summa"] == 1600.0
+        assert any("närmaste Altech" in f for f in rad["flaggor"])
         other = {"Authorization": "Bearer " + c.post("/api/auth/register", json={"email": "annan@dahl.se", "password": "hemligt1"}).json()["access_token"]}
         assert c.get(f"/api/drawings/{did}/radiators", headers=other).status_code == 404
