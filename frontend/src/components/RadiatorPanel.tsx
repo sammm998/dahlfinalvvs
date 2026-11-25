@@ -32,7 +32,7 @@ export default function RadiatorPanel({ drawingId, onZoom }: { drawingId: string
   return (
     <section className="card" style={{ marginTop: 12 }}>
       <h2 style={{ margin: 0 }}>{tr("Radiatorer och Altech-korsning")}</h2>
-      <p className="muted small" style={{ maxWidth: 800 }}>{tr("Varje radiatoretikett på ritningen (t.ex. TPv4 22-218 med 650W-57l/h-Kv0,25) räknas per hus och korsas mot Altech. Finns samma typ, höjd och längd hos Altech och ger den den projekterade effekten är det en exakt motsvarighet; annars väljs närmaste modell som ger effekten – samma typ före kraftigare, samma höjd före närmaste, samma längd före närmaste, kortare före längre. Skillnaden i effekt, längd och höjd visas, liksom alternativen.")}</p>
+      <p className="muted small" style={{ maxWidth: 800 }}>{tr("Varje radiatoretikett på ritningen (t.ex. TPv4 22-218 med 650W-57l/h-Kv0,25) räknas per hus och korsas mot Altech. Finns samma typ, höjd och längd hos Altech och ger den den projekterade effekten är det en exakt motsvarighet; annars väljs närmaste modell som ger effekten – samma typ före kraftigare, och sedan efter valet nedan antingen samma längd (radiatorn blir högre) eller samma höjd (den blir längre), kortare före längre. Skillnaden i effekt, längd och höjd visas, liksom alternativen.")}</p>
       <div className="row small" style={{ gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
         <label>{tr("Temperaturer fram/retur/rum °C")}<br />
           <select value={temps} onChange={(e) => { setTemps(e.target.value); load(e.target.value, prefer); }}>
@@ -57,7 +57,11 @@ export default function RadiatorPanel({ drawingId, onZoom }: { drawingId: string
           <span className="badge">{trf("{0} W projekterat", kr(s.w_total))}</span>
           {s.zones.filter(Boolean).map((z: string) => <span key={z} className="badge">{z}: {s.per_zone[z]}</span>)}
           {res.totals?.price_list
-            ? <span className="badge">{trf("Altech {0} kr · föreskrivet {1} kr", kr(res.totals.altech), res.totals.prescribed ? kr(res.totals.prescribed) : "–")}</span>
+            ? <><span className="badge">{trf("Altech {0} kr", kr(res.totals.altech))}</span>
+              {res.totals.prescribed_designations_with_price > 0
+                ? <span className="badge" title={tr("Jämförelsen görs bara på de beteckningar där prisfilen har den föreskrivna modellen.")}>
+                    {trf("Där föreskriven modell har pris ({0} av {1} beteckningar): föreskrivet {2} kr, Altech {3} kr", res.totals.prescribed_designations_with_price, res.totals.designations, kr(res.totals.prescribed), kr(res.totals.altech_same_designations))}</span>
+                : <span className="badge">{tr("Föreskrivna modeller saknas i prisfilen – ingen prisjämförelse")}</span>}</>
             : <span className="badge warn">{tr("Ingen prisfil uppladdad – priser saknas")}</span>}
         </div>
         <div className="tablewrap" style={{ marginTop: 8, overflow: "auto" }}>

@@ -104,8 +104,8 @@ export const GUIDE: GuideGroup[] = [
     tasks: [
       {
         id: "offert", title: "Offert ur mängden", action: { kind: "project", anchor: "offert" },
-        what: "Offert med Dahls artiklar och priser (netto efter kundens rabatter) ur projektets mängder och material.",
-        need: "Minst en analyserad ritning eller materiallista. Dahls prisfil uppladdad (Offert → Offertdata).",
+        what: "Offert med Dahls artiklar och priser (netto efter kundens rabatter) ur projektets underlag: beskrivningens och listornas material, och radiatorerna på ritningarna korsade till Altech.",
+        need: "Ett underlag i projektet: teknisk beskrivning, materiallista, IFC-modell eller en VS-ritning med radiatorer (de korsas till Altech). Dahls prisfil uppladdad (Offert → Offertdata).",
         where: "Projekt → projektet → Offert",
         steps: ["Öppna projektet och delen Offert.", "Välj kund – rabatterna hämtas.", "Gå igenom raderna: osäkra artikelval är markerade och kan bytas.", "Exportera offerten (Excel eller kundversion)."],
       },

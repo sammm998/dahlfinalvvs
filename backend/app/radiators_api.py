@@ -95,8 +95,8 @@ def compute(d: Drawing, temps: tuple[float, float, float], prefer: str = "length
     # priserna läggs på vid varje fråga: prisfilen kan ha bytts sedan läsningen
     by_rsk, rows, disc = _price_index()
     fam_of = {r["designation"]: r["family"] for r in res["radiators"]}
-    tot_pres = tot_alt = 0.0
-    missing = 0
+    tot_pres = tot_alt = same_alt = 0.0
+    missing = n_pres = 0
     for x in res["cross"]:
         x["family_written"] = fam_of.get(x["designation"])
         pres = _price(_prescribed_row({**x, "family": x["family_written"]}, rows), disc) if rows else None
@@ -112,8 +112,13 @@ def compute(d: Drawing, temps: tuple[float, float, float], prefer: str = "length
             missing += 1
         if unit(pres) is not None:
             tot_pres += unit(pres) * x["count"]
+            n_pres += 1
+            if unit(a.get("price")) is not None:
+                same_alt += unit(a["price"]) * x["count"]
+    # det föreskrivna har pris bara där prisfilen har modellen: jämförelsen görs på just de beteckningarna
     res["totals"] = {"altech": round(tot_alt, 2), "prescribed": round(tot_pres, 2), "altech_rows_without_price": missing,
-                     "price_list": bool(rows)}
+                     "prescribed_designations_with_price": n_pres, "designations": len(res["cross"]),
+                     "altech_same_designations": round(same_alt, 2), "price_list": bool(rows)}
     res["source"] = RAD.altech()["source"]
     return res
 
@@ -179,7 +184,11 @@ def to_xlsx(d: Drawing, res: dict[str, Any]) -> bytes:
                    ", ".join(str(n) for n in x.get("radiators_under") or [])])
     w3.append([])
     t = res.get("totals") or {}
-    w3.append(["Summa", "", "", "", "", "", "", "", "", "", "", "", "", "", t.get("prescribed"), "", t.get("altech")])
+    w3.append(["Summa Altech, alla", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", t.get("altech")])
+    if t.get("prescribed_designations_with_price"):
+        w3.append([f"Jämförbart: de {t['prescribed_designations_with_price']} av {t.get('designations')} beteckningar där "
+                   "prisfilen har den föreskrivna modellen", "", "", "", "", "", "", "", "", "", "", "", "", "",
+                   t.get("prescribed"), "", t.get("altech_same_designations")])
     for c in w3[w3.max_row]:
         c.font = bold
     if not t.get("price_list"):

@@ -368,11 +368,63 @@ def _build(db: Session, o: Offer) -> None:
                                     ["kalkylen saknar material - öppna ritningens kalkyl"], "kalla": "ritning",
                                     "tim_per_enhet": t.get("timmar"), "tim_kalla": "Normtid VVS via ritningskalkylen"},
                                    st.get("hourly_rate") or 0))
+    rows += _radiator_rows(db, o, terms, purchase, st.get("hourly_rate") or 0)
     o.customer_name = (terms or {}).get("namn") or o.customer_name
     o.rows = rows
     o.settings = dict(st)
     flag_modified(o, "settings")
     o.updated_at = dt.datetime.now(dt.timezone.utc)
+
+
+def _radiator_drawings(db: Session, project_id: str) -> list:
+    """Projektets ritningar med radiatoretiketter (läsningen är billig och sparas per ritning)."""
+    from .db import Drawing
+    from . import radiators_api as RA
+    out = []
+    for d in db.query(Drawing).filter(Drawing.project_id == project_id).all():
+        try:
+            res = RA.compute(d, (55.0, 45.0, 20.0), "length")
+        except Exception:                                     # noqa: BLE001 - en oläslig ritning hoppas över
+            continue
+        if res.get("summary", {}).get("total"):
+            out.append((d, res))
+    return out
+
+
+def _radiator_rows(db: Session, o: Offer, terms, purchase, hourly_rate: float) -> list[dict[str, Any]]:
+    """Radiatorerna på projektets ritningar som offertrader: den föreskrivna radiatorn korsad till Altech (Dahls eget
+    märke) enligt radiatorkorsningen, med antal ur ritningen och kundens pris. Skillnaden mot föreskriven modell
+    står som flagga, så att säljaren ser vad som ska stämmas av med projektören."""
+    st = o.settings or {}
+    if st.get("radiators") is False:
+        return []
+    from . import radiators_api as RA
+    rows = []
+    for d, _ in _radiator_drawings(db, o.project_id):
+        res = RA.compute(d, tuple(float(x) for x in (st.get("radiator_temps") or "55/45/20").split("/")),
+                         st.get("radiator_prefer") or "length")
+        for x in res.get("cross") or []:
+            a = x.get("altech") or {}
+            rsk = str((a.get("rsk") or [""])[0])
+            price = OF.customer_price(rsk, _book(), terms) if rsk else {"brutto": None, "rabattgrupp": "", "rabatt_pct": None,
+                                                                         "netto": None, "pris_enligt": ""}
+            flags = []
+            if x.get("status") != "exakt":
+                flags.append(f"korsad till närmaste Altech ({x.get('status')}): " + "; ".join(a.get("notes") or [])[:300])
+            if x.get("radiators_under"):
+                flags.append(f"Altech ger för lite för radiator nr {', '.join(map(str, x['radiators_under']))}")
+            if price.get("netto") is None and rsk:
+                flags.append("pris saknas")
+            row = {"id": f"rad-{d.id}-{x['designation']}", "pos": "", "text": f"Radiator {x['designation']} ({x['h']}×{x['l']} mm), {d.filename}",
+                   "foreskrift": f"{x.get('maker') or ''} {x.get('series') or ''} {x['designation']}".strip(),
+                   "rsk": rsk, "artikel": a.get("name") or "", "val": f"Altech-korsning: {x.get('status')}",
+                   "antal": x.get("count"), "enhet": "st", **price,
+                   "inkop": purchase.get(rsk), "flaggor": flags, "kalla": "ritning (radiatorer)", "option": False,
+                   "mangd_kalla": f"radiatoretiketter på ritningen, {x.get('count')} st", "reglerbar": False, "artikelstatus": ""}
+            if o.kind == "kalkyloffert":
+                row["tim_per_enhet"], row["tim_kalla"] = None, ""
+            rows.append(OF.compute(row, hourly_rate))
+    return rows
 
 
 @router.post("/api/projects/{project_id}/offers")
@@ -383,8 +435,9 @@ def create_offer(project_id: str, body: OfferIn, user: User = Depends(current_us
         raise HTTPException(422, "Offerten är en materialoffert eller en kalkyloffert")
     specs = body.spec_ids or [s.id for s in db.query(TechSpec).filter(TechSpec.project_id == p.id,
                                                                       TechSpec.status == "COMPLETED").all()]
-    if not specs:
-        raise HTTPException(422, "Projektet har inget matchat underlag att göra en offert av")
+    if not specs and not _radiator_drawings(db, p.id):
+        raise HTTPException(422, "Projektet har inget underlag att göra en offert av: ladda upp en teknisk beskrivning, "
+                                 "en materiallista eller en IFC-modell, eller en VS-ritning med radiatorer")
     n = db.query(Offer).count() + 1
     o = Offer(project_id=p.id, kind=body.kind, title=body.title or p.name, customer_no=body.customer_no.strip(),
               sources=specs, created_by=user.email, number=f"{dt.date.today():%y%m}-{n:04d}",
