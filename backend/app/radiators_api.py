@@ -242,3 +242,56 @@ def radiators_xlsx(drawing_id: str, temps: str = "55/45/20", prefer: str = "leng
     base = re.sub(r"\.pdf$", "", d.filename or "ritning", flags=re.I)
     return Response(to_xlsx(d, res), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": f'attachment; filename="{base}-radiatorer.xlsx"'})
+
+
+# ---------------------------------------------------------------- Golden Standard (korsning mot Altech + Prixel)
+
+from fastapi import File, Form, UploadFile  # noqa: E402
+
+from vvs_engine.radiators import golden as GOLD  # noqa: E402
+
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _golden_response(run: dict[str, Any], fmt: str):
+    if fmt == "xlsx":
+        if run["export_blocked"]:
+            raise HTTPException(409, "Exporten är stoppad av en blockerande QA-kontroll: "
+                                + "; ".join(f"{c['id']} {c['area']}" for c in run["qa"] if c["status"] == "FAIL" and c["blocking"]))
+        return Response(GOLD.to_xlsx(run), media_type=XLSX,
+                        headers={"Content-Disposition": f'attachment; filename="{run["filename"]}"'})
+    return run
+
+
+@router.post("/api/radiators/golden")
+async def golden_from_list(file: UploadFile | None = File(None), rows: str = Form(""), project: str = Form("Projekt"),
+                           program: str = Form(GOLD.PROGRAM), fmt: str = Form("json"),
+                           user: User = Depends(current_user)):
+    """Kundens radiatorlista (Excel) eller rader som JSON -> korsning, Prixel, avvikelser och QA A-I."""
+    if file is not None:
+        data = await file.read()
+        if len(data) > 20 * 1024 * 1024:
+            raise HTTPException(413, "Filen är större än 20 MB")
+        try:
+            src = GOLD.rows_from_xlsx(data)
+        except Exception as e:  # noqa: BLE001 - trasig eller skyddad fil
+            raise HTTPException(400, f"Kunde inte läsa Excel-filen: {e}") from e
+        if not src:
+            raise HTTPException(400, "Hittade ingen rubrikrad med benämning och antal i filen")
+    else:
+        try:
+            src = json.loads(rows or "[]")
+        except ValueError as e:
+            raise HTTPException(400, "rows ska vara JSON") from e
+    return _golden_response(GOLD.run(src, project=project or "Projekt", program=program), fmt)
+
+
+@router.get("/api/drawings/{drawing_id}/radiators/golden")
+def golden_from_drawing(drawing_id: str, project: str = "", fmt: str = "json", user: User = Depends(current_user),
+                        db: Session = Depends(get_db)):
+    """Ritningens radiatorer korsade enligt Golden Standard."""
+    d = _drawing(db, user, drawing_id)
+    res = compute(d, (55.0, 45.0, 20.0))
+    run = GOLD.run(GOLD.rows_from_reader(res), project=project or re.sub(r"\.pdf$", "", d.filename or "Projekt", flags=re.I))
+    run["notice"] = res.get("notice")
+    return _golden_response(run, fmt)

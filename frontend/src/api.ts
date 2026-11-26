@@ -102,6 +102,28 @@ export const api = {
   // discipline: vad ritningen ska läsas som (vvs, el, ventilation ...); tomt = projektets disciplin
   upload: (projectId: string, file: File, discipline?: string) => { const fd = new FormData(); fd.append("file", file); return req(`/api/projects/${projectId}/drawings${discipline ? `?discipline=${encodeURIComponent(discipline)}` : ""}`, { method: "POST", body: fd }); },
   drawing: (id: string) => req(`/api/drawings/${id}`),
+  radiatorsGolden: (id: string) => req(`/api/drawings/${id}/radiators/golden`),
+  radiatorsGoldenList: (file: File, project: string) => {
+    const fd = new FormData(); fd.append("file", file); fd.append("project", project);
+    return req("/api/radiators/golden", { method: "POST", body: fd });
+  },
+  radiatorsGoldenListXlsx: async (file: File, project: string) => {
+    const fd = new FormData(); fd.append("file", file); fd.append("project", project); fd.append("fmt", "xlsx");
+    const res = await fetch("/api/radiators/golden", { method: "POST", body: fd, headers: { Authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) throw await failure(res);
+    return res.blob();
+  },
+  // ---- KAM: prisjustering för KAM-kund (simulerad, ingen M3-koppling) ----
+  kamStatus: () => req("/api/kam/status"),
+  kamCases: () => req("/api/kam/cases"),
+  kamCase: (id: string) => req(`/api/kam/cases/${id}`),
+  kamCreate: (body: any) => req("/api/kam/cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  kamStatistics: (id: string, file: File) => { const fd = new FormData(); fd.append("file", file); return req(`/api/kam/cases/${id}/statistics`, { method: "POST", body: fd }); },
+  kamStatisticsFromOffers: (id: string) => req(`/api/kam/cases/${id}/statistics/offers`, { method: "POST" }),
+  kamProposal: (id: string, body: any) => req(`/api/kam/cases/${id}/proposal`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  kamAction: (id: string, action: "submit" | "approve" | "reject" | "register", comment = "") =>
+    req(`/api/kam/cases/${id}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ comment }) }),
+  kamDelete: (id: string) => req(`/api/kam/cases/${id}`, { method: "DELETE" }),
   radiators: (id: string, temps = "55/45/20", prefer = "length") =>
     req(`/api/drawings/${id}/radiators?temps=${encodeURIComponent(temps)}&prefer=${prefer}`),
   deleteDrawing: (id: string) => req(`/api/drawings/${id}`, { method: "DELETE" }),

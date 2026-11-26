@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { api } from "../api";
 import { t as tr, trf, locale } from "../i18n";
+import GoldenPanel from "./GoldenPanel";
 
 /* Radiatorerna på ritningen: varje etikett (TPv4 22-218 med 650W-57l/h-Kv0,25) räknad per hus, och korsad mot
  * Altech – exakt där Altech har storleken, annars närmaste modell som ger den projekterade effekten, med
@@ -29,7 +30,7 @@ export default function RadiatorPanel({ drawingId, onZoom }: { drawingId: string
   };
 
   const s = res?.summary;
-  return (
+  return (<>
     <section className="card" style={{ marginTop: 12 }}>
       <h2 style={{ margin: 0 }}>{tr("Radiatorer och Altech-korsning")}</h2>
       <p className="muted small" style={{ maxWidth: 800 }}>{tr("Varje radiatoretikett på ritningen (t.ex. TPv4 22-218 med 650W-57l/h-Kv0,25) räknas per hus och korsas mot Altech. Finns samma typ, höjd och längd hos Altech och ger den den projekterade effekten är det en exakt motsvarighet; annars väljs närmaste modell som ger effekten – samma typ före kraftigare, och sedan efter valet nedan antingen samma längd (radiatorn blir högre) eller samma höjd (den blir längre), kortare före längre. Skillnaden i effekt, längd och höjd visas, liksom alternativen.")}</p>
@@ -50,7 +51,7 @@ export default function RadiatorPanel({ drawingId, onZoom }: { drawingId: string
       {res && !s?.total && (
         <p className="muted small" style={{ marginTop: 8 }}>{res.no_text_pages?.length
           ? tr("Ritningen har ingen läsbar text (skannad bild) – radiatoretiketterna kan inte läsas. Ladda upp den ursprungliga PDF:en från CAD.")
-          : tr("Inga radiatoretiketter hittades på ritningen (t.ex. TPv4 22-218, CV22-512, C22-300-1200).")}</p>)}
+          : tr("Inga radiatoretiketter hittades som text på ritningen (t.ex. TPv4 22-218, CV22-512, C22-300-1200). Syns beteckningarna ändå på ritningen är texten utritad som linjer vid PDF-utskriften och kan inte läsas – ladda upp en PDF utskriven med text, eller kundens radiatorlista som Excel under Kom igång.")}</p>)}
       {s?.total > 0 && (<>
         <div className="row small" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
           <span className="badge">{trf("{0} radiatorer", s.total)}</span>
@@ -119,5 +120,6 @@ export default function RadiatorPanel({ drawingId, onZoom }: { drawingId: string
         <p className="muted small">{tr("Källa Altech")}: {res.source}</p>
       </>)}
     </section>
-  );
+    {s?.total > 0 && <GoldenPanel drawingId={drawingId} />}
+  </>);
 }

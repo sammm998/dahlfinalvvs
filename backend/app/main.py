@@ -187,6 +187,8 @@ from . import prefab_package as prefab_package_api  # noqa: E402
 app.include_router(prefab_package_api.router)
 from . import radiators_api  # noqa: E402
 app.include_router(radiators_api.router)
+from . import kam  # noqa: E402
+app.include_router(kam.router)
 
 
 # ---------------------------------------------------------------- health / auth
