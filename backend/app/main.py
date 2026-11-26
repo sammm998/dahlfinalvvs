@@ -49,6 +49,11 @@ async def _lifespan(_app: FastAPI):
     if os.environ.get("PYTEST_CURRENT_TEST") is None:
         from .reset_once import run as _reset_once
         _reset_once(storage.path(""))
+        try:                        # ägarens engångstömning av ritningar och modeller (purge_once.py)
+            from .purge_once import run as _purge_once
+            _purge_once(storage.path(""))
+        except Exception as e:      # noqa: BLE001 - tjänsten startar ändå
+            print(f"[tömning] kunde inte tömma: {type(e).__name__}: {e}", flush=True)
         try:                        # 5 000 kr av budgeten är redan förbrukade före nystarten: en rad, en gång
             from .db import SessionLocal
             with SessionLocal() as _db:
