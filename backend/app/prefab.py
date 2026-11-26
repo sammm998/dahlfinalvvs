@@ -147,6 +147,13 @@ def _log(s: HangerSet, user: User, action: str, hanger: str | None = None, **kw)
     s.log = (s.log or []) + [{"at": _now(), "user": user.email, "action": action, "hanger": hanger, **kw}]
 
 
+def production_status(s: HangerSet) -> str:
+    """Bara en uppsättning som är frisläppt för produktion med verifierade regler är produktionsgodkänd. Allt
+    annat - testberäkningar, overifierade regler, uppskattade eller manuella höjder - är det inte, och märks så."""
+    ok = bool((s.approvals or {}).get("produktion")) and bool((s.settings or {}).get("rules_verified"))
+    return "PRODUKTIONSGODKÄND" if ok else "EJ PRODUKTIONSGODKÄND"
+
+
 def _out(s: HangerSet, full: bool = True) -> dict[str, Any]:
     hs = s.hangers or []
     st = s.settings or {}
@@ -154,6 +161,8 @@ def _out(s: HangerSet, full: bool = True) -> dict[str, Any]:
     for h in hs:
         counts[h.get("status") or "föreslagen"] = counts.get(h.get("status") or "föreslagen", 0) + 1
     base = {"id": s.id, "project_id": s.project_id, "name": s.name, "revision": s.revision,
+            "production_status": production_status(s), "blocked_reason": st.get("blocked_reason"),
+            "excluded_models": st.get("excluded") or {},
             "source_filename": s.source_filename, "approvals": s.approvals or {}, "n": len(hs), "status_counts": counts,
             "flagged": sum(1 for h in hs if h.get("flags")), "rules_version": st.get("rules_version"),
             "rules_verified": st.get("rules_verified"), "updated_at": s.updated_at}
@@ -752,7 +761,7 @@ def _xlsx(s: HangerSet) -> bytes:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Hängare"
-    ws.append([f"SmartHangers {s.name} - revision {s.revision}", "", "", f"Regler v{(s.settings or {}).get('rules_version')}"
+    ws.append([f"SmartHangers {s.name} - revision {s.revision} - {production_status(s)}", "", "", f"Regler v{(s.settings or {}).get('rules_version')}"
                + ("" if (s.settings or {}).get("rules_verified") else " EXEMPEL - EJ VERIFIERADE")])
     ws.append(["ID", "Våning", "Zon", "Typ", "X", "Y", "Tak Z", "Höjdkälla", "Pendel mm", "Gängstång", "Takjärn mm",
                "Rör", "Last kN", "Status", "Kolli", "Packsekvens", "Flaggor"])
@@ -767,7 +776,7 @@ def _xlsx(s: HangerSet) -> bytes:
     from vvs_engine.hangers import outputs as HO
     wp = wb.create_sheet("Punktlista")
     wp.append(HO.POINT_COLUMNS)
-    for row in HO.point_rows(hs, s.name):
+    for row in HO.point_rows(hs, s.name, production_status(s)):
         wp.append(row)
     w2 = wb.create_sheet("Material per hängare")
     w2.append(["Hängare", "Del", "Benämning", "Antal", "Längd mm"])
@@ -824,6 +833,8 @@ def _labels_pdf(s: HangerSet, base: str, only: list[str] | None = None) -> bytes
                                    color=None, fill=(0, 0, 0), width=0)
         page.insert_text((4 * mm, 14 * mm), h["id"], fontsize=24, fontname="hebo")
         pk = h.get("pack") or {}
+        if production_status(s) != "PRODUKTIONSGODKÄND":
+            page.insert_text((4 * mm, 48 * mm), "EJ PRODUKTIONSGODKÄND", fontsize=7, fontname="hebo", color=(0.8, 0, 0))
         lines = [s.name[:34], f"{h['storey']} · {h.get('zone') or ''}", f"Revision {h.get('revision') or s.revision} · {h['kind']}",
                  f"Kolli {pk.get('kolli', '-')} · nr {pk.get('seq', '-')}" + (f" · {pk['etapp']}" if pk.get("etapp") else ""),
                  f"Pendel {(h.get('rods') or [{}])[0].get('length_mm') or '-'} mm" + (f" · takjärn {h['takjarn']['length_mm']} mm" if h.get("takjarn") else "")]
@@ -847,7 +858,7 @@ def export(set_id: str, fmt: str, request: Request, ids: str = "", user: User = 
         return Response(_labels_pdf(s, _base_url(request), only), media_type="application/pdf",
                         headers={"Content-Disposition": f'attachment; filename="{fname}-etiketter.pdf"'})
     if fmt == "ifc":
-        return Response(HX.export(s.hangers or [], s.name, s.revision), media_type="application/x-step",
+        return Response(HX.export(s.hangers or [], s.name, s.revision, production_status(s)), media_type="application/x-step",
                         headers={"Content-Disposition": f'attachment; filename="{fname}.ifc"'})
     from .prefab_package import export_more
     more = export_more(s, fmt)

@@ -156,6 +156,7 @@ export default function PrefabPanel({ project }: { project: any }) {
         <div style={{ marginTop: 14 }}>
           <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <b>{open.name} · {tr("revision")} {open.revision}</b>
+            <span className={`badge ${open.production_status === "PRODUKTIONSGODKÄND" ? "ok" : "warn"}`} title={tr("Produktionsgodkänd blir uppsättningen först när reglerna är verifierade av en tekniskt ansvarig och produktionen är frisläppt. Allt dessförinnan är testberäkning.")}>{tr(open.production_status || "EJ PRODUKTIONSGODKÄND")}</span>
             <span className="badge">{trf("{0} hängare", open.n)}</span>
             {open.flagged > 0 && <span className="badge warn">{trf("{0} flaggade", open.flagged)}</span>}
             {Object.entries(open.status_counts || {}).map(([k, v]) => <span key={k} className="badge" style={{ borderLeft: `4px solid ${statusColor(k)}` }}>{tr(k)} {String(v)}</span>)}
@@ -172,13 +173,19 @@ export default function PrefabPanel({ project }: { project: any }) {
             return noHeight > 0 ? <p className="badge warn" style={{ display: "block", marginTop: 8 }}>
               {trf("{0} av {1} hängare saknar takhöjd och därmed gängstångslängd: ange underkant bjälklag per våning under \"Takhöjder per våning\" nedan, eller ladda upp modellen igen (med K-modellen om den finns) så kontrolleras den och kan uppskattas.", noHeight, open.n)}</p> : null;
           })()}
+          {open.n === 0 && open.blocked_reason && <p className="error" style={{ marginTop: 8 }}><b>{tr("0 hängare")}:</b> {tr(open.blocked_reason)}</p>}
+          {Object.keys(open.excluded_models || {}).length > 0 && <p className="badge warn" style={{ display: "block", marginTop: 8 }}>
+            {trf("Exkluderad ur beräkningen: {0}", Object.entries(open.excluded_models).map(([f, w]: [string, any]) => `${f} (${(w as string[]).join(", ")})`).join("; "))}</p>}
           {open.settings?.files?.length > 0 && <PackageStatus key={`${open.id}-${open.revision}-${open.settings?.job?.updated || ""}`} setId={open.id} download={download} onDone={() => run(() => api.hangerSet(open.id))} />}
 
           <div className="row small" style={{ gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
             <b>{tr("Godkännanden")}:</b>
             {(["offert", "konstruktion", "produktion"] as const).map((k) => (
               ap[k] ? <span key={k} className="badge ok">{tr(k)} ✓ {ap[k].by} {String(ap[k].at).slice(0, 10)}</span>
-                : <button key={k} className="secondary small" disabled={busy} onClick={() => run(() => api.approveHangerSet(open.id, k))}>{trf("Godkänn {0}", tr(k))}</button>))}
+                : <button key={k} className="secondary small" disabled={busy || (k === "produktion" && !open.rules_verified)}
+                    title={k === "produktion" && !open.rules_verified ? tr("Produktionen kan frisläppas först när en administratör har verifierat reglerna (Regeluppsättning längst ned). Testberäkningen fungerar ändå.") : ""}
+                    onClick={() => run(() => api.approveHangerSet(open.id, k))}>{trf("Godkänn {0}", tr(k))}</button>))}
+            {!open.rules_verified && <span className="muted small">{tr("Testberäkning: reglerna är inte verifierade – produktion kan inte frisläppas.")}</span>}
           </div>
 
           <details className="settings" style={{ marginTop: 10 }}>

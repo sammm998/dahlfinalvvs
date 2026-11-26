@@ -234,6 +234,49 @@ def zone_model_check(pipes: list[dict[str, Any]], min_run: int = 20, share: floa
     return out
 
 
+USES = {"K": "bjälklag, balkar och håltagningar (underkant bjälklag, ankare)", "A": "väggavstånd, undertak och A-modellens bjälklag",
+        "Ö": "kollisionskontrollen", "VS": "rören"}
+
+
+def _file_name(m: dict[str, Any]) -> str:
+    return (m.get("header") or {}).get("file_name") or (m.get("discipline") or "")
+
+
+def run_checks(models: list[dict[str, Any]], rules: dict[str, Any] | None = None,
+               settings: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]], dict[str, list[str]]]:
+    """Kontrollrapporten, och vad som görs med den: en Stopp som gäller en annan modell än VS (V1 nollpunkt, V2
+    våningsplan, V3 enhet) stoppar inte beräkningen - den modellen tas ur paketet, flaggas tydligt, och de delar
+    av beräkningen som behöver den får klara sig utan (K/KP bär, manuell underkant där inget bjälklag finns).
+    Bara det som gäller VS-modellen eller beräkningen i stort (V6 utan någon höjd alls) stoppar.
+
+    Returnerar (modellerna som används, sammanslagningen, rapporten, {fil: [skäl]} för de uteslutna)."""
+    report = validate(models, combine(models), rules, settings)
+    vs_names = {_file_name(m) for m in models if (m.get("discipline") or "VS").upper() == "VS"}
+    by_name = {_file_name(m): m for m in models}
+    excluded: dict[str, list[dict[str, Any]]] = {}
+    for f in blocking(report):
+        files = [x.strip() for x in (f.get("file") or "").split(" / ") if x.strip()]
+        culprits = [x for x in files if x in by_name and x not in vs_names]
+        if culprits:
+            excluded.setdefault(culprits[-1], []).append(f)
+    if not excluded:
+        return models, combine(models), report, {}
+    used = [m for m in models if _file_name(m) not in excluded]
+    merged = combine(used)
+    out = validate(used, merged, rules, settings)
+    for fn, fs in excluded.items():
+        disc = (by_name[fn].get("discipline") or "Ö").upper()
+        for f in fs:
+            out.append({**f, "level": "varning", "excluded": True, "title": f"{f['title']} - modellen exkluderad"})
+        out.append(finding(fs[0]["rule"], "varning", f"Modell exkluderad: {fn}",
+                           f"{fn} används inte i beräkningen ({'; '.join(f['title'] for f in fs)}). Det den skulle ge - "
+                           f"{USES.get(disc, 'stödgeometri')} - kommer från de andra modellerna eller manuella värden. "
+                           "Rätta modellen och ladda upp den som ny revision.", file=fn, excluded=True))
+    order = {"stopp": 0, "varning": 1, "info": 2}
+    out.sort(key=lambda f: (order.get(f["level"], 3), f["rule"]))
+    return used, merged, out, {fn: [f["title"] for f in fs] for fn, fs in excluded.items()}
+
+
 def blocking(report: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Stopp som gäller hela beräkningen (inte ett enskilt rör)."""
     return [f for f in report if f["level"] == "stopp" and not f.get("per_pipe")]

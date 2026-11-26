@@ -369,8 +369,8 @@ def test_the_ceiling_height_is_read_from_the_slab_or_ceiling_in_the_model():
     hs = G.generate(m)["hangers"]
     assert all(h["ceiling_z"] == 3100 and h["height_source"].startswith("modell: slab") for h in hs)
     assert hs[0]["rods"][0]["length_mm"] == 680 - 150                                 # 150 mm lägre tak än beräknat
-    man = G.generate(m, None, {"Plan 10": 3300})["hangers"]                           # inmatat går före modellen
-    assert all(h["height_source"].startswith("manuell") for h in man)
+    man = G.generate(m, None, {"Plan 10": 3300})["hangers"]                           # modellens bjälklag går före
+    assert all(h["height_source"].startswith("modell: slab") and h["ceiling_z"] == 3100 for h in man)  # det inmatade
 
 
 def test_packing_follows_the_delivery_stage_and_the_volume():
@@ -429,6 +429,8 @@ def test_a_model_package_is_read_validated_and_calculated_in_the_background(clie
         st = client.get(f"/api/hanger-sets/{r.json()['id']}/package", headers=H).json()
         assert st["job"]["state"] == "stoppad" and st["n"] == 0 and any(f["rule"] == "V6" and f["level"] == "stopp" for f in st["validation"])
         assert st["storeys"] == ["Plan 10"] and st["pipe_count"] > 0          # våningen att ange takhöjd för, trots stoppet
+        assert st["blocked_reason"].startswith(f"{st['pipe_count']} rör identifierade - hängarberäkningen blockerad av V6")
+        assert st["production_status"] == "EJ PRODUKTIONSGODKÄND"
         # en uppskattad höjd släpper beräkningen, märkt som uppskattad
         st2 = client.post(f"/api/hanger-sets/{st['id']}/package-settings", json={"estimate_above": 400}, headers=H).json()
         pk = client.get(f"/api/hanger-sets/{st2['id']}/package", headers=H).json()

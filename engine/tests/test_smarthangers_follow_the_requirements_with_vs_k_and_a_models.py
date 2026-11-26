@@ -197,3 +197,24 @@ def test_storeys_are_matched_on_number_and_height_not_on_exact_names():
     k3["storeys"] = [{"name": "Plan 40", "elevation": 90000.0}]                        # ingenting gemensamt
     assert any(f["title"] == "Inga gemensamma våningsplan" and f["level"] == "stopp" for f in PK.validate([vs, k3], PK.combine([vs, k3])))
     assert PK.storey_key("PLAN 09 M30") == PK.storey_key("Plan 9") == PK.storey_key("09") == 9 and PK.storey_key("Takplan") is None
+
+
+def test_a_wrong_a_model_is_excluded_and_k_carries_with_manual_height_where_k_has_nothing():
+    vs = _vs()
+    vs["storeys"] = [{"name": "PLAN 09 M30", "elevation": 0.0}, {"name": "Plan 1", "elevation": None}]
+    vs["pipes"].append({"id": "Z", "start": [20000, 0, 2700], "end": [26000, 0, 2700], "od": 22.0, "dn": 22,
+                        "material": "koppar", "system": "VV1", "insulation_mm": 0.0, "storey": "Plan 1"})   # utanför K:s bjälklag
+    k = _k()
+    k["header"]["file_name"] = "4075-KP-23.ifc"
+    a = _a()
+    a["storeys"] = [{"name": "09", "elevation": 1670.0}]                                  # 1670 mm fel på Plan 09
+    used, merged, rep, excluded = PK.run_checks([vs, k, a], None, {"manual_heights": {"Plan 1": 3300}})
+    assert list(excluded) == ["A.ifc"] and not PK.blocking(rep)
+    assert any(f["title"].startswith("Modell exkluderad: A.ifc") for f in rep)
+    assert merged["has"] == {"VS": True, "K": True, "A": False}
+    hs = G.generate(merged, None, {"Plan 1": 3300})["hangers"]
+    on_k = [h for h in hs if h["pipes"][0]["id"] == "A"]
+    off_k = [h for h in hs if h["pipes"][0]["id"] == "Z"]
+    assert on_k and all(h["height_source"].startswith("modell: slab") for h in on_k)        # K före manuell
+    assert off_k and all(h["height_source"].startswith("manuell") for h in off_k)           # manuell där K saknar
+    assert all(h["rods"][0]["length_mm"] for h in on_k + off_k)

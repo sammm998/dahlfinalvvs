@@ -110,6 +110,8 @@ export default function HangerPage() {
           onKeyDown={(e) => e.key === "Enter" && search && go(search)} style={{ width: 150 }} />
         <Link className="button secondary small" to={`/montage/${setId}/${encodeURIComponent(hid)}${prod ? "" : "?läge=produktion"}`}>{prod ? tr("Montageläge") : tr("Produktionsläge")}</Link>
       </div>
+      {d.set.production_status !== "PRODUKTIONSGODKÄND" && (
+        <p className="error" style={{ margin: "10px 0 0", fontWeight: 700, letterSpacing: 0.5 }}>{tr("EJ PRODUKTIONSGODKÄND – testberäkning, kapa och montera inte efter detta")}</p>)}
       <div className="card" style={{ marginTop: 10, borderLeft: `8px solid ${statusColor(h.status, h.deviation)}` }}>
         <div className="row" style={{ alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h1 style={{ margin: 0, fontSize: 34 }}>{h.id}</h1>

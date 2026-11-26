@@ -23,14 +23,14 @@ from .ifc_export import guid
 POINT_COLUMNS = ["ID", "Våning", "Zon", "Typ", "X", "Y", "Z underkant bjälklag", "Höjdkälla", "Bjälklagstyp", "Infästning",
                  "Gängstång", "Kaplängd mm", "Beräknad längd mm", "Takjärn mm", "Avstånd vägg mm", "Vägg",
                  "Avstånd undertak mm", "Last kN", "Punktlast kg", "Rör (GlobalId)", "Rör", "Artiklar", "Placerad",
-                 "Status", "Kolli", "Flaggor", "IFC GlobalId"]
+                 "Status", "Kolli", "Flaggor", "IFC GlobalId", "Produktionsstatus"]
 
 
 def _rod(h: dict[str, Any]) -> dict[str, Any]:
     return (h.get("rods") or [{}])[0]
 
 
-def point_rows(hangers: list[dict[str, Any]], project: str = "") -> list[list[Any]]:
+def point_rows(hangers: list[dict[str, Any]], project: str = "", status: str = "EJ PRODUKTIONSGODKÄND") -> list[list[Any]]:
     out = []
     for h in hangers:
         r, p = _rod(h), h.get("position") or {}
@@ -44,17 +44,17 @@ def point_rows(hangers: list[dict[str, Any]], project: str = "") -> list[list[An
             ", ".join(f"{pp.get('material')} {pp.get('dn') or pp.get('od')}" for pp in h.get("pipes") or []),
             "; ".join(f"{b['qty']} x {b['text']}" + (f" {b['length_mm']} mm" if b.get("length_mm") else "") for b in h.get("bom") or []),
             h.get("placed_because"), h.get("status"), (h.get("pack") or {}).get("kolli"), "; ".join(h.get("flags") or []),
-            guid(f"{project}:{h['id']}"),
+            guid(f"{project}:{h['id']}"), status,
         ])
     return out
 
 
-def point_csv(hangers: list[dict[str, Any]], project: str = "") -> str:
+def point_csv(hangers: list[dict[str, Any]], project: str = "", status: str = "EJ PRODUKTIONSGODKÄND") -> str:
     """Punktlistan som CSV med semikolon (svensk Excel öppnar den direkt)."""
     b = io.StringIO()
     w = csv.writer(b, delimiter=";")
     w.writerow(POINT_COLUMNS)
-    w.writerows(point_rows(hangers, project))
+    w.writerows(point_rows(hangers, project, status))
     return "﻿" + b.getvalue()
 
 
@@ -131,7 +131,8 @@ def issues(validation: list[dict[str, Any]], findings: list[dict[str, Any]], han
 
 
 def report_pdf(project: str, revision: str, validation: list[dict[str, Any]], findings: list[dict[str, Any]],
-               hangers: list[dict[str, Any]], summary: dict[str, Any] | None = None, files: list[dict[str, Any]] | None = None) -> bytes:
+               hangers: list[dict[str, Any]], summary: dict[str, Any] | None = None, files: list[dict[str, Any]] | None = None,
+               status: str = "EJ PRODUKTIONSGODKÄND") -> bytes:
     import pymupdf
     doc = pymupdf.open()
     W, H, M = 595, 842, 40
@@ -153,6 +154,7 @@ def report_pdf(project: str, revision: str, validation: list[dict[str, Any]], fi
 
     new()
     line(f"Kontrollrapport SmartHangers - {project}", 16, True)
+    line(status, 12, True, color=(0.75, 0, 0) if status != "PRODUKTIONSGODKÄND" else (0, 0.5, 0))
     line(f"Revision {revision} · {time.strftime('%Y-%m-%d %H:%M')}", 9)
     state["y"] += 6
     iss = issues(validation, findings, hangers, project)
