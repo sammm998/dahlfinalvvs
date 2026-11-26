@@ -26,7 +26,7 @@ def _s(text: Any) -> str:
     return "'" + "".join(out) + "'"
 
 
-def export(hangers: list[dict[str, Any]], project: str, revision: str = "A") -> str:
+def export(hangers: list[dict[str, Any]], project: str, revision: str = "A", status: str = "EJ PRODUKTIONSGODKÄND") -> str:
     L: list[str] = []
     n = [0]
 
@@ -83,6 +83,7 @@ def export(hangers: list[dict[str, Any]], project: str, revision: str = "A") -> 
         el = add(f"IFCDISCRETEACCESSORY({_s(guid(project + ':' + h['id']))},$,{_s(h['id'])},{_s('SmartHanger ' + h['kind'])},'SmartHanger',#{place},#{pds},{_s(h['id'])},.USERDEFINED.)")
         contained[st].append(el)
         props = [("ID", h["id"]), ("Projekt", project), ("Revision", h.get("revision") or revision), ("Status", h.get("status")),
+                 ("Produktionsstatus", status),
                  ("Typ", h["kind"]), ("Vaning", st), ("Zon", h.get("zone")), ("Pendellangd_mm", rod_len),
                  ("Takjarnslangd_mm", tj.get("length_mm")), ("Hojdkalla", h.get("height_source")),
                  ("Kolli", (h.get("pack") or {}).get("kolli")), ("Ror", ", ".join(str(pp.get("dn") or pp.get("od")) for pp in h["pipes"])),

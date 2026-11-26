@@ -120,7 +120,8 @@ export function PackageStatus({ setId, onDone, download }: { setId: string; onDo
     <div className="card" style={{ marginTop: 10, padding: 10 }}>
       <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <b>{tr("Modellpaket")}</b>
-        {pk.files.map((f: any) => <span key={f.name} className="badge small">{f.discipline}: {f.name}</span>)}
+        {pk.files.map((f: any) => <span key={f.name} className={`badge small${pk.excluded?.[f.name] ? " warn" : ""}`} title={pk.excluded?.[f.name] ? trf("Exkluderad: {0}", pk.excluded[f.name].join(", ")) : ""}>{f.discipline}: {f.name}{pk.excluded?.[f.name] ? ` · ${tr("exkluderad")}` : ""}</span>)}
+        <span className={`badge small ${pk.production_status === "PRODUKTIONSGODKÄND" ? "ok" : "warn"}`}>{tr(pk.production_status || "EJ PRODUKTIONSGODKÄND")}</span>
         <span className={`badge ${job.state === "klar" ? "ok" : job.state === "stoppad" || job.state === "fel" || job.state === "avbruten" ? "warn" : ""}`}>
           {tr(job.state || "–")}{job.step ? ` · ${tr(job.step)}` : ""}</span>
         {!job.done && <span className="muted small">{tr("uppdateras var tredje sekund")}</span>}
@@ -128,7 +129,8 @@ export function PackageStatus({ setId, onDone, download }: { setId: string; onDo
       </div>
       {pk.files_read?.length > 0 && (
         <div className="small muted" style={{ marginTop: 4 }}>
-          {pk.files_read.map((f: any) => <div key={f.file_name}>{f.discipline}: {f.file_name} · {f.application || ""} · {f.timestamp || ""} · {trf("{0} rör, {1} bjälklag/balkar, {2} väggar, {3} håltagningar", f.pipes, f.ceilings, f.walls, f.openings)}</div>)}
+          {pk.files_read.map((f: any) => <div key={f.file_name}>{f.discipline}: {f.file_name} · {f.application || ""} · {f.timestamp || ""} · {trf("{0} rör, {1} bjälklag/balkar, {2} väggar, {3} håltagningar", f.pipes, f.ceilings, f.walls, f.openings)}
+            {f.excluded && <b className="error"> · {trf("EXKLUDERAD ur beräkningen ({0})", f.excluded.join(", "))}</b>}</div>)}
         </div>)}
 
       {job.state === "stoppad" && (pk.validation || []).some((f: any) => f.rule === "V6" && f.level === "stopp") && (

@@ -53,7 +53,7 @@ def guess_discipline(filename: str) -> str:
     for tok in re.findall(r"(?:^|[-_ .])([A-ZÅÄÖ]{1,3})(?=[-_ .\d])", n):
         if tok in ("V", "VS", "VVS", "S", "P"):
             return "VS"
-        if tok in ("K", "KB", "KON"):
+        if tok in ("K", "KB", "KON", "KP", "KS", "KM"):
             return "K"
         if tok in ("A", "AR", "ARK"):
             return "A"
@@ -141,23 +141,29 @@ def _run(sid: str, reread: bool) -> None:
             s = db.get(HangerSet, sid)
             st = s.settings or {}
             r = P.rules()
-            merged = PK.combine(models)
-            report = PK.validate(models, merged, r, {"manual_heights": st.get("manual_heights") or {},
-                                                     "estimate_above": st.get("estimate_above")})
+            # en felaktig modell (inte VS) tas ur beräkningen och flaggas i stället för att stoppa allt
+            used, merged, report, excluded = PK.run_checks(models, r, {"manual_heights": st.get("manual_heights") or {},
+                                                                       "estimate_above": st.get("estimate_above"),
+                                                                       "zone_slab_types": st.get("zone_slab_types") or {}})
             stop = PK.blocking(report)
             files_info = [{**(m.get("header") or {}), "discipline": m.get("discipline"), "pipes": len(m.get("pipes") or []),
                            "ceilings": len(m.get("ceilings") or []), "walls": len(m.get("walls") or []),
-                           "openings": len(m.get("openings") or [])} for m in models]
+                           "openings": len(m.get("openings") or []),
+                           "excluded": excluded.get((m.get("header") or {}).get("file_name") or "")} for m in models]
             s.settings = {**st, "validation": report[:400], "validation_summary": PK.summary(report), "files_read": files_info,
                           "has": merged.get("has"),
                           # våningarna ur rören, så att en takhöjd kan anges även när kontrollen stoppat beräkningen
                           "storeys_read": sorted({str(p_.get("storey")) for p_ in merged.get("pipes") or [] if p_.get("storey")}),
-                          "pipe_count": len(merged.get("pipes") or [])}
+                          "pipe_count": len(merged.get("pipes") or []), "excluded": excluded, "blocked_reason": None}
             _save_json(_key(sid, "validation.json.gz"), report)
             if stop:
                 s.hangers = []
-                _job(s, state="stoppad", step=f"{len(stop)} stopp i kontrollrapporten - rätta modellen eller ange värden",
-                     done=True)
+                n_pipes = len(merged.get("pipes") or [])
+                why = "; ".join(f"{f['rule']} {f['title']}" for f in stop)
+                reason = (f"{n_pipes:,} rör identifierade - hängarberäkningen blockerad av {why}".replace(",", " ")
+                          if n_pipes else f"Inga rör i VS-modellen - hängarberäkningen blockerad av {why}")
+                s.settings = {**s.settings, "blocked_reason": reason}
+                _job(s, state="stoppad", step=reason, done=True)
                 db.commit()
                 return
             _job(s, state="räknar", step=f"räknar {len(merged['pipes'])} rör")
@@ -242,7 +248,7 @@ async def revise_package(s: HangerSet, files: list[UploadFile], disciplines: lis
             if not fname.lower().endswith((".ifc", ".zip", ".ifczip")):
                 raise HTTPException(400, f"{fname}: modellerna ska vara .ifc (eller .zip med en .ifc)")
             disc = (disciplines[i] if i < len(disciplines) and disciplines[i] else guess_discipline(fname)).upper()
-            disc = {"V": "VS", "VVS": "VS", "O": "Ö", "ÖVRIGT": "Ö"}.get(disc, disc)
+            disc = {"V": "VS", "VVS": "VS", "O": "Ö", "ÖVRIGT": "Ö", "KP": "K"}.get(disc, disc)
             if disc not in DISCIPLINES:
                 raise HTTPException(422, f"{fname}: disciplinen ska vara VS, K, A eller Ö (övrig)")
             key = _key(s.id, f"files/{stamp}-{i}-{disc}-{re.sub(r'[^A-Za-z0-9._-]', '_', fname)}")
@@ -315,7 +321,7 @@ async def create_package(project_id: str, files: list[UploadFile] = File(...), d
             if not fname.lower().endswith((".ifc", ".zip", ".ifczip")):
                 raise HTTPException(400, f"{fname}: modellerna ska vara .ifc (eller .zip med en .ifc)")
             disc = (given[i] if i < len(given) and given[i] else guess_discipline(fname)).upper()
-            disc = {"V": "VS", "VVS": "VS", "O": "Ö", "ÖVRIGT": "Ö"}.get(disc, disc)
+            disc = {"V": "VS", "VVS": "VS", "O": "Ö", "ÖVRIGT": "Ö", "KP": "K"}.get(disc, disc)
             if disc not in DISCIPLINES:
                 raise HTTPException(422, f"{fname}: disciplinen ska vara VS, K, A eller Ö (övrig)")
             key = _key(s.id, f"files/{i}-{disc}-{re.sub(r'[^A-Za-z0-9._-]', '_', fname)}")
@@ -437,7 +443,8 @@ def package_status(set_id: str, user: User = Depends(current_user), db: Session 
             "manual_heights": st.get("manual_heights") or {}, "zone_slab_types": st.get("zone_slab_types") or {},
             "estimate_above": st.get("estimate_above"), "storeys": storeys, "zones": zones, "groups": st.get("groups") or {},
             "slab_types": sorted((P.rules().get("anchors") or {}).keys()), "n": len(s.hangers or []),
-            "pipe_count": st.get("pipe_count")}
+            "pipe_count": st.get("pipe_count"), "excluded": st.get("excluded") or {}, "blocked_reason": st.get("blocked_reason"),
+            "production_status": P.production_status(s)}
 
 
 @router.post("/api/hanger-sets/{set_id}/package-rerun")
@@ -569,7 +576,7 @@ def _articles_xlsx(s: HangerSet) -> bytes:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Artiklar per zon"
-    ws.append([f"Artikellista {s.name} - revision {s.revision}", "", "", f"Summa {tot['total']:,.2f} kr".replace(",", " "),
+    ws.append([f"Artikellista {s.name} - revision {s.revision} - {P.production_status(s)}", "", "", f"Summa {tot['total']:,.2f} kr".replace(",", " "),
                f"{tot['rows_without_price']} rader utan artikel eller pris"])
     ws.append(["Våning", "Zon", "Del", "Benämning", "Längd mm", "Antal", "Mängd", "Enhet", "Artikelnr", "Artikel",
                "Á-pris", "Pris", "Summa", "Källa"])
@@ -602,14 +609,14 @@ def export_more(s: HangerSet, fmt: str) -> Response | None:
     fnd = _load_json(_key(s.id, "findings.json.gz")) or (s.settings or {}).get("findings") or []
     att = lambda ext: {"Content-Disposition": f'attachment; filename="{fname}{ext}"'}
     if fmt == "csv":
-        return Response(HO.point_csv(hs, s.name).encode("utf-8"), media_type="text/csv; charset=utf-8", headers=att("-punktlista.csv"))
+        return Response(HO.point_csv(hs, s.name, P.production_status(s)).encode("utf-8"), media_type="text/csv; charset=utf-8", headers=att("-punktlista.csv"))
     if fmt == "dxf":
         return Response(HO.dxf(hs, (s.pipes or {}).get("pipes") or []), media_type="application/dxf", headers=att(".dxf"))
     if fmt == "bcf":
         return Response(HO.bcf_zip(s.name, s.revision, val, fnd, hs), media_type="application/octet-stream", headers=att(".bcfzip"))
     if fmt == "rapport":
         files = (s.settings or {}).get("files_read") or []
-        return Response(HO.report_pdf(s.name, s.revision, val, fnd, hs, HG.summary(hs, P.rules()), files),
+        return Response(HO.report_pdf(s.name, s.revision, val, fnd, hs, HG.summary(hs, P.rules()), files, P.production_status(s)),
                         media_type="application/pdf", headers=att("-kontrollrapport.pdf"))
     if fmt == "artiklar":
         return Response(_articles_xlsx(s), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

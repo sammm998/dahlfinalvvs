@@ -467,10 +467,11 @@ def generate(model: dict[str, Any], rules: dict[str, Any] | None = None, manual_
         over = [s_ for s_ in grids["ceilings"].near(cx, cy) if _inside(s_["bbox"], cx, cy) and s_["zmin"] > top + 20]
         if over:
             slab = min(over, key=lambda x: x["zmin"])
-        if slab is not None and manual in (None, ""):
+        # K/KP är primär stödgeometri; den manuella underkanten gäller där modellen inte har något ovanför punkten
+        if slab is not None:
             c = {"z": float(slab["zmin"]), "source": f"modell: {slab.get('kind')} {slab.get('name') or slab['id']}".strip()}
         elif manual not in (None, ""):
-            c = {"z": float(manual), "source": "manuell" if not has_k else "manuell (över K-modellen)"}
+            c = {"z": float(manual), "source": "manuell" if not has_k else "manuell (inget bjälklag ovanför i K-modellen)"}
         elif has_k:
             c = {"z": None, "source": "saknas"}
             flags.append("V6: inget bjälklag eller balk ovanför punkten i K-modellen")
