@@ -172,7 +172,7 @@ export default function PrefabPanel({ project }: { project: any }) {
             return noHeight > 0 ? <p className="badge warn" style={{ display: "block", marginTop: 8 }}>
               {trf("{0} av {1} hängare saknar takhöjd och därmed gängstångslängd: ange underkant bjälklag per våning under \"Takhöjder per våning\" nedan, eller ladda upp modellen igen (med K-modellen om den finns) så kontrolleras den och kan uppskattas.", noHeight, open.n)}</p> : null;
           })()}
-          {open.settings?.files?.length > 0 && <PackageStatus setId={open.id} download={download} onDone={() => run(() => api.hangerSet(open.id))} />}
+          {open.settings?.files?.length > 0 && <PackageStatus key={`${open.id}-${open.revision}-${open.settings?.job?.updated || ""}`} setId={open.id} download={download} onDone={() => run(() => api.hangerSet(open.id))} />}
 
           <div className="row small" style={{ gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
             <b>{tr("Godkännanden")}:</b>
@@ -236,14 +236,14 @@ export default function PrefabPanel({ project }: { project: any }) {
             </form>
           </details>
 
-          <details className="settings" style={{ marginTop: 10 }}>
+          {!open.settings?.files?.length && <details className="settings" style={{ marginTop: 10 }}>
             <summary>{tr("Takhöjder per våning")}</summary>
             <p className="muted small">{tr("Tom ruta: höjden räknas ur nästa våning minus bjälklaget. Absolut höjd i mm i modellens koordinater.")}</p>
             {storeys.map((s: any) => (
               <label key={s.name} className="small" style={{ marginRight: 12 }}>{s.name} <span className="muted">({tr("golv")} {s.elevation ?? "?"}; {tr(open.ceilings?.[s.name]?.source || "saknas")} {open.ceilings?.[s.name]?.z ?? ""})</span><br />
                 <input style={{ width: 90 }} value={heights[s.name] || ""} onChange={(e) => setHeights({ ...heights, [s.name]: e.target.value })} /></label>))}
             <div><button className="small" disabled={busy} onClick={() => run(() => api.regenerateHangerSet(open.id, heights))}>{tr("Räkna om")}</button></div>
-          </details>
+          </details>}
 
           <div className="row" style={{ gap: 8, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
             <select value={storey} onChange={(e) => setStorey(e.target.value)}>
@@ -299,6 +299,7 @@ export default function PrefabPanel({ project }: { project: any }) {
           <details className="settings" style={{ marginTop: 12 }}>
             <summary>{tr("Ny modellrevision")}</summary>
             <p className="muted small">{tr("Rören jämförs med förra revisionen: nya, borttagna, flyttade och ändrade. Hängare vars rör inte ändrats behåller status. Berörda hängare som redan är producerade, packade, levererade eller monterade är kritiska.")}</p>
+            {open.settings?.files?.length > 0 && <p className="muted small">{tr("Modellpaket: den nya filen ersätter paketets fil av samma disciplin (läses ur filnamnet: -V- för VS, -K- för K, -A- för A). Övriga modeller i paketet behålls.")}</p>}
             <input type="file" accept=".ifc,.zip,.ifczip" id="prefab-rev" className="file" ref={revFile} onChange={revise} />
             <label className="pick small" htmlFor="prefab-rev">{tr("Ladda upp ny revision")}</label>
             {open.diff && (

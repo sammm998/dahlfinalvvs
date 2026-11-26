@@ -17,6 +17,16 @@ export function SystemHealth() {
   const [err, setErr] = useState("");
   const [cleaning, setCleaning] = useState(false);
   const [cleaned, setCleaned] = useState<any>(null);
+  const [purgeText, setPurgeText] = useState("");
+  const [purged, setPurged] = useState<any>(null);
+  const purgeAll = () => {
+    if (!window.confirm(tr("Alla ritningar, analyser, SmartHangers-uppsättningar, beskrivningar, listor och offerter tas bort för alla konton. Det går inte att ångra. Fortsätt?"))) return;
+    setCleaning(true);
+    api.admPost("system/purge-all", { confirm: purgeText })
+      .then((r) => { setPurged(r); setPurgeText(""); return api.adm("system").then(setH); })
+      .catch((e) => setErr(e.message))
+      .finally(() => setCleaning(false));
+  };
   const cleanUp = () => {
     if (!window.confirm(tr("Ta bort äldre körningar av samma ritning, misslyckade körningar och detektorns cache? Den senaste körningen av varje ritning står kvar."))) return;
     setCleaning(true);
@@ -54,7 +64,7 @@ export function SystemHealth() {
       <section className="card" style={{ marginTop: 16 }}>
         <h3 style={{ marginTop: 0 }}>{tr("Rensa lagret")}</h3>
         <p className="muted">
-          {tr("Tar bort äldre körningar av samma ritning, misslyckade körningar, kvarlämnade arbetsmappar och detektorns cache. Den senaste körningen av varje ritning, alla ritningar och alla projekt står kvar.")}
+          {tr("Tar bort äldre körningar av samma ritning, misslyckade körningar, kvarlämnade arbetsmappar, detektorns cache och SmartHangers råa modellfiler som redan är lästa. Den senaste körningen av varje ritning, alla ritningar, alla uppsättningar och alla projekt står kvar.")}
         </p>
         <button className="btn" onClick={cleanUp} disabled={cleaning}>{cleaning ? tr("Rensar…") : tr("Rensa")}</button>
         {cleaned && (
@@ -62,6 +72,17 @@ export function SystemHealth() {
             {tr("Ledigt före")}: {bytes(cleaned.free_before)} · {tr("efter")}: <b>{bytes(cleaned.free_after)}</b>
           </p>
         )}
+      </section>
+      <section className="card" style={{ marginTop: 16, borderLeft: "4px solid #d64545" }}>
+        <h3 style={{ marginTop: 0 }}>{tr("Töm alla ritningar och modeller")}</h3>
+        <p className="muted">
+          {tr("Tar bort alla ritningar med analyser, alla SmartHangers-uppsättningar med modeller, tekniska beskrivningar, materiallistor och offerter – för alla konton. Konton, projekt (tomma), prisfil, kunder, SmartHangers-reglerna, Dahls katalog och CAD-blad står kvar. Går inte att ångra.")}
+        </p>
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          <input value={purgeText} onChange={(e) => setPurgeText(e.target.value)} placeholder={tr("skriv RENSA")} style={{ width: 140 }} />
+          <button className="btn" onClick={purgeAll} disabled={cleaning || purgeText.trim().toUpperCase() !== "RENSA"}>{cleaning ? tr("Rensar…") : tr("Töm lagret")}</button>
+        </div>
+        {purged && <p style={{ marginBottom: 0 }}>{tr("Borttaget")}: {purged.drawings} {tr("ritningar")}, {purged.hanger_sets} {tr("SmartHangers-uppsättningar")}, {purged.tech_specs} {tr("beskrivningar/listor")}, {purged.offers} {tr("offerter")} · {purged.freed_mb} MB {tr("frigjort")}</p>}
       </section>
       <section className="card" style={{ marginTop: 16 }}>
         <h3 style={{ marginTop: 0 }}>{tr("Vad som styr en läsning")}</h3>

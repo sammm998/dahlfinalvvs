@@ -505,3 +505,59 @@ def test_a_project_with_hangers_and_offers_can_be_deleted(client):
     r = client.delete(f"/api/projects/{p['id']}", headers=H)
     assert r.status_code == 200, r.text
     assert client.get(f"/api/hanger-sets/{s.json()['id']}", headers=H).status_code == 404
+
+
+def test_package_files_are_not_kept_and_a_revision_and_recalculation_go_through_the_package(client):
+    import os
+    os.environ["VVS_HANGERS_INLINE"] = "1"
+    try:
+        from app.storage import storage
+        H = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "rev@dahl.se", "password": "hemligt1"}).json()["access_token"]}
+        p = client.post("/api/projects", json={"name": "Rev", "contract_form": "ABT06"}, headers=H).json()
+        r = client.post(f"/api/projects/{p['id']}/hanger-packages",
+                        files=[("files", ("4075-V-50-V-1.ifc", _ifc(slab=False).encode(), "application/octet-stream")),
+                               ("files", ("4075-K-50-K-1.ifc", _ifc(slab=True).encode(), "application/octet-stream"))], headers=H)
+        sid = r.json()["id"]
+        assert storage.exists(f"prefab/{sid}/models.json.gz") and not storage.exists(f"prefab/{sid}/files")   # råfilerna borta
+        s = client.get(f"/api/hanger-sets/{sid}", headers=H).json()
+        n0, first = s["n"], s["hangers"][0]
+        assert n0 > 0 and first["slab"]["type"] == "HD/F"
+        # omräkning och "läs om" går ur det lästa - K-modellen är kvar
+        assert client.post(f"/api/hanger-sets/{sid}/package-rerun", headers=H).json()["job"]["state"] == "klar"
+        s = client.post(f"/api/hanger-sets/{sid}/regenerate", json={"heights": {"Plan 10": 3200}}, headers=H).json()
+        s = client.get(f"/api/hanger-sets/{sid}", headers=H).json()
+        assert s["hangers"][0]["slab"]["type"] == "HD/F" and s["settings"]["manual_heights"] == {"Plan 10": 3200.0}
+        client.patch(f"/api/hanger-sets/{sid}/hangers/{first['id']}", json={"comment": "kollad", "status": "granskad"}, headers=H)
+        # ny revision med bara en ny VS-modell: K behålls, oförändrade hängare behåller status
+        r = client.post(f"/api/hanger-sets/{sid}/revise", files={"file": ("4075-V-50-V-1-B.ifc", _ifc(slab=False).encode(), "application/octet-stream")}, headers=H)
+        assert r.status_code == 200, r.text
+        s = client.get(f"/api/hanger-sets/{sid}", headers=H).json()
+        assert s["revision"] == "B" and s["hangers"][0]["slab"]["type"] == "HD/F"
+        assert [f["discipline"] for f in s["settings"]["files"]] == ["K", "VS"]
+        h0 = next(h for h in s["hangers"] if h["id"] == first["id"])
+        assert h0["status"] == "granskad" and s["settings"]["diff"]["to_revision"] == "B"
+        # borttagen uppsättning tar sina filer med sig
+        assert client.delete(f"/api/hanger-sets/{sid}", headers=H).status_code == 200
+        assert not storage.exists(f"prefab/{sid}")
+    finally:
+        os.environ.pop("VVS_HANGERS_INLINE", None)
+
+
+def test_the_storage_can_be_emptied_only_by_an_admin_who_confirms(client):
+    import io
+
+    from app.storage import storage
+    # första kontot i testdatabasen är administratör
+    admin = {"Authorization": "Bearer " + client.post("/api/auth/login", data={"username": "admin@dahl.se", "password": "hemligt1"}).json()["access_token"]}
+    other = {"Authorization": "Bearer " + client.post("/api/auth/register", json={"email": "vanlig@dahl.se", "password": "hemligt1"}).json()["access_token"]}
+    storage.put("prefab/okand-uppsattning/x.ifc", io.BytesIO(b"x" * 1000))
+    cl = client.post("/api/admin/system/cleanup", json={}, headers=admin).json()
+    assert cl["prefab_dirs"] >= 1 and not storage.exists("prefab/okand-uppsattning")
+    assert client.post("/api/admin/system/purge-all", json={"confirm": "RENSA"}, headers=other).status_code == 403
+    assert client.post("/api/admin/system/purge-all", json={"confirm": "ja"}, headers=admin).status_code == 400
+    p = client.post("/api/projects", json={"name": "Töms", "contract_form": "ABT06"}, headers=admin).json()
+    client.post(f"/api/projects/{p['id']}/hangers", files={"file": ("vs.ifc", _ifc().encode(), "application/octet-stream")}, headers=admin)
+    out = client.post("/api/admin/system/purge-all", json={"confirm": "RENSA"}, headers=admin).json()
+    assert out["hanger_sets"] >= 1
+    assert client.get(f"/api/projects/{p['id']}/hangers", headers=admin).json() == []
+    assert client.get(f"/api/projects/{p['id']}", headers=admin).status_code == 200          # projektet står kvar

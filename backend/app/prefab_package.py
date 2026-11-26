@@ -42,7 +42,8 @@ _pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hangers")
 _running: set[str] = set()
 _lock = threading.Lock()
 DISCIPLINES = ("VS", "K", "A", "Ö")
-WANT = {"VS": {"pipes", "obstacles"}, "K": {"structure"}, "A": {"architecture"}, "Ö": {"obstacles"}}
+# A-modellen läses också för sina bjälklag: utan K-modell är de den bästa källan till underkant bjälklag
+WANT = {"VS": {"pipes", "obstacles"}, "K": {"structure"}, "A": {"architecture", "structure"}, "Ö": {"obstacles"}}
 
 
 def guess_discipline(filename: str) -> str:
@@ -109,17 +110,30 @@ def _run(sid: str, reread: bool) -> None:
         with SessionLocal() as db:
             s = db.get(HangerSet, sid)
             files = list((s.settings or {}).get("files") or [])
-        if reread or not storage.exists(_key(sid, "models.json.gz")):
+        cached = {(m.get("discipline"), (m.get("header") or {}).get("file_name")): m
+                  for m in (_load_json(_key(sid, "models.json.gz")) or [])}
+        # vilka filer som läses: alla vars råfil finns (reread=True), bara de nya (en lista, vid en revision), eller
+        # inga - då räknas det om ur det redan lästa
+        todo = [f for f in files if storage.exists(f["key"]) and (reread is True or (isinstance(reread, list) and f["key"] in reread))]
+        if todo or not cached:
             models = []
             for i, f in enumerate(files):
-                _step(sid, state="läser", step=f"läser {f['name']} ({f['discipline']}, {i + 1} av {len(files)})")
-                with storage.open(f["key"]) as fh:
-                    text = _ifc_text(fh.read(), f["name"])
-                m = read_model(text, f["discipline"], WANT.get(f["discipline"]))
-                del text
-                m["header"] = {**(m.get("header") or {}), "file_name": f["name"]}
-                models.append(_light(m))
+                if f in todo:
+                    _step(sid, state="läser", step=f"läser {f['name']} ({f['discipline']}, {i + 1} av {len(files)})")
+                    with storage.open(f["key"]) as fh:
+                        text = _ifc_text(fh.read(), f["name"])
+                    m = read_model(text, f["discipline"], WANT.get(f["discipline"]))
+                    del text
+                    m["header"] = {**(m.get("header") or {}), "file_name": f["name"]}
+                    models.append(_light(m))
+                elif (f["discipline"], f["name"]) in cached:
+                    models.append(cached[(f["discipline"], f["name"])])
+                else:
+                    raise RuntimeError(f"{f['name']} finns inte kvar - ladda upp modellen igen")
             _save_json(_key(sid, "models.json.gz"), models)
+            # Råfilerna behövs inte längre: det lästa ligger komprimerat bredvid (en MagiCAD-fil på 283 MB blir
+            # några MB). Att spara varje uppladdad modell fyllde volymen efter fyra-fem uppladdningar.
+            storage.delete_prefix(_key(sid, "files"))
         else:
             models = _load_json(_key(sid, "models.json.gz"))
         _step(sid, state="validerar", step="kontrollerar modellerna (V1-V11)")
@@ -157,6 +171,13 @@ def _run(sid: str, reread: bool) -> None:
             fsum: dict[str, int] = {}
             for f in res["findings"]:
                 fsum[f"{f['rule']} {f['level']}"] = fsum.get(f"{f['rule']} {f['level']}", 0) + 1
+            if st.get("revise_pending"):
+                # ny revision: hängare vars rör inte ändrats behåller ID, status och historik; berörda listas
+                prev = _load_json(_key(sid, "previous.json.gz")) or {}
+                d = HG.diff(prev.get("pipes") or [], merged["pipes"], prev.get("hangers") or [])
+                P.carry_over(prev.get("hangers") or [], res["hangers"], d)
+                s.settings = {**s.settings, "revise_pending": False,
+                              "diff": {**d, "from_revision": prev.get("revision"), "to_revision": s.revision}}
             s.hangers = res["hangers"]
             s.pipes = {"pipes": [{k: p.get(k) for k in ("id", "name", "start", "end", "od", "dn", "material", "system",
                                                          "insulation_mm", "storey")} for p in merged["pipes"]],
@@ -176,7 +197,94 @@ def _run(sid: str, reread: bool) -> None:
             _running.discard(sid)
 
 
-def submit(sid: str, reread: bool = True) -> None:
+def slim_prefab() -> dict[str, Any]:
+    """Plats som inte bär någon information: uppladdade modellfiler för paket som redan är lästa (det lästa ligger
+    komprimerat bredvid), och kataloger under prefab/ som ingen uppsättning äger (avbrutna uppladdningar, borttagna
+    uppsättningar). Uppsättningar som läses just nu lämnas."""
+    import shutil
+    root = storage.path("prefab")
+    freed, dirs = 0, 0
+    if not os.path.isdir(root):
+        return {"prefab_freed_mb": 0, "prefab_dirs": 0}
+    with SessionLocal() as db:
+        owned = {sid for (sid,) in db.query(HangerSet.id).all()}
+    for name in os.listdir(root):
+        p = os.path.join(root, name)
+        if not os.path.isdir(p) or name in _running:
+            continue
+        size = lambda q: sum(os.path.getsize(os.path.join(a, f)) for a, _, fs in os.walk(q) for f in fs)
+        if name not in owned:
+            freed += size(p)
+            shutil.rmtree(p, ignore_errors=True)
+            dirs += 1
+        else:
+            if os.path.isdir(os.path.join(p, "files")) and os.path.isfile(os.path.join(p, "models.json.gz")):
+                freed += size(os.path.join(p, "files"))
+                shutil.rmtree(os.path.join(p, "files"), ignore_errors=True)
+            # snabbvägens och revisionernas råa IFC-kopior (A.ifc, B.ifc): omräkningen går på de lästa rören
+            for f in os.listdir(p):
+                if f.lower().endswith(".ifc") and os.path.isfile(os.path.join(p, f)):
+                    freed += os.path.getsize(os.path.join(p, f))
+                    os.remove(os.path.join(p, f))
+    return {"prefab_freed_mb": round(freed / 1e6), "prefab_dirs": dirs}
+
+
+async def revise_package(s: HangerSet, files: list[UploadFile], disciplines: list[str], user: User, db: Session):
+    """En ny revision av ett modellpaket: de nya filerna ersätter paketets filer av samma disciplin (en ny VS-modell
+    ersätter VS, en K-modell läggs till eller ersätter K). Bara de nya läses; de andra räknas ur det redan lästa."""
+    st = dict(s.settings or {})
+    old_files = list(st.get("files") or [])
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M%S")
+    new = []
+    try:
+        for i, f in enumerate(files):
+            fname = os.path.basename(f.filename or f"modell{i}.ifc")
+            if not fname.lower().endswith((".ifc", ".zip", ".ifczip")):
+                raise HTTPException(400, f"{fname}: modellerna ska vara .ifc (eller .zip med en .ifc)")
+            disc = (disciplines[i] if i < len(disciplines) and disciplines[i] else guess_discipline(fname)).upper()
+            disc = {"V": "VS", "VVS": "VS", "O": "Ö", "ÖVRIGT": "Ö"}.get(disc, disc)
+            if disc not in DISCIPLINES:
+                raise HTTPException(422, f"{fname}: disciplinen ska vara VS, K, A eller Ö (övrig)")
+            key = _key(s.id, f"files/{stamp}-{i}-{disc}-{re.sub(r'[^A-Za-z0-9._-]', '_', fname)}")
+            storage.put(key, f.file)
+            new.append({"name": fname, "discipline": disc, "key": key})
+    except OSError:
+        for f in new:
+            try:
+                os.remove(storage.path(f["key"]))
+            except OSError:
+                pass
+        raise HTTPException(507, "Disken där modellerna sparas är full. Rensa under Administration → System och ladda upp igen.")
+    replaced = {f["discipline"] for f in new}
+    files = [f for f in old_files if f["discipline"] not in replaced] + new
+    _save_json(_key(s.id, "previous.json.gz"), {"pipes": (s.pipes or {}).get("pipes") or [], "hangers": s.hangers or [],
+                                                "revision": s.revision})
+    s.revision = P._next_rev(s.revision)
+    s.settings = {**st, "files": files, "revise_pending": True}
+    s.approvals = {}
+    _job(s, state="köad", step=f"revision {s.revision}: läser {', '.join(f['name'] for f in new)}", done=False)
+    P._log(s, user, "ny revision", revision=s.revision, files=[f"{f['discipline']}: {f['name']}" for f in new])
+    P._touch(s)
+    db.commit()
+    submit(s.id, [f["key"] for f in new])
+    db.refresh(s)
+    return P._out(s)
+
+
+@router.post("/api/hanger-sets/{set_id}/package-revise")
+async def package_revise(set_id: str, files: list[UploadFile] = File(...), disciplines: str = Form("[]"),
+                         user: User = Depends(current_user), db: Session = Depends(get_db)):
+    s = P._set(db, user, set_id, "projektadmin")
+    if not (s.settings or {}).get("files"):
+        raise HTTPException(400, "Uppsättningen kommer inte ur ett modellpaket")
+    try:
+        given = json.loads(disciplines or "[]")
+    except ValueError:
+        raise HTTPException(422, "Disciplinerna ska vara en lista: [\"VS\", \"K\", \"A\"]")
+    return await revise_package(s, files, given, user, db)
+
+
+def submit(sid: str, reread: bool | list[str] = True) -> None:
     with _lock:
         if sid in _running:
             raise HTTPException(409, "Paketet räknas redan - vänta tills det är klart")
@@ -201,19 +309,30 @@ async def create_package(project_id: str, files: list[UploadFile] = File(...), d
     db.add(s)
     db.flush()
     stored = []
-    for i, f in enumerate(files):
-        fname = os.path.basename(f.filename or f"modell{i}.ifc")
-        if not fname.lower().endswith((".ifc", ".zip", ".ifczip")):
-            raise HTTPException(400, f"{fname}: modellerna ska vara .ifc (eller .zip med en .ifc)")
-        disc = (given[i] if i < len(given) and given[i] else guess_discipline(fname)).upper()
-        disc = {"V": "VS", "VVS": "VS", "O": "Ö", "ÖVRIGT": "Ö"}.get(disc, disc)
-        if disc not in DISCIPLINES:
-            raise HTTPException(422, f"{fname}: disciplinen ska vara VS, K, A eller Ö (övrig)")
-        key = _key(s.id, f"files/{i}-{disc}-{re.sub(r'[^A-Za-z0-9._-]', '_', fname)}")
-        storage.put(key, f.file)                                  # strömmas till disk, inte in i minnet
-        stored.append({"name": fname, "discipline": disc, "key": key})
-    if not any(f["discipline"] == "VS" for f in stored):
-        raise HTTPException(422, "Paketet behöver en VS-modell (rören)")
+    try:
+        for i, f in enumerate(files):
+            fname = os.path.basename(f.filename or f"modell{i}.ifc")
+            if not fname.lower().endswith((".ifc", ".zip", ".ifczip")):
+                raise HTTPException(400, f"{fname}: modellerna ska vara .ifc (eller .zip med en .ifc)")
+            disc = (given[i] if i < len(given) and given[i] else guess_discipline(fname)).upper()
+            disc = {"V": "VS", "VVS": "VS", "O": "Ö", "ÖVRIGT": "Ö"}.get(disc, disc)
+            if disc not in DISCIPLINES:
+                raise HTTPException(422, f"{fname}: disciplinen ska vara VS, K, A eller Ö (övrig)")
+            key = _key(s.id, f"files/{i}-{disc}-{re.sub(r'[^A-Za-z0-9._-]', '_', fname)}")
+            storage.put(key, f.file)                              # strömmas till disk, inte in i minnet
+            stored.append({"name": fname, "discipline": disc, "key": key})
+        if not any(f["discipline"] == "VS" for f in stored):
+            raise HTTPException(422, "Paketet behöver en VS-modell (rören)")
+    except (HTTPException, OSError) as e:
+        # inget halvt uppladdat paket får ligga kvar och ta plats
+        db.rollback()
+        storage.delete_prefix(f"prefab/{s.id}")
+        if isinstance(e, OSError):
+            from .disk_space import free_bytes
+            raise HTTPException(507, f"Disken där modellerna sparas är full ({free_bytes(storage.path('')) // (1024 * 1024)} MB "
+                                     "ledigt). Ta bort gamla SmartHangers-uppsättningar och ritningar (Administration → "
+                                     "System → Rensa) eller utöka volymen, och ladda upp igen.")
+        raise
     try:
         est = float(estimate_above) if estimate_above not in ("", None) else None
     except ValueError:
@@ -327,9 +446,14 @@ def package_rerun(set_id: str, user: User = Depends(current_user), db: Session =
     s = P._set(db, user, set_id, ("projektadmin",))
     if not (s.settings or {}).get("files"):
         raise HTTPException(400, "Uppsättningen kommer inte ur ett modellpaket")
-    _job(s, state="köad", step="läser om filerna", done=False)
+    raw = all(storage.exists(f["key"]) for f in s.settings["files"])
+    if not raw and not storage.exists(_key(s.id, "models.json.gz")):
+        raise HTTPException(409, "Modellfilerna finns inte kvar - ladda upp paketet igen")
+    # råfilerna tas bort när de lästs: då räknas det om ur det lästa
+    _job(s, state="köad", step="läser om filerna" if raw else "räknar om ur de lästa modellerna", done=False)
     db.commit()
-    submit(s.id, True)
+    submit(s.id, raw)
+    db.expire_all()                                     # läget som jobbet skrev, inte det som låg i sessionen
     return package_status(set_id, user, db)
 
 
