@@ -51,6 +51,19 @@ export const GUIDE: GuideGroup[] = [
           "Radiatorerna läses direkt – ingen analys behövs. Välj temperaturer och vad som väger tyngst när Altech saknar storleken.",
           "Öppna Detaljer för en rad för att se varför Altech-modellen valdes och alternativen.",
           "Ladda ner Excel: sammanställning per hus, detaljlista, korsning, alternativ och källor.",
+          "Under Altech-korsning enligt Golden Standard: korsa och ladda ner Excel med de nio bladen och Prixel-importen.",
+        ],
+      },
+      {
+        id: "radiatorlista", title: "Radiatorlista till Altech och Prixel (Golden Standard)", action: { kind: "link", to: "/radiatorer" },
+        what: "Kundens radiatorlista (t.ex. GRAD 40 V 11-304, TP 22 V4-218) korsad mot Altech: exakt eller närmaste kortare, H200 till konvektor med konsol, rätt H/V-RSK, avvikelser E001–E010, QA A–I och Prixel-import.",
+        need: "Excel med benämning och antal per rad (gärna artikelnummer och placering).",
+        where: "Kom igång → Radiatorlista till Altech, eller Ritningen → Altech-korsning enligt Golden Standard",
+        steps: [
+          "Ladda upp kundens lista och skriv projektnamnet.",
+          "Tryck Korsa mot Altech och gå igenom matchningen, avvikelserna och QA A–I.",
+          "Ladda ner Excel – filnamnet följer [Projekt]_[Fabrikat]_korsad_mot_Altech_inkl_Prixel_[datum]_v01.xlsx.",
+          "Klistra in bladet Prixel import i Prixel. Rader utan RSK står under Avvikelser.",
         ],
       },
       {
@@ -108,6 +121,19 @@ export const GUIDE: GuideGroup[] = [
         need: "Ett underlag i projektet: teknisk beskrivning, materiallista, IFC-modell eller en VS-ritning med radiatorer (de korsas till Altech). Dahls prisfil uppladdad (Offert → Offertdata).",
         where: "Projekt → projektet → Offert",
         steps: ["Öppna projektet och delen Offert.", "Välj kund – rabatterna hämtas.", "Gå igenom raderna: osäkra artikelval är markerade och kan bytas.", "Exportera offerten (Excel eller kundversion)."],
+      },
+      {
+        id: "kam", title: "KAM – prisjustering för KAM-kund", action: { kind: "link", to: "/kam" },
+        what: "Kundens artiklar med antal och kostpris mot ny prislista och matris: Ändr % och bruttovinst per produktområde, produktgrupp och kalkylgrupp; kundavvikelser och extrarabatt; registreringsunderlag med attest av säljare och säljledare; kundutskrift utan kostpris. Simulerad – ingen M3-koppling ännu.",
+        need: "Dahls prisfil uppladdad (Offert → Offertdata) och kundens statistik: Dahlmenyns offertfil eller en tabell med Artnr och Antal (gärna Kalk.gr, Cp, Brutto, R1, R2, Netto).",
+        where: "KAM i menyn",
+        steps: [
+          "Skapa ett ärende med kundnummer och prisdatum (ÅÅMM).",
+          "Läs in kundens statistik ur fil eller ur kundens offerter i tjänsten.",
+          "Ändra kundavvikelser per kalkylgrupp (2, 4 eller 6 tecken), extrarabatt och nettopriser – se Ändr % och Hbv% direkt.",
+          "Skicka för attest. Under marginalgolvet krävs säljledare; under kostpris stoppas förslaget.",
+          "Säljledaren attesterar och registrerar – rabatterna gäller då i offerterna.",
+        ],
       },
       {
         id: "handling", title: "Hela handlingen på en gång", action: { kind: "project-analysis" },

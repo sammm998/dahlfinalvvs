@@ -27,6 +27,7 @@ import { cad } from "./en/cad";
 import { akademi } from "./en/akademi";
 import { innehall } from "./en/innehall";
 import { server } from "./en/server";
+import { kam } from "./en/kam";
 
 export type Lang = "sv" | "en";
 
@@ -87,6 +88,7 @@ const EN: Record<string, string> = {
   ...publikt,
   ...mangd,
   ...projekt,
+  ...kam,
   ...admin,
   ...cad,
   ...akademi,

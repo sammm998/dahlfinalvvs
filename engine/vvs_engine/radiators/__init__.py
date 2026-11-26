@@ -243,8 +243,13 @@ def read_pdf(path: str, pages: list[int] | None = None) -> dict[str, Any]:
     for k, r in enumerate(rads, 1):
         r["nr"] = k
     no_text = [s["page"] for s in sheets if s["text_lines"] == 0]
+    notice = None
+    if not rads:
+        notice = ("Inga radiatorbeteckningar hittades som text i ritningen. Om beteckningarna syns på ritningen är de "
+                  "utritade som linjer (vektoriserad text vid PDF-utskrift) och kan inte läsas utan OCR. Ladda upp en "
+                  "PDF utskriven med text, en radiatorförteckning eller kundens lista som Excel.")
     return {"sheets": [{k: v for k, v in s.items() if k != "radiators"} for s in sheets], "radiators": rads,
-            "summary": summary(rads), "no_text_pages": no_text}
+            "summary": summary(rads), "no_text_pages": no_text, "notice": notice}
 
 
 def summary(rads: list[dict[str, Any]]) -> dict[str, Any]:

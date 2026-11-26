@@ -21,6 +21,8 @@ import Boundary from "./components/Boundary";
 import PageCurtain from "./components/PageCurtain";
 import LearnPage, { LearnCoursePage, LearnLessonPage } from "./pages/LearnPage";
 import MaterialPage from "./pages/Material";
+import KamPage from "./pages/Kam";
+import RadiatorListPage from "./pages/RadiatorList";
 import CreditsPage from "./pages/Credits";
 import PricingPage from "./pages/Pricing";
 import AboutPage from "./pages/About";
@@ -85,6 +87,15 @@ function IconMaterial() {
     <svg width="17" height="17" viewBox="0 0 18 18" fill="none" aria-hidden="true">
       <path d="M2.4 5.6 9 2.4l6.6 3.2v6.8L9 15.6 2.4 12.4V5.6Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
       <path d="M2.4 5.6 9 8.9l6.6-3.3M9 8.9v6.7" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconKam() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M3 14.5V9.5M7 14.5V6.5M11 14.5V8.5M15 14.5V3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M2.5 15.5h13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -204,6 +215,8 @@ const ROUTES = (
     <Route path="/lar/:modul/:lektion" element={<Guard><LearnLessonPage /></Guard>} />
     <Route path="/agent" element={<Guard><AgentPage /></Guard>} />
     <Route path="/material" element={<Guard><MaterialPage /></Guard>} />
+    <Route path="/kam" element={<Guard><KamPage /></Guard>} />
+    <Route path="/radiatorer" element={<Guard><RadiatorListPage /></Guard>} />
     <Route path="/credits" element={<Guard><CreditsPage /></Guard>} />
     <Route path="/installningar" element={<Navigate to="/admin" replace />} />
     <Route path="/admin" element={<Guard><AdminPage /></Guard>} />
@@ -312,6 +325,9 @@ export default function App() {
           </Link>
           <Link to="/material" className={path.startsWith("/material") ? "on" : ""}>
             <IconMaterial /> <span className="wide">{tr("Material")}</span>
+          </Link>
+          <Link to="/kam" className={path.startsWith("/kam") ? "on" : ""} title={tr("Prisjustering för KAM-kund")}>
+            <IconKam /> <span className="wide">KAM</span>
           </Link>
           <Link to="/credits" className={path.startsWith("/credits") ? "on" : ""}>
             <IconCredits /> <span className="wide">Credits{left !== null && (

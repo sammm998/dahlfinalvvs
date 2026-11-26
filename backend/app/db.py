@@ -665,6 +665,33 @@ class ToolPreset(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class KamCase(Base):
+    """En prisjustering för en KAM-kund (ersätter Dahlmenyns PrisJusteringKund).
+
+    Statistiken (kundens artiklar med antal och CP) och förslaget (kundavvikelser, extrarabatt, nettopriser)
+    sparas; simuleringen räknas om ur dem varje gång mot aktuell prislista och matris. Attesten följer
+    registreringsunderlaget: säljaren skickar, säljledaren (administratör) godkänner och registrerar.
+    """
+    __tablename__ = "kam_cases"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    kundnr: Mapped[str] = mapped_column(String(64), index=True)
+    kundnamn: Mapped[str] = mapped_column(String(255), default="")
+    rabattsystem: Mapped[str] = mapped_column(String(16), default="KAM12")
+    old_period: Mapped[str] = mapped_column(String(8), default="")
+    new_period: Mapped[str] = mapped_column(String(8), default="")
+    status: Mapped[str] = mapped_column(String(16), default="utkast")   # utkast|attest|godkand|avslagen|registrerad
+    statistics: Mapped[list] = mapped_column(JSON, default=list)
+    statistics_source: Mapped[str] = mapped_column(String(255), default="")
+    proposal: Mapped[dict] = mapped_column(JSON, default=dict)
+    comment: Mapped[str] = mapped_column(Text, default="")
+    history: Mapped[list] = mapped_column(JSON, default=list)
+    attest_saljare: Mapped[str] = mapped_column(String(255), default="")
+    attest_saljledare: Mapped[str] = mapped_column(String(255), default="")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class ServiceSetting(Base):
     """Det tjänsten själv går efter, satt av en administratör: en flyttad regel, ett antagande.
 
