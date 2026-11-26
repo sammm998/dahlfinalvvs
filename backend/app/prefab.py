@@ -221,7 +221,6 @@ async def create_set(project_id: str, file: UploadFile = File(...), heights: str
                   created_by=user.email, approvals={}, log=[])
     db.add(s)
     db.flush()
-    storage.put(f"prefab/{s.id}/A.ifc", io.BytesIO(data))
     res = _generate(s, model, _heights(heights))
     s.hangers = res["hangers"]
     _log(s, user, "genererad", n=len(res["hangers"]), rules_version=res["rules_version"])
@@ -346,8 +345,10 @@ def shared_sets(user: User = Depends(current_user), db: Session = Depends(get_db
 @router.delete("/api/hanger-sets/{set_id}")
 def delete_set(set_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     s = _set(db, user, set_id, "projektadmin")
+    sid = s.id
     db.delete(s)
     db.commit()
+    storage.delete_prefix(f"prefab/{sid}")             # uppsättningens modeller och det lästa: annars fylls volymen
     return {"ok": True}
 
 
@@ -358,6 +359,10 @@ def regenerate(set_id: str, body: dict[str, Any], user: User = Depends(current_u
     if any(h.get("status") in ("producerad", "packad", "levererad", "monterad") for h in s.hangers or []):
         raise HTTPException(409, "Hängare är redan producerade - gör en ny revision i stället")
     heights = {str(k): float(v) for k, v in (body.get("heights") or {}).items() if v not in (None, "")}
+    if (s.settings or {}).get("files"):
+        # ett modellpaket räknas om ur paketet: K- och A-modellen, uppskattningen och grupperingen följer med
+        from .prefab_package import package_settings
+        return package_settings(set_id, {"manual_heights": heights}, user, db)
     model = {k: (s.pipes or {}).get(k) or [] for k in ("pipes", "fittings", "storeys", "ceilings")}
     model["source"] = (s.pipes or {}).get("source")
     if model["source"] == "2D-ritning":
@@ -389,22 +394,16 @@ async def revise(set_id: str, file: UploadFile = File(...), user: User = Depends
     """En ny revision av modellen. Hängare vars rör inte ändrats behåller status och historik; de berörda står i
     jämförelsen, och de som redan är producerade, packade, levererade eller monterade är kritiska."""
     s = _set(db, user, set_id, "projektadmin")
+    if (s.settings or {}).get("files"):
+        from .prefab_package import revise_package
+        return await revise_package(s, [file], [], user, db)
     data = await file.read()
     model = _read_ifc(file, data)
     old_h = s.hangers or []
     d = HG.diff((s.pipes or {}).get("pipes") or [], model["pipes"], old_h)
     s.revision = _next_rev(s.revision)
-    storage.put(f"prefab/{s.id}/{s.revision}.ifc", io.BytesIO(data))
     res = _generate(s, model, (s.settings or {}).get("manual_heights") or {})
-    touched = {p for a in d["affected"] for p in a["pipes"]} | set(d["added"])
-    old_by_key = {(tuple(sorted(p["id"] for p in h["pipes"])), round(h["station_mm"] / 50)): h for h in old_h}
-    for h in res["hangers"]:
-        key = (tuple(sorted(p["id"] for p in h["pipes"])), round(h["station_mm"] / 50))
-        o = old_by_key.get(key)
-        if o and not touched & set(key[0]):
-            h.update(status=o.get("status"), history=o.get("history") or [], approved=o.get("approved") or {},
-                     id=o["id"], pack=o.get("pack") or h.get("pack"))
-            h["carried_from"] = o["id"]
+    carry_over(old_h, res["hangers"], d)
     s.hangers = res["hangers"]
     s.approvals = {}
     s.settings = {**s.settings, "diff": {**d, "from_revision": _prev(s.revision), "to_revision": s.revision}}
@@ -412,6 +411,19 @@ async def revise(set_id: str, file: UploadFile = File(...), user: User = Depends
     _touch(s)
     db.commit()
     return _out(s)
+
+
+def carry_over(old_h: list[dict[str, Any]], new_h: list[dict[str, Any]], d: dict[str, Any]) -> None:
+    """Hängare vars rör inte ändrats behåller ID, status, historik, godkännanden och kolli från förra revisionen."""
+    touched = {p for a in d["affected"] for p in a["pipes"]} | set(d["added"])
+    old_by_key = {(tuple(sorted(p["id"] for p in h["pipes"])), round(h["station_mm"] / 50)): h for h in old_h}
+    for h in new_h:
+        key = (tuple(sorted(p["id"] for p in h["pipes"])), round(h["station_mm"] / 50))
+        o = old_by_key.get(key)
+        if o and not touched & set(key[0]):
+            h.update(status=o.get("status"), history=o.get("history") or [], approved=o.get("approved") or {},
+                     id=o["id"], pack=o.get("pack") or h.get("pack"))
+            h["carried_from"] = o["id"]
 
 
 def _prev(r: str) -> str:

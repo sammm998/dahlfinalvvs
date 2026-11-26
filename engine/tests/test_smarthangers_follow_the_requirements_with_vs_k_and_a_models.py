@@ -180,3 +180,20 @@ def test_trapeze_groups_can_be_split_and_merged_by_hand():
     assert kinds(G.generate(m2)) == {"pendel"}
     merged = G.generate(m2, groups={"merge": [["P1", "P2"]]})
     assert kinds(merged) == {"takjärn"} and all(h["takjarn"]["length_mm"] >= 1800 for h in merged["hangers"])
+
+
+def test_storeys_are_matched_on_number_and_height_not_on_exact_names():
+    vs = _vs()
+    vs["storeys"] = [{"name": "PLAN 09 M30", "elevation": 0.0}] + [{"name": f"{i:02d}", "elevation": None} for i in range(9, 13)]
+    k = _k()
+    k["storeys"] = [{"name": f"Plan {i:02d}", "elevation": float((i - 9) * 3300)} for i in range(9, 13)]
+    rep = PK.validate([vs, k], PK.combine([vs, k]))
+    assert not [f for f in rep if f["rule"] == "V2" and f["level"] == "stopp"]       # samma plan, olika namn
+    assert any(f["rule"] == "V2" and f["level"] == "info" for f in rep)
+    k2 = _k()
+    k2["storeys"] = [{"name": "Plan 09", "elevation": 400.0}]                          # samma plan, 400 mm fel
+    assert any(f["title"] == "Olika våningshöjd" for f in PK.validate([vs, k2], PK.combine([vs, k2])))
+    k3 = _k()
+    k3["storeys"] = [{"name": "Plan 40", "elevation": 90000.0}]                        # ingenting gemensamt
+    assert any(f["title"] == "Inga gemensamma våningsplan" and f["level"] == "stopp" for f in PK.validate([vs, k3], PK.combine([vs, k3])))
+    assert PK.storey_key("PLAN 09 M30") == PK.storey_key("Plan 9") == PK.storey_key("09") == 9 and PK.storey_key("Takplan") is None

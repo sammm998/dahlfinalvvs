@@ -33,6 +33,16 @@ from . import rules as RL
 LEVELS = ("stopp", "varning", "info")
 
 
+def storey_key(name: str | None) -> int | None:
+    """Våningens nummer ur namnet: "PLAN 09 M30" -> 9, "Plan 9" -> 9, "09" -> 9, "Våning 2 (+7.20)" -> 2.
+    Ett nummer som är en höjd (+7.20) eller en zon/modul (M30) räknas inte. Inget nummer -> None."""
+    import re
+    t = re.sub(r"[+-]\s*\d+[.,]\d+", " ", str(name or ""))          # höjder i namnet
+    t = re.sub(r"\b[A-ZÅÄÖ]{1,2}\s?\d+\b", lambda m: m.group(0) if re.match(r"(?i)plan|vån|vaning|level|lvl|etage|floor|bv|kv|ov", m.group(0)) else " ", t.upper())
+    m = re.search(r"(?<![\d.])(\d{1,3})(?![\d.])", t)
+    return int(m.group(1)) if m else None
+
+
 def finding(rule: str, level: str, title: str, text: str, guids: list[str] | None = None, file: str = "",
             **extra) -> dict[str, Any]:
     return {"rule": rule, "level": level, "title": title, "text": text, "guids": (guids or [])[:500],
@@ -95,22 +105,50 @@ def validate(models: list[dict[str, Any]], merged: dict[str, Any], rules: dict[s
                                f"{name(m1)} och {name(m2)} har nollpunkter som skiljer {diff:.0f} mm (högst {tol_origin:.0f} mm).",
                                file=f"{name(m1)} / {name(m2)}"))
     # V2 våningsplan
+    # Bara modellernas riktiga våningsplan (IfcBuildingStorey med höjd) jämförs - inte de våningar VS-läsningen
+    # tagit ur rörens MagiCAD-egenskaper - och ett plan känns igen på sitt nummer ("PLAN 09 M30", "Plan 09" och
+    # "09" är samma plan) eller, utan nummer, på sin höjd. Konsulterna namnger olika; det är inget fel.
     vs = [m for m in models if (m.get("discipline") or "VS").upper() == "VS"]
     for m in models:
         if m in vs or not vs:
             continue
-        ref = {s["name"]: s["elevation"] for s in vs[0].get("storeys") or []}
-        mine = {s["name"]: s["elevation"] for s in m.get("storeys") or []}
-        missing = sorted(set(ref) - set(mine))
-        off = [(n, ref[n], mine[n]) for n in set(ref) & set(mine)
-               if ref[n] is not None and mine[n] is not None and abs(ref[n] - mine[n]) > tol_storey]
-        if missing:
-            out.append(finding("V2", "stopp", "Våningsplan saknas",
-                               f"{name(m)} saknar våningsplanen {', '.join(missing[:8])} med samma namn som VS-modellen.",
+        # VS: IFC-planen och de våningar rören själva bär (MagiCAD StoreyName - en MagiCAD-export har ofta ett enda
+        # IFC-plan för hela huset); de senare har ingen höjd och paras bara på nummer
+        ref = [s for s in vs[0].get("storeys") or [] if s.get("elevation") is not None or storey_key(s["name"]) is not None]
+        mine = [s for s in m.get("storeys") or [] if s.get("elevation") is not None]
+        if not ref or not mine:
+            continue
+        pairs, missing = [], []
+        for s in ref:
+            k = storey_key(s["name"])
+            hit = next((o for o in mine if k is not None and storey_key(o["name"]) == k), None)
+            if hit is None and s.get("elevation") is not None:
+                hit = next((o for o in mine if abs(o["elevation"] - s["elevation"]) <= tol_storey), None)
+            (pairs.append((s, hit)) if hit else missing.append(s["name"]))
+        # ett plan som bara finns som rörens våningsnamn och inte i den andra modellen är inget fel i sig
+        missing = [n for n in missing if any(x["name"] == n and x.get("elevation") is not None for x in ref)] or \
+            ([] if pairs else missing)
+        if not pairs:
+            out.append(finding("V2", "stopp", "Inga gemensamma våningsplan",
+                               f"{name(m)} har inget våningsplan som VS-modellen har - varken med samma nummer eller "
+                               f"på samma höjd (VS: {', '.join(s['name'] for s in ref[:6])}; {name(m)}: "
+                               f"{', '.join(s['name'] for s in mine[:6])}). Är det samma byggnad och samma nollpunkt?",
                                file=name(m)))
-        for n, a_, b_ in off:
-            out.append(finding("V2", "stopp", "Olika våningshöjd",
-                               f"Våningsplanet {n}: VS {a_:.0f} mm, {name(m)} {b_:.0f} mm (högst {tol_storey:.0f} mm).", file=name(m)))
+            continue
+        if missing:
+            out.append(finding("V2", "varning", "Våningsplan saknas i modellen",
+                               f"{name(m)} har inte VS-modellens våningsplan {', '.join(missing[:8])}. Rören på de "
+                               "våningarna får ingen information ur den här modellen.", file=name(m)))
+        for s, o in pairs:
+            if s.get("elevation") is not None and abs(s["elevation"] - o["elevation"]) > tol_storey:
+                out.append(finding("V2", "stopp", "Olika våningshöjd",
+                                   f"Våningsplanet {s['name']}: VS {s['elevation']:.0f} mm, {name(m)} ({o['name']}) "
+                                   f"{o['elevation']:.0f} mm (högst {tol_storey:.0f} mm).", file=name(m)))
+            elif storey_key(s["name"]) is None or s["name"].strip().lower() != o["name"].strip().lower():
+                if not any(f["rule"] == "V2" and f["title"] == "Olika namn på våningsplanen" and f["file"] == name(m) for f in out):
+                    out.append(finding("V2", "info", "Olika namn på våningsplanen",
+                                       f"{name(m)} namnger planen annorlunda (t.ex. VS {s['name']} = {o['name']}); de "
+                                       "paras ihop på nummer och höjd.", file=name(m)))
     # V4 röregenskaper (per rör)
     bad = defaultdict(list)
     for p in merged.get("pipes") or []:
@@ -129,7 +167,11 @@ def validate(models: list[dict[str, Any]], merged: dict[str, Any], rules: dict[s
     # V6 utan K-modell: global
     manual = settings.get("manual_heights") or {}
     if not merged["has"].get("K"):
-        if manual:
+        if merged.get("ceilings") and merged["has"].get("A"):
+            out.append(finding("V6", "varning", "K-modell saknas - bjälklag ur A-modellen",
+                               f"Ingen K-modell i paketet. Underkant bjälklag tas ur A-modellens {len(merged['ceilings'])} "
+                               "bjälklag; kontrollera mot konstruktionen innan kapning. Rör utan bjälklag ovanför flaggas."))
+        elif manual:
             out.append(finding("V6", "varning", "K-modell saknas - inmatad takhöjd",
                                "Ingen K-modell i paketet. Underkant bjälklag är inmatad per våning/zon och märks så på varje "
                                "upphängning; kontrollera mot konstruktionen."))

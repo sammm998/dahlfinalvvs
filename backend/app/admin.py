@@ -372,8 +372,28 @@ def system_cleanup(admin: User = Depends(current_admin)):
     """Frigör lagret: äldre körningar av samma ritning, misslyckade körningar, kvarlämnade arbetsmappar och
     detektorns cache. Den senaste färdiga körningen av varje ritning och allt som pågår står kvar."""
     from .disk_space import clean_up
+    from .prefab_package import slim_prefab
     from .storage import storage as _storage
-    return clean_up(_storage.path(""), _storage.path("results"), _storage.path("cache/native"))
+    slim = slim_prefab()                                 # först, så att "ledigt efter" räknar med det
+    return {**clean_up(_storage.path(""), _storage.path("results"), _storage.path("cache/native")), **slim}
+
+
+class PurgeIn(BaseModel):
+    confirm: str = ""
+
+
+@router.post("/system/purge-all")
+def system_purge_all(body: PurgeIn, admin: User = Depends(current_admin), db: Session = Depends(get_db)):
+    """Töm lagret på alla ritningar och modeller (purge_files.py säger vad som tas bort och vad som behålls).
+    Kräver att bekräftelsen RENSA skrivs ut - en knapptryckning räcker inte för något som inte går att ångra."""
+    if body.confirm.strip().upper() != "RENSA":
+        raise HTTPException(400, "Skriv RENSA för att bekräfta att alla ritningar och modeller tas bort")
+    from .purge_files import purge_all
+    from .storage import storage as _storage
+    out = purge_all(db, _storage.path(""))
+    import logging
+    logging.getLogger("vvs").warning("Lagret tömt av %s: %s", admin.email, out)
+    return out
 
 
 @router.get("/accounts")
