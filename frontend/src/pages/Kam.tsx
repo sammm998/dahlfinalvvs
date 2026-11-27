@@ -67,7 +67,7 @@ export default function KamPage() {
       <div className="row" style={{ gap: 16, alignItems: "flex-start", flexWrap: "wrap", marginTop: 12 }}>
         <section className="card" style={{ flex: "0 0 300px", padding: 14 }}>
           <h2 style={{ marginTop: 0 }}>{tr("Nytt ärende")}</h2>
-          <label className="small">{tr("Kundnummer")}<br /><input value={nc.kundnr} onChange={(e) => setNc({ ...nc, kundnr: e.target.value })} placeholder="830102" /></label>
+          <label className="small">{tr("Kundnummer")}<br /><input value={nc.kundnr} onChange={(e) => setNc({ ...nc, kundnr: e.target.value })} placeholder="100001" /></label>
           <div className="row small" style={{ gap: 6 }}>
             <label>{tr("Gammalt prisdatum (ÅÅMM)")}<br /><input value={nc.old_period} onChange={(e) => setNc({ ...nc, old_period: e.target.value })} size={6} placeholder="2601" /></label>
             <label>{tr("Nytt prisdatum (ÅÅMM)")}<br /><input value={nc.new_period} onChange={(e) => setNc({ ...nc, new_period: e.target.value })} size={6} placeholder="2701" /></label>

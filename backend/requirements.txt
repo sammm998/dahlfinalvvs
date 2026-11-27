@@ -20,3 +20,6 @@ anthropic>=1.11,<2
 # Safe XML parsing for annotation import tooling.
 defusedxml>=0.7.1,<1
 google-genai>=1.30,<3
+
+# Binary Excel (.xlsb) for KAM price files.
+pyxlsb>=1.0.10,<2

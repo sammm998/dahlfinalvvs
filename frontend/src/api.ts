@@ -124,6 +124,22 @@ export const api = {
   kamAction: (id: string, action: "submit" | "approve" | "reject" | "register", comment = "") =>
     req(`/api/kam/cases/${id}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ comment }) }),
   kamDelete: (id: string) => req(`/api/kam/cases/${id}`, { method: "DELETE" }),
+  // ---- KAM: årlig prisförhandling ----
+  negList: () => req("/api/kam/negotiations"),
+  negCreate: (body: any) => req("/api/kam/negotiations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  neg: (id: string) => req(`/api/kam/negotiations/${id}`),
+  negUpdate: (id: string, body: any) => req(`/api/kam/negotiations/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  negDelete: (id: string) => req(`/api/kam/negotiations/${id}`, { method: "DELETE" }),
+  negUpload: (id: string, files: File[]) => { const fd = new FormData(); files.forEach((f) => fd.append("files", f)); return req(`/api/kam/negotiations/${id}/files`, { method: "POST", body: fd }); },
+  negReset: (id: string) => req(`/api/kam/negotiations/${id}/files/reset`, { method: "POST" }),
+  negGroups: (id: string) => req(`/api/kam/negotiations/${id}/groups`),
+  negAdjust: (id: string, body: any) => req(`/api/kam/negotiations/${id}/adjustments`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  negInsights: (id: string) => req(`/api/kam/negotiations/${id}/insights`),
+  negApply: (id: string, kgs: string[]) => req(`/api/kam/negotiations/${id}/insights/apply`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kgs }) }),
+  negArticles: (id: string, kg: string) => req(`/api/kam/negotiations/${id}/groups/${encodeURIComponent(kg)}/articles`),
+  negPresentation: (id: string) => req(`/api/kam/negotiations/${id}/presentation`),
+  negAction: (id: string, action: "submit" | "approve" | "reject" | "register", comment = "") =>
+    req(`/api/kam/negotiations/${id}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: action === "submit" || action === "register" ? undefined : JSON.stringify({ comment }) }),
   radiators: (id: string, temps = "55/45/20", prefer = "length") =>
     req(`/api/drawings/${id}/radiators?temps=${encodeURIComponent(temps)}&prefer=${prefer}`),
   deleteDrawing: (id: string) => req(`/api/drawings/${id}`, { method: "DELETE" }),
