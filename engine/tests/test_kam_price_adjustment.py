@@ -97,7 +97,7 @@ def test_statistics_are_read_from_a_dahlmenyn_offer_sheet():
                                         ("kund", "Prisjustering")])
 def test_exports(kind, first):
     sim = K.simulate(STATS, PRICES, MATRIX, proposal={"avvikelser": {"HA1413": 42.0}})
-    wb = openpyxl.load_workbook(io.BytesIO(K.to_xlsx({"kundnr": "830102", "kundnamn": "Kund", "status": "utkast"}, sim, kind)))
+    wb = openpyxl.load_workbook(io.BytesIO(K.to_xlsx({"kundnr": "100001", "kundnamn": "Kund", "status": "utkast"}, sim, kind)))
     assert wb.sheetnames[0] == first
     text = " ".join(str(c) for ws in wb for r in ws.iter_rows(values_only=True) for c in r if c is not None)
     if kind == "kund":
@@ -155,8 +155,8 @@ def test_service_case_flow_simulated(tmp_path_factory):
         assert st["simulated"] and st["prislista"] == 3 and st["matris"] == 3
 
         assert c.post("/api/kam/cases", json={"kundnr": "x"}, headers=H).status_code == 422
-        assert c.post("/api/kam/cases", json={"kundnr": "830102", "new_period": "2613"}, headers=H).status_code == 422
-        case = c.post("/api/kam/cases", json={"kundnr": "830102", "old_period": "2601", "new_period": "2701"}, headers=H).json()
+        assert c.post("/api/kam/cases", json={"kundnr": "100001", "new_period": "2613"}, headers=H).status_code == 422
+        case = c.post("/api/kam/cases", json={"kundnr": "100001", "old_period": "2601", "new_period": "2701"}, headers=H).json()
         cid = case["id"]
         assert case["rabattsystem"] == "KAM12" and case["simulation"] is None
         assert c.post(f"/api/kam/cases/{cid}/submit", headers=H).status_code == 409          # ingen statistik ännu
@@ -178,11 +178,11 @@ def test_service_case_flow_simulated(tmp_path_factory):
         assert c.post(f"/api/kam/cases/{cid}/approve", json={"comment": "ok"}, headers=A).json()["status"] == "godkand"
         for kind in ("analys", "registrering", "kund"):
             x = c.get(f"/api/kam/cases/{cid}/export.xlsx?kind={kind}", headers=H)
-            assert x.status_code == 200 and f"KAM_830102_{kind}_" in x.headers["content-disposition"]
+            assert x.status_code == 200 and f"KAM_100001_{kind}_" in x.headers["content-disposition"]
         reg = c.post(f"/api/kam/cases/{cid}/register", headers=A).json()
         assert reg["status"] == "registrerad" and reg["terms"]["rabatter"] == {"HA1413": 42.0, "CC": 38.0}
         assert reg["terms"]["extra"] == 1.0
-        assert c.get("/api/customers/830102", headers=H).json()["rabatter"]["HA1413"] == 42.0   # gäller i offerterna
+        assert c.get("/api/customers/100001", headers=H).json()["rabatter"]["HA1413"] == 42.0   # gäller i offerterna
         assert c.delete(f"/api/kam/cases/{cid}", headers=H).status_code == 409
         other = {"Authorization": "Bearer " + c.post("/api/auth/register", json={"email": "annan@dahl.se", "password": "hemligt1"}).json()["access_token"]}
         assert c.get(f"/api/kam/cases/{cid}", headers=other).status_code == 404

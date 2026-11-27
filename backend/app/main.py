@@ -189,6 +189,8 @@ from . import radiators_api  # noqa: E402
 app.include_router(radiators_api.router)
 from . import kam  # noqa: E402
 app.include_router(kam.router)
+from . import kam_negotiation  # noqa: E402
+app.include_router(kam_negotiation.router)
 
 
 # ---------------------------------------------------------------- health / auth

@@ -692,6 +692,33 @@ class KamCase(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class KamNegotiation(Base):
+    """En årlig prisförhandling för en KAM-kund (ersätter arbetsboken med Justeringsvy och Varukorgsanalys).
+
+    Underlaget (prislistor, rabattbrev, korgar ...) ligger i lagringen under kam/neg/{id}/; här sparas det en
+    människa bestämt: rabatt NY och nettoprisjustering per kalkylgrupp, kommentarer, inställningar och attesten.
+    """
+    __tablename__ = "kam_negotiations"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String(255), default="")
+    customer: Mapped[str] = mapped_column(String(255), default="")
+    kundnr: Mapped[str] = mapped_column(String(64), default="", index=True)
+    valid_from: Mapped[str] = mapped_column(String(16), default="")
+    status: Mapped[str] = mapped_column(String(16), default="utkast")   # utkast|attest|godkand|avslagen|registrerad
+    files: Mapped[list] = mapped_column(JSON, default=list)
+    adjustments: Mapped[dict] = mapped_column(JSON, default=dict)
+    netto: Mapped[dict] = mapped_column(JSON, default=dict)
+    comments: Mapped[dict] = mapped_column(JSON, default=dict)
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    job: Mapped[dict] = mapped_column(JSON, default=dict)
+    history: Mapped[list] = mapped_column(JSON, default=list)
+    attest_saljare: Mapped[str] = mapped_column(String(255), default="")
+    attest_saljledare: Mapped[str] = mapped_column(String(255), default="")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class ServiceSetting(Base):
     """Det tjänsten själv går efter, satt av en administratör: en flyttad regel, ett antagande.
 

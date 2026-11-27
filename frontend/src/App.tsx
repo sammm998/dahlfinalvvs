@@ -22,6 +22,8 @@ import PageCurtain from "./components/PageCurtain";
 import LearnPage, { LearnCoursePage, LearnLessonPage } from "./pages/LearnPage";
 import MaterialPage from "./pages/Material";
 import KamPage from "./pages/Kam";
+import KamHomePage from "./pages/KamHome";
+import KamNegotiationPage from "./pages/KamNegotiation";
 import RadiatorListPage from "./pages/RadiatorList";
 import CreditsPage from "./pages/Credits";
 import PricingPage from "./pages/Pricing";
@@ -215,7 +217,9 @@ const ROUTES = (
     <Route path="/lar/:modul/:lektion" element={<Guard><LearnLessonPage /></Guard>} />
     <Route path="/agent" element={<Guard><AgentPage /></Guard>} />
     <Route path="/material" element={<Guard><MaterialPage /></Guard>} />
-    <Route path="/kam" element={<Guard><KamPage /></Guard>} />
+    <Route path="/kam" element={<Guard><KamHomePage /></Guard>} />
+    <Route path="/kam/enkel" element={<Guard><KamPage /></Guard>} />
+    <Route path="/kam/:id" element={<Guard><KamNegotiationPage /></Guard>} />
     <Route path="/radiatorer" element={<Guard><RadiatorListPage /></Guard>} />
     <Route path="/credits" element={<Guard><CreditsPage /></Guard>} />
     <Route path="/installningar" element={<Navigate to="/admin" replace />} />
